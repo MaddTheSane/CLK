@@ -7,7 +7,7 @@
 //
 
 class Atari2600OptionsPanel: MachinePanel {
-	var atari2600: CSAtari2600! {
+	var atari2600: CSAtari2600? {
 		get {
 			return self.machine.atari2600
 		}
@@ -24,16 +24,16 @@ class Atari2600OptionsPanel: MachinePanel {
 	}
 
 	fileprivate func pushSwitchValues() {
-		atari2600.colourButton = colourButton.state == .on
-		atari2600.leftPlayerDifficultyButton = leftPlayerDifficultyButton.state == .on
-		atari2600.rightPlayerDifficultyButton = rightPlayerDifficultyButton.state == .on
+		atari2600?.colourButton = colourButton.state == .on
+		atari2600?.leftPlayerDifficultyButton = leftPlayerDifficultyButton.state == .on
+		atari2600?.rightPlayerDifficultyButton = rightPlayerDifficultyButton.state == .on
 	}
 
 	@IBAction func optionWasPressed(_ sender: NSButton!) {
 		if sender == resetButton {
-			atari2600.pressResetButton()
+			atari2600?.pressResetButton()
 		} else {
-			atari2600.pressSelectButton()
+			atari2600?.pressSelectButton()
 		}
 	}
 }

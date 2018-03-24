@@ -7,7 +7,7 @@
 //
 
 class ZX8081OptionsPanel: MachinePanel {
-	var zx8081: CSZX8081! {
+	var zx8081: CSZX8081? {
 		get {
 			return self.machine.zx8081
 		}
@@ -26,8 +26,8 @@ class ZX8081OptionsPanel: MachinePanel {
 
 	@IBOutlet var playOrPauseTapeButton: NSButton!
 	@IBAction func playOrPauseTape(_ sender: NSButton!) {
-		self.zx8081.tapeIsPlaying = !self.zx8081.tapeIsPlaying
-		self.playOrPauseTapeButton.title = self.zx8081.tapeIsPlaying
+		self.zx8081?.tapeIsPlaying = !(self.zx8081?.tapeIsPlaying ?? false)
+		self.playOrPauseTapeButton.title = (self.zx8081?.tapeIsPlaying ?? false)
 			? NSLocalizedString("Stop Tape", comment: "Text for a button that will stop tape playback")
 			: NSLocalizedString("Play Tape", comment: "Text for a button that will start tape playback")
 	}

@@ -7,6 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <AppKit/NSNib.h>
 
 @class CSMachine;
 
@@ -14,7 +15,7 @@
 
 - (instancetype)initWithFileAtURL:(NSURL *)url;
 
-@property(nonatomic, readonly) NSString *optionsPanelNibName;
+@property(nonatomic, readonly) NSNibName optionsPanelNibName;
 @property(nonatomic, readonly) NSString *displayName;
 
 @end

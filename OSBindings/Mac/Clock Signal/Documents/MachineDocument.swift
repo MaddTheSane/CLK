@@ -74,7 +74,7 @@ class MachineDocument:
 		self.bestEffortUpdater!.delegate = self
 	}
 
-	func machineSpeakerDidChangeInputClock(_ machine: CSMachine!) {
+	func machineSpeakerDidChangeInputClock(_ machine: CSMachine) {
 		setupAudioQueueClockRate()
 	}
 
@@ -118,7 +118,7 @@ class MachineDocument:
 		}
 
 		if let optionsPanelNibName = analysis.optionsPanelNibName {
-			Bundle.main.loadNibNamed(NSNib.Name(rawValue: optionsPanelNibName), owner: self, topLevelObjects: nil)
+			Bundle.main.loadNibNamed(optionsPanelNibName, owner: self, topLevelObjects: nil)
 			self.optionsPanel.machine = self.machine
 			showOptions(self)
 		}
@@ -180,6 +180,10 @@ class MachineDocument:
 
 	// MARK: NSDocument overrides
 	override func data(ofType typeName: String) throws -> Data {
+		throw NSError(domain: NSOSStatusErrorDomain, code: unimpErr, userInfo: nil)
+	}
+	
+	convenience init(type typeName: String) throws {
 		throw NSError(domain: NSOSStatusErrorDomain, code: unimpErr, userInfo: nil)
 	}
 

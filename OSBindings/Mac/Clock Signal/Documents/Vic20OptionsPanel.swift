@@ -7,9 +7,9 @@
 //
 
 class Vic20OptionsPanel: MachinePanel {
-	var vic20: CSVic20! {
+	var vic20: CSVic20? {
 		get {
-			return self.machine as! CSVic20
+			return self.machine as? CSVic20
 		}
 	}
 
@@ -27,15 +27,15 @@ class Vic20OptionsPanel: MachinePanel {
 	fileprivate func setCountry(_ countryID: Int) {
 		switch countryID {
 			case 0:	// Danish
-				vic20.country = .danish
+				vic20?.country = .danish
 			case 1: // European
-				vic20.country = .european
+				vic20?.country = .european
 			case 2: // Japanese
-				vic20.country = .japanese
+				vic20?.country = .japanese
 			case 3: // Swedish
-				vic20.country = .swedish
+				vic20?.country = .swedish
 			case 4: // US
-				vic20.country = .american
+				vic20?.country = .american
 			default: break
 		}
 	}
@@ -61,9 +61,9 @@ class Vic20OptionsPanel: MachinePanel {
 	}
 	fileprivate func setMemorySize(_ sizeIndex: Int) {
 		switch sizeIndex {
-			case 2:		vic20.memorySize = .size32Kb
-			case 1:		vic20.memorySize = .size8Kb
-			default:	vic20.memorySize = .size5Kb
+			case 2:		vic20?.memorySize = .size32Kb
+			case 1:		vic20?.memorySize = .size8Kb
+			default:	vic20?.memorySize = .size5Kb
 		}
 	}
 
