@@ -299,7 +299,8 @@ class ConcreteMachine:
 	public MOS::MOS6522::IRQDelegatePortHandler::Delegate,
 	public Utility::TypeRecipient,
 	public Storage::Tape::BinaryTapePlayer::Delegate,
-	public Machine {
+	public Machine,
+	public Sleeper::SleepObserver {
 	public:
 		ConcreteMachine() :
 				m6502_(*this),
@@ -325,13 +326,10 @@ class ConcreteMachine:
 			user_port_via_port_handler_->set_interrupt_delegate(this);
 			keyboard_via_port_handler_->set_interrupt_delegate(this);
 			tape_->set_delegate(this);
+			tape_->set_sleep_observer(this);
 
 			// install a joystick
 			joysticks_.emplace_back(new Joystick(*user_port_via_port_handler_, *keyboard_via_port_handler_));
-		}
-
-		~ConcreteMachine() {
-			delete[] rom_;
 		}
 
 		// Obtains the system ROMs.
@@ -368,22 +366,10 @@ class ConcreteMachine:
 		}
 
 		void configure_as_target(const Analyser::Static::Target *target) override final {
-			auto *const commodore_target = dynamic_cast<const Analyser::Static::Commodore::Target *>(target);
+			commodore_target_ = *dynamic_cast<const Analyser::Static::Commodore::Target *>(target);
 
 			if(target->loading_command.length()) {
 				type_string(target->loading_command);
-			}
-
-			switch(commodore_target->memory_model) {
-				case Analyser::Static::Commodore::Target::MemoryModel::Unexpanded:
-					set_memory_size(Default);
-				break;
-				case Analyser::Static::Commodore::Target::MemoryModel::EightKB:
-					set_memory_size(ThreeKB);
-				break;
-				case Analyser::Static::Commodore::Target::MemoryModel::ThirtyTwoKB:
-					set_memory_size(ThirtyTwoKB);
-				break;
 			}
 
 			if(target->media.disks.size()) {
@@ -395,6 +381,9 @@ class ConcreteMachine:
 
 				// give it a means to obtain its ROM
 				c1540_->set_rom_fetcher(rom_fetcher_);
+
+				// give it a little warm up
+				c1540_->run_for(Cycles(2000000));
 			}
 
 			insert_media(target->media);
@@ -414,9 +403,8 @@ class ConcreteMachine:
 				std::vector<uint8_t> rom_image = media.cartridges.front()->get_segments().front().data;
 				rom_length_ = static_cast<uint16_t>(rom_image.size());
 
-				rom_ = new uint8_t[0x2000];
-				std::memcpy(rom_, rom_image.data(), rom_image.size());
-				write_to_map(processor_read_memory_map_, rom_, rom_address_, 0x2000);
+				rom_ = rom_image;
+				rom_.resize(0x2000);
 			}
 
 			set_use_fast_tape();
@@ -439,16 +427,6 @@ class ConcreteMachine:
 			return joysticks_;
 		}
 
-		void set_memory_size(MemorySize size) override final {
-			memory_size_ = size;
-			needs_configuration_ = true;
-		}
-
-		void set_region(Region region) override final {
-			region_ = region;
-			needs_configuration_ = true;
-		}
-
 		void set_ntsc_6560() {
 			set_clock_rate(1022727);
 			if(mos6560_) {
@@ -465,9 +443,9 @@ class ConcreteMachine:
 			}
 		}
 
-		void configure_memory() {
+		void set_memory_map(Analyser::Static::Commodore::Target::MemoryModel memory_model, Analyser::Static::Commodore::Target::Region region) {
 			// Determine PAL/NTSC
-			if(region_ == American || region_ == Japanese) {
+			if(region == Analyser::Static::Commodore::Target::Region::American || region == Analyser::Static::Commodore::Target::Region::Japanese) {
 				// NTSC
 				set_ntsc_6560();
 			} else {
@@ -479,13 +457,13 @@ class ConcreteMachine:
 			memset(processor_write_memory_map_, 0, sizeof(processor_write_memory_map_));
 			memset(mos6560_->video_memory_map, 0, sizeof(mos6560_->video_memory_map));
 
-			switch(memory_size_) {
+			switch(memory_model) {
 				default: break;
-				case ThreeKB:
+				case Analyser::Static::Commodore::Target::MemoryModel::EightKB:
 					write_to_map(processor_read_memory_map_, expansion_ram_, 0x0000, 0x1000);
 					write_to_map(processor_write_memory_map_, expansion_ram_, 0x0000, 0x1000);
 				break;
-				case ThirtyTwoKB:
+				case Analyser::Static::Commodore::Target::MemoryModel::ThirtyTwoKB:
 					write_to_map(processor_read_memory_map_, expansion_ram_, 0x0000, 0x8000);
 					write_to_map(processor_write_memory_map_, expansion_ram_, 0x0000, 0x8000);
 				break;
@@ -508,24 +486,24 @@ class ConcreteMachine:
 
 			ROM character_rom;
 			ROM kernel_rom;
-			switch(region_) {
+			switch(region) {
 				default:
 					character_rom = CharactersEnglish;
 					kernel_rom = KernelPAL;
 				break;
-				case American:
+				case Analyser::Static::Commodore::Target::Region::American:
 					character_rom = CharactersEnglish;
 					kernel_rom = KernelNTSC;
 				break;
-				case Danish:
+				case Analyser::Static::Commodore::Target::Region::Danish:
 					character_rom = CharactersDanish;
 					kernel_rom = KernelDanish;
 				break;
-				case Japanese:
+				case Analyser::Static::Commodore::Target::Region::Japanese:
 					character_rom = CharactersJapanese;
 					kernel_rom = KernelJapanese;
 				break;
-				case Swedish:
+				case Analyser::Static::Commodore::Target::Region::Swedish:
 					character_rom = CharactersSwedish;
 					kernel_rom = KernelSwedish;
 				break;
@@ -536,15 +514,15 @@ class ConcreteMachine:
 			write_to_map(processor_read_memory_map_, roms_[kernel_rom].data(), 0xe000, static_cast<uint16_t>(roms_[kernel_rom].size()));
 
 			// install the inserted ROM if there is one
-			if(rom_) {
-				write_to_map(processor_read_memory_map_, rom_, rom_address_, rom_length_);
+			if(!rom_.empty()) {
+				write_to_map(processor_read_memory_map_, rom_.data(), rom_address_, rom_length_);
 			}
 		}
 
 		// to satisfy CPU::MOS6502::Processor
 		forceinline Cycles perform_bus_operation(CPU::MOS6502::BusOperation operation, uint16_t address, uint8_t *value) {
 			// run the phase-1 part of this cycle, in which the VIC accesses memory
-			if(!is_running_at_zero_cost_) mos6560_->run_for(Cycles(1));
+			cycles_since_mos6560_update_++;
 
 			// run the phase-2 part of the cycle, which is whatever the 6502 said it should be
 			if(isReadOperation(operation)) {
@@ -556,10 +534,7 @@ class ConcreteMachine:
 				}
 				*value = result;
 
-				// This combined with the stuff below constitutes the fast tape hack. Performed here: if the
-				// PC hits the start of the loop that just waits for an interesting tape interrupt to have
-				// occurred then skip both 6522s and the tape ahead to the next interrupt without any further
-				// CPU or 6560 costs.
+				// Consider applying the fast tape hack.
 				if(use_fast_tape_hack_ && operation == CPU::MOS6502::BusOperation::ReadOpcode) {
 					if(address == 0xf7b2) {
 						// Address 0xf7b2 contains a JSR to 0xf8c0 that will fill the tape buffer with the next header.
@@ -585,36 +560,43 @@ class ConcreteMachine:
 						uint8_t x = static_cast<uint8_t>(m6502_.get_value_of_register(CPU::MOS6502::Register::X));
 						if(x == 0xe) {
 							Storage::Tape::Commodore::Parser parser;
+							const uint64_t tape_position = tape_->get_tape()->get_offset();
 							std::unique_ptr<Storage::Tape::Commodore::Data> data = parser.get_next_data(tape_->get_tape());
-							uint16_t start_address, end_address;
-							start_address = static_cast<uint16_t>(user_basic_memory_[0xc1] | (user_basic_memory_[0xc2] << 8));
-							end_address = static_cast<uint16_t>(user_basic_memory_[0xae] | (user_basic_memory_[0xaf] << 8));
+							if(data) {
+								uint16_t start_address, end_address;
+								start_address = static_cast<uint16_t>(user_basic_memory_[0xc1] | (user_basic_memory_[0xc2] << 8));
+								end_address = static_cast<uint16_t>(user_basic_memory_[0xae] | (user_basic_memory_[0xaf] << 8));
 
-							// perform a via-processor_write_memory_map_ memcpy
-							uint8_t *data_ptr = data->data.data();
-							std::size_t data_left = data->data.size();
-							while(data_left && start_address != end_address) {
-								uint8_t *page = processor_write_memory_map_[start_address >> 10];
-								if(page) page[start_address & 0x3ff] = *data_ptr;
-								data_ptr++;
-								start_address++;
-								data_left--;
+								// perform a via-processor_write_memory_map_ memcpy
+								uint8_t *data_ptr = data->data.data();
+								std::size_t data_left = data->data.size();
+								while(data_left && start_address != end_address) {
+									uint8_t *page = processor_write_memory_map_[start_address >> 10];
+									if(page) page[start_address & 0x3ff] = *data_ptr;
+									data_ptr++;
+									start_address++;
+									data_left--;
+								}
+
+								// set tape status, carry and flag
+								user_basic_memory_[0x90] |= 0x40;
+								uint8_t	flags = static_cast<uint8_t>(m6502_.get_value_of_register(CPU::MOS6502::Register::Flags));
+								flags &= ~static_cast<uint8_t>((CPU::MOS6502::Flag::Carry | CPU::MOS6502::Flag::Interrupt));
+								m6502_.set_value_of_register(CPU::MOS6502::Register::Flags, flags);
+
+								// to ensure that execution proceeds to 0xfccf, pretend a NOP was here and
+								// ensure that the PC leaps to 0xfccf
+								m6502_.set_value_of_register(CPU::MOS6502::Register::ProgramCounter, 0xfccf);
+								*value = 0xea;	// i.e. NOP implied
+							} else {
+								tape_->get_tape()->set_offset(tape_position);
 							}
-
-							// set tape status, carry and flag
-							user_basic_memory_[0x90] |= 0x40;
-							uint8_t	flags = static_cast<uint8_t>(m6502_.get_value_of_register(CPU::MOS6502::Register::Flags));
-							flags &= ~static_cast<uint8_t>((CPU::MOS6502::Flag::Carry | CPU::MOS6502::Flag::Interrupt));
-							m6502_.set_value_of_register(CPU::MOS6502::Register::Flags, flags);
-
-							// to ensure that execution proceeds to 0xfccf, pretend a NOP was here and
-							// ensure that the PC leaps to 0xfccf
-							m6502_.set_value_of_register(CPU::MOS6502::Register::ProgramCounter, 0xfccf);
-							*value = 0xea;	// i.e. NOP implied
 						}
 					}
 				}
 			} else {
+				mos6560_->run_for(cycles_since_mos6560_update_.flush());
+
 				uint8_t *ram = processor_write_memory_map_[address >> 10];
 				if(ram) ram[address & 0x3ff] = *value;
 				if((address&0xfc00) == 0x9000) {
@@ -632,21 +614,18 @@ class ConcreteMachine:
 					typer_.reset();
 				}
 			}
-			tape_->run_for(Cycles(1));
+			if(!tape_is_sleeping_) tape_->run_for(Cycles(1));
 			if(c1540_) c1540_->run_for(Cycles(1));
 
 			return Cycles(1);
 		}
 
-		forceinline void flush() {
+		void flush() {
+			mos6560_->run_for(cycles_since_mos6560_update_.flush());
 			mos6560_->flush();
 		}
 
 		void run_for(const Cycles cycles) override final {
-			if(needs_configuration_) {
-				needs_configuration_ = false;
-				configure_memory();
-			}
 			m6502_.run_for(cycles);
 		}
 
@@ -654,7 +633,7 @@ class ConcreteMachine:
 			mos6560_.reset(new Vic6560());
 			mos6560_->set_high_frequency_cutoff(1600);	// There is a 1.6Khz low-pass filter in the Vic-20.
 			// Make a guess: PAL. Without setting a clock rate the 6560 isn't fully set up so contractually something must be set.
-			set_pal_6560();
+			set_memory_map(commodore_target_.memory_model, commodore_target_.region);
 		}
 
 		void close_output() override final {
@@ -712,7 +691,14 @@ class ConcreteMachine:
 			return selection_set;
 		}
 
+		void set_component_is_sleeping(void *component, bool is_sleeping) override {
+			tape_is_sleeping_ = is_sleeping;
+			set_use_fast_tape();
+		}
+
 	private:
+		Analyser::Static::Commodore::Target commodore_target_;
+
 		CPU::MOS6502::Processor<ConcreteMachine, false> m6502_;
 
 		std::vector<uint8_t>  roms_[9];
@@ -722,7 +708,7 @@ class ConcreteMachine:
 		std::vector<uint8_t>  kernel_rom_;
 		uint8_t expansion_ram_[0x8000];
 
-		uint8_t *rom_ = nullptr;
+		std::vector<uint8_t> rom_;
 		uint16_t rom_address_, rom_length_;
 
 		uint8_t user_basic_memory_[0x0400];
@@ -743,13 +729,10 @@ class ConcreteMachine:
 			}
 		}
 
-		Region region_ = European;
-		MemorySize memory_size_ = MemorySize::Default;
-		bool needs_configuration_ = true;
-
 		Commodore::Vic20::KeyboardMapper keyboard_mapper_;
 		std::vector<std::unique_ptr<Inputs::Joystick>> joysticks_;
 
+		Cycles cycles_since_mos6560_update_;
 		std::unique_ptr<Vic6560> mos6560_;
 		std::shared_ptr<UserPortVIA> user_port_via_port_handler_;
 		std::shared_ptr<KeyboardVIA> keyboard_via_port_handler_;
@@ -763,9 +746,9 @@ class ConcreteMachine:
 		std::shared_ptr<Storage::Tape::BinaryTapePlayer> tape_;
 		bool use_fast_tape_hack_ = false;
 		bool allow_fast_tape_hack_ = false;
-		bool is_running_at_zero_cost_ = false;
+		bool tape_is_sleeping_ = true;
 		void set_use_fast_tape() {
-			use_fast_tape_hack_ = allow_fast_tape_hack_ && tape_->has_tape();
+			use_fast_tape_hack_ = !tape_is_sleeping_ && allow_fast_tape_hack_ && tape_->has_tape();
 		}
 
 		// Disk
