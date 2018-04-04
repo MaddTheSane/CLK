@@ -13,8 +13,6 @@
 #import "CSOpenGLView.h"
 #import "CSStaticAnalyser.h"
 
-
-
 @class CSMachine;
 @protocol CSMachineDelegate <NSObject>
 - (void)machineSpeakerDidChangeInputClock:(nonnull CSMachine *)machine;
