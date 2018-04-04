@@ -20,6 +20,12 @@
 - (void)machineSpeakerDidChangeInputClock:(nonnull CSMachine *)machine;
 @end
 
+typedef NS_ENUM(NSInteger, CSMachineVideoSignal) {
+	CSMachineVideoSignalComposite,
+	CSMachineVideoSignalSVideo,
+	CSMachineVideoSignalRGB
+};
+
 // Deliberately low; to ensure CSMachine has been declared as an @class already.
 #import "CSAtari2600.h"
 #import "CSZX8081.h"
@@ -56,8 +62,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)paste:(NSString *)string;
 
 @property (nonatomic, assign) BOOL useFastLoadingHack;
-@property (nonatomic, assign) BOOL useCompositeOutput;
+@property (nonatomic, assign) CSMachineVideoSignal videoSignal;
 @property (nonatomic, assign) BOOL useAutomaticTapeMotorControl;
+
+- (bool)supportsVideoSignal:(CSMachineVideoSignal)videoSignal;
 
 // Special-case accessors; undefined behaviour if accessed for a machine not of the corresponding type.
 @property (nonatomic, readonly, nullable) CSAtari2600 *atari2600;

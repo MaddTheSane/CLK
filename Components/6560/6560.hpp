@@ -54,15 +54,19 @@ template <class T> class MOS6560 {
 				audio_generator_(audio_queue_),
 				speaker_(audio_generator_)
 		{
-			crt_->set_composite_sampling_function(
-				"float composite_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase, float amplitude)"
+			crt_->set_svideo_sampling_function(
+				"vec2 svideo_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase)"
 				"{"
 					"vec2 yc = texture(texID, coordinate).rg / vec2(255.0);"
-					"float phaseOffset = 6.283185308 * 2.0 * yc.y;"
 
-					"float chroma = cos(phase + phaseOffset);"
-					"return mix(yc.x, step(yc.y, 0.75) * chroma, amplitude);"
+					"float phaseOffset = 6.283185308 * 2.0 * yc.y;"
+					"float chroma = step(yc.y, 0.75) * cos(phase + phaseOffset);"
+
+					"return vec2(yc.x, chroma);"
 				"}");
+
+			// default to s-video output
+			crt_->set_video_signal(Outputs::CRT::VideoSignal::SVideo);
 
 			// default to NTSC
 			set_output_mode(OutputMode::NTSC);
@@ -93,11 +97,11 @@ template <class T> class MOS6560 {
 		void set_output_mode(OutputMode output_mode) {
 			output_mode_ = output_mode;
 
-			// Lumunances are encoded trivially: on a 0–255 scale.
+			// Luminances are encoded trivially: on a 0–255 scale.
 			const uint8_t luminances[16] = {
 				0,		255,	60,		189,
-				100,	144,	40,		227,
-				126,	161,	227,	207,
+				80,		144,	40,		227,
+				90,		161,	207,	227,
 				200,	196,	160,	196
 			};
 
@@ -105,16 +109,16 @@ template <class T> class MOS6560 {
 			// anything above 191 disables the colour subcarrier. Phase is relative to the
 			// colour burst, so 0 is green.
 			const uint8_t pal_chrominances[16] = {
-				255,	255,	36,		112,
-				8,		88,		120,	48,
-				40,		56,		36,		112,
-				8,		72,		126,	56,
+				255,	255,	37,		101,
+				19,		86,		123,	59,
+				46,		53,		37,		101,
+				19,		86,		123,	59,
 			};
 			const uint8_t ntsc_chrominances[16] = {
-				255,	255,	8,		72,
-				32,		88,		40,		112,
-				0,		8,		12,		72,
-				32,		88,		48,		112,
+				255,	255,	7,		71,
+				25,		86,		48,		112,
+				0,		119,	7,		71,
+				25,		86,		48,		112,
 			};
 			const uint8_t *chrominances;
 			Outputs::CRT::DisplayType display_type;
@@ -140,7 +144,7 @@ template <class T> class MOS6560 {
 			}
 
 			crt_->set_new_display_type(static_cast<unsigned int>(timing_.cycles_per_line*4), display_type);
-//			crt_->set_visible_area(Outputs::CRT::Rect(0.05f, 0.05f, 0.9f, 0.9f));
+			crt_->set_visible_area(Outputs::CRT::Rect(0.1f, 0.05f, 0.9f, 0.9f));
 
 //			switch(output_mode) {
 //				case OutputMode::PAL:

@@ -40,11 +40,13 @@
 #include "../../Configurable/StandardOptions.hpp"
 #include "../../ClockReceiver/ForceInline.hpp"
 
+#include "../../Analyser/Static/MSX/Target.hpp"
+
 namespace MSX {
 
 std::vector<std::unique_ptr<Configurable::Option>> get_options() {
 	return Configurable::standard_options(
-		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGBComposite | Configurable::QuickLoadTape)
+		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplaySVideo | Configurable::DisplayComposite | Configurable::QuickLoadTape)
 	);
 }
 
@@ -183,8 +185,10 @@ class ConcreteMachine:
 		}
 
 		void configure_as_target(const Analyser::Static::Target *target) override {
+			auto *const msx_target = dynamic_cast<const Analyser::Static::MSX::Target *>(target);
+
 			// Add a disk cartridge if any disks were supplied.
-			if(!target->media.disks.empty()) {
+			if(msx_target->has_disk_drive) {
 				map(2, 0, 0x4000, 0x2000);
 				unmap(2, 0x6000, 0x2000);
 				memory_slots_[2].set_handler(new DiskROM(memory_slots_[2].source));
@@ -562,7 +566,7 @@ class ConcreteMachine:
 
 			Configurable::Display display;
 			if(Configurable::get_display(selections_by_option, display)) {
-				get_crt()->set_output_device((display == Configurable::Display::RGB) ? Outputs::CRT::OutputDevice::Monitor : Outputs::CRT::OutputDevice::Television);
+				set_video_signal_configurable(display);
 			}
 		}
 

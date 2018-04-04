@@ -44,7 +44,7 @@ enum ROM {
 
 std::vector<std::unique_ptr<Configurable::Option>> get_options() {
 	return Configurable::standard_options(
-		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGBComposite | Configurable::QuickLoadTape)
+		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplayComposite | Configurable::QuickLoadTape)
 	);
 }
 
@@ -263,7 +263,7 @@ class ConcreteMachine:
 			use_fast_tape_hack_ = activate;
 		}
 
-		void set_output_device(Outputs::CRT::OutputDevice output_device) {
+		void set_output_device(Outputs::CRT::VideoSignal output_device) {
 			video_output_->set_output_device(output_device);
 		}
 
@@ -271,7 +271,7 @@ class ConcreteMachine:
 		void configure_as_target(const Analyser::Static::Target *target) override final {
 			auto *const oric_target = dynamic_cast<const Analyser::Static::Oric::Target *>(target);
 
-			if(oric_target->has_microdisc) {
+			if(oric_target->has_microdrive) {
 				microdisc_is_enabled_ = true;
 				microdisc_did_change_paging_flags(&microdisc_);
 				microdisc_.set_delegate(this);
@@ -392,7 +392,7 @@ class ConcreteMachine:
 
 			video_output_.reset(new VideoOutput(ram_));
 			if(!colour_rom_.empty()) video_output_->set_colour_rom(colour_rom_);
-			set_output_device(Outputs::CRT::OutputDevice::Monitor);
+			set_output_device(Outputs::CRT::VideoSignal::RGB);
 		}
 
 		void close_output() override final {
@@ -465,7 +465,7 @@ class ConcreteMachine:
 
 			Configurable::Display display;
 			if(Configurable::get_display(selections_by_option, display)) {
-				set_output_device((display == Configurable::Display::RGB) ? Outputs::CRT::OutputDevice::Monitor : Outputs::CRT::OutputDevice::Television);
+				set_video_signal_configurable(display);
 			}
 		}
 
