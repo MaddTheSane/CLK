@@ -78,13 +78,13 @@ fileprivate struct RegisterState {
 		i = UInt8(truncating: dictionary["i"] as! NSNumber)
 		r = UInt8(truncating: dictionary["r"] as! NSNumber)
 
-		iff1 = (dictionary["iff1"] as! NSNumber).boolValue
-		iff2 = (dictionary["iff2"] as! NSNumber).boolValue
+		iff1 = dictionary["iff1"] as! Bool
+		iff2 = dictionary["iff2"] as! Bool
 
-		interruptMode = (dictionary["im"] as! NSNumber).intValue
-		isHalted = (dictionary["halted"] as! NSNumber).boolValue
+		interruptMode = dictionary["im"] as! Int
+		isHalted = dictionary["halted"] as! Bool
 
-		tStates = (dictionary["tStates"] as! NSNumber).intValue
+		tStates = dictionary["tStates"] as! Int
 	}
 
 	init(machine: CSTestMachineZ80) {
@@ -144,20 +144,23 @@ fileprivate func ==(lhs: RegisterState, rhs: RegisterState) -> Bool {
 class FUSETests: XCTestCase {
 
 	func testFUSE() {
-		let inputFilename: String! = Bundle(for: type(of: self)).path(forResource: "tests.in", ofType: "json")
-		let outputFilename: String! = Bundle(for: type(of: self)).path(forResource: "tests.expected", ofType: "json")
+		guard let inputFilename = Bundle(for: type(of: self)).url(forResource: "tests.in", withExtension: "json"),
+			let outputFilename = Bundle(for: type(of: self)).url(forResource: "tests.expected", withExtension: "json") else {
+				XCTFail("inputFilename == nil || outputFilename == nil")
+				return;
+		}
 
-		XCTAssert(inputFilename != nil && outputFilename != nil)
+		guard let inputData = try? Data(contentsOf: inputFilename),
+			let outputData = try? Data(contentsOf: outputFilename) else {
+				XCTFail("inputData == nil || outputData == nil")
+				return
+		}
 
-		let inputData: Data! = try? Data(contentsOf: URL(fileURLWithPath: inputFilename))
-		let outputData: Data! = try? Data(contentsOf: URL(fileURLWithPath: outputFilename))
-
-		XCTAssert(inputData != nil && outputData != nil)
-
-		let inputArray: [Any]! = try! JSONSerialization.jsonObject(with: inputData, options: []) as? [Any]
-		let outputArray: [Any]! = try! JSONSerialization.jsonObject(with: outputData, options: []) as? [Any]
-
-		XCTAssert(inputArray != nil && outputArray != nil)
+		guard let inputArray = try! JSONSerialization.jsonObject(with: inputData, options: []) as? [Any],
+			let outputArray = try! JSONSerialization.jsonObject(with: outputData, options: []) as? [Any] else {
+				XCTFail("inputArray == nil || outputArray == nil")
+				return
+		}
 
 		var index = 0
 		for item in inputArray {
