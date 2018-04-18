@@ -15,8 +15,8 @@ class ZexallTests: XCTestCase, CSTestMachineTrapHandler {
 	fileprivate var output = ""
 
 	func testZexall() {
-		if let filename = Bundle(for: type(of: self)).path(forResource: "zexdoc", ofType: "com") {
-			if let testData = try? Data(contentsOf: URL(fileURLWithPath: filename)) {
+		if let filename = Bundle(for: type(of: self)).url(forResource: "zexdoc", withExtension: "com") {
+			if let testData = try? Data(contentsOf: filename) {
 
 				// install test program, at the usual CP/M place
 				let machine = CSTestMachineZ80()
