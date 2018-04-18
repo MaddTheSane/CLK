@@ -18,7 +18,7 @@
             <windowStyleMask key="styleMask" titled="YES" documentModal="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="196" y="240" width="600" height="165"/>
-            <rect key="screenRect" x="0.0" y="0.0" width="1366" height="768"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="1440" height="877"/>
             <view key="contentView" wantsLayer="YES" id="EiT-Mj-1SZ">
                 <rect key="frame" x="0.0" y="0.0" width="600" height="165"/>
                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
@@ -355,7 +355,7 @@ Gw
                             <action selector="cancelCreateMachine:" target="-2" id="lf8-PM-c0m"/>
                         </connections>
                     </button>
-                    <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="9YM-5x-pc0">
+                    <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" setsMaxLayoutWidthAtFirstLayout="YES" translatesAutoresizingMaskIntoConstraints="NO" id="9YM-5x-pc0">
                         <rect key="frame" x="20" y="14" width="398" height="34"/>
                         <textFieldCell key="cell" sendsActionOnEndEditing="YES" id="xTm-Oy-oz5">
                             <font key="font" metaFont="system"/>
