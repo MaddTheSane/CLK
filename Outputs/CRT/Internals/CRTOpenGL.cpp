@@ -315,20 +315,22 @@ void OpenGLOutputBuilder::prepare_composite_input_shaders() {
 }
 
 void OpenGLOutputBuilder::prepare_svideo_input_shaders() {
-	svideo_input_shader_program_ = OpenGL::IntermediateShader::make_svideo_source_shader(svideo_shader_, rgb_shader_);
-	svideo_input_shader_program_->set_source_texture_unit(source_data_texture_unit);
-	svideo_input_shader_program_->set_output_size(IntermediateBufferWidth, IntermediateBufferHeight);
+	if(!svideo_shader_.empty() || !rgb_shader_.empty()) {
+		svideo_input_shader_program_ = OpenGL::IntermediateShader::make_svideo_source_shader(svideo_shader_, rgb_shader_);
+		svideo_input_shader_program_->set_source_texture_unit(source_data_texture_unit);
+		svideo_input_shader_program_->set_output_size(IntermediateBufferWidth, IntermediateBufferHeight);
 
-	// TODO: the below is related to texture fencing, which is not yet implemented correctly, so not yet enabled.
-	if(work_texture_) {
-		svideo_input_shader_program_->set_is_double_height(true, 0.0f, 0.0f);
-	} else {
-		svideo_input_shader_program_->set_is_double_height(false);
+		// TODO: the below is related to texture fencing, which is not yet implemented correctly, so not yet enabled.
+		if(work_texture_) {
+			svideo_input_shader_program_->set_is_double_height(true, 0.0f, 0.0f);
+		} else {
+			svideo_input_shader_program_->set_is_double_height(false);
+		}
 	}
 }
 
 void OpenGLOutputBuilder::prepare_rgb_input_shaders() {
-	if(rgb_shader_.size()) {
+	if(!rgb_shader_.empty()) {
 		rgb_input_shader_program_ = OpenGL::IntermediateShader::make_rgb_source_shader(rgb_shader_);
 		rgb_input_shader_program_->set_source_texture_unit(source_data_texture_unit);
 		rgb_input_shader_program_->set_output_size(IntermediateBufferWidth, IntermediateBufferHeight);
@@ -340,35 +342,38 @@ void OpenGLOutputBuilder::prepare_rgb_input_shaders() {
 }
 
 void OpenGLOutputBuilder::prepare_source_vertex_array() {
-	if(composite_input_shader_program_) {
+	if(composite_input_shader_program_ || svideo_input_shader_program_) {
 		glBindVertexArray(source_vertex_array_);
 		array_builder.bind_input();
+	}
 
-		using Shader = OpenGL::IntermediateShader;
-		composite_input_shader_program_->enable_vertex_attribute_with_pointer(
+	using Shader = OpenGL::IntermediateShader;
+	OpenGL::IntermediateShader *const shaders[] = {
+		composite_input_shader_program_.get(),
+		svideo_input_shader_program_.get()
+	};
+	for(int c = 0; c < 2; ++c) {
+		if(!shaders[c]) continue;
+
+		shaders[c]->enable_vertex_attribute_with_pointer(
 			Shader::get_input_name(Shader::Input::InputStart),
 			2, GL_UNSIGNED_SHORT, GL_FALSE, SourceVertexSize,
 			(void *)SourceVertexOffsetOfInputStart, 1);
 
-		composite_input_shader_program_->enable_vertex_attribute_with_pointer(
+		shaders[c]->enable_vertex_attribute_with_pointer(
 			Shader::get_input_name(Shader::Input::OutputStart),
 			2, GL_UNSIGNED_SHORT, GL_FALSE, SourceVertexSize,
 			(void *)SourceVertexOffsetOfOutputStart, 1);
 
-		composite_input_shader_program_->enable_vertex_attribute_with_pointer(
+		shaders[c]->enable_vertex_attribute_with_pointer(
 			Shader::get_input_name(Shader::Input::Ends),
 			2, GL_UNSIGNED_SHORT, GL_FALSE, SourceVertexSize,
 			(void *)SourceVertexOffsetOfEnds, 1);
 
-		composite_input_shader_program_->enable_vertex_attribute_with_pointer(
+		shaders[c]->enable_vertex_attribute_with_pointer(
 			Shader::get_input_name(Shader::Input::PhaseTimeAndAmplitude),
 			3, GL_UNSIGNED_BYTE, GL_FALSE, SourceVertexSize,
 			(void *)SourceVertexOffsetOfPhaseTimeAndAmplitude, 1);
-
-		svideo_input_shader_program_->enable_vertex_attribute_with_pointer(
-			Shader::get_input_name(Shader::Input::InputStart),
-			2, GL_UNSIGNED_SHORT, GL_FALSE, SourceVertexSize,
-			(void *)SourceVertexOffsetOfInputStart, 1);
 	}
 }
 
@@ -383,7 +388,7 @@ void OpenGLOutputBuilder::prepare_output_vertex_array() {
 	if(output_shader_program_) {
 		glBindVertexArray(output_vertex_array_);
 		array_builder.bind_output();
-		
+
 		using Shader = OpenGL::OutputShader;
 		output_shader_program_->enable_vertex_attribute_with_pointer(
 			Shader::get_input_name(Shader::Input::Horizontal),

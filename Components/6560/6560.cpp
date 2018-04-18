@@ -10,7 +10,7 @@
 
 #include <cstring>
 
-using namespace MOS;
+using namespace MOS::MOS6560;
 
 AudioGenerator::AudioGenerator(Concurrency::DeferringAsyncTaskQueue &audio_queue) :
 	audio_queue_(audio_queue) {}
@@ -18,7 +18,7 @@ AudioGenerator::AudioGenerator(Concurrency::DeferringAsyncTaskQueue &audio_queue
 
 void AudioGenerator::set_volume(uint8_t volume) {
 	audio_queue_.defer([=]() {
-		volume_ = volume;
+		volume_ = static_cast<int16_t>(volume) * range_multiplier_;
 	});
 }
 
@@ -106,7 +106,7 @@ static uint8_t noise_pattern[] = {
 // means every second cycle, etc.
 
 void AudioGenerator::get_samples(std::size_t number_of_samples, int16_t *target) {
-	for(unsigned int c = 0; c < number_of_samples; c++) {
+	for(unsigned int c = 0; c < number_of_samples; ++c) {
 		update(0, 2, shift);
 		update(1, 1, shift);
 		update(2, 0, shift);
@@ -114,17 +114,17 @@ void AudioGenerator::get_samples(std::size_t number_of_samples, int16_t *target)
 
 		// this sums the output of all three sounds channels plus a DC offset for volume;
 		// TODO: what's the real ratio of this stuff?
-		target[c] = (
+		target[c] = static_cast<int16_t>(
 			(shift_registers_[0]&1) +
 			(shift_registers_[1]&1) +
 			(shift_registers_[2]&1) +
 			((noise_pattern[shift_registers_[3] >> 3] >> (shift_registers_[3]&7))&(control_registers_[3] >> 7)&1)
-		) * volume_ * 700 + volume_ * 44;
+		) * volume_ + (volume_ >> 4);
 	}
 }
 
 void AudioGenerator::skip_samples(std::size_t number_of_samples) {
-	for(unsigned int c = 0; c < number_of_samples; c++) {
+	for(unsigned int c = 0; c < number_of_samples; ++c) {
 		update(0, 2, shift);
 		update(1, 1, shift);
 		update(2, 0, shift);
@@ -133,6 +133,7 @@ void AudioGenerator::skip_samples(std::size_t number_of_samples) {
 }
 
 void AudioGenerator::set_sample_volume_range(std::int16_t range) {
+	range_multiplier_ = static_cast<int16_t>(range / 64);
 }
 
 #undef shift

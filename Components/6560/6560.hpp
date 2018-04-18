@@ -16,6 +16,7 @@
 #include "../../Outputs/Speaker/Implementation/SampleSource.hpp"
 
 namespace MOS {
+namespace MOS6560 {
 
 // audio state
 class AudioGenerator: public ::Outputs::Speaker::SampleSource {
@@ -36,7 +37,19 @@ class AudioGenerator: public ::Outputs::Speaker::SampleSource {
 		unsigned int counters_[4] = {2, 1, 0, 0}; 	// create a slight phase offset for the three channels
 		unsigned int shift_registers_[4] = {0, 0, 0, 0};
 		uint8_t control_registers_[4] = {0, 0, 0, 0};
-		uint8_t volume_ = 0;
+		int16_t volume_ = 0;
+		int16_t range_multiplier_ = 1;
+};
+
+struct BusHandler {
+	void perform_read(uint16_t address, uint8_t *pixel_data, uint8_t *colour_data) {
+		*pixel_data = 0xff;
+		*colour_data = 0xff;
+	}
+};
+
+enum class OutputMode {
+	PAL, NTSC
 };
 
 /*!
@@ -47,9 +60,10 @@ class AudioGenerator: public ::Outputs::Speaker::SampleSource {
 
 	@c set_register and @c get_register provide register access.
 */
-template <class T> class MOS6560 {
+template <class BusHandler> class MOS6560 {
 	public:
-		MOS6560() :
+		MOS6560(BusHandler &bus_handler) :
+				bus_handler_(bus_handler),
 				crt_(new Outputs::CRT::CRT(65*4, 4, Outputs::CRT::DisplayType::NTSC60, 2)),
 				audio_generator_(audio_queue_),
 				speaker_(audio_generator_)
@@ -87,10 +101,6 @@ template <class T> class MOS6560 {
 			speaker_.set_high_frequency_cutoff(cutoff);
 		}
 
-		enum OutputMode {
-			PAL, NTSC
-		};
-
 		/*!
 			Sets the output mode to either PAL or NTSC.
 		*/
@@ -99,10 +109,10 @@ template <class T> class MOS6560 {
 
 			// Luminances are encoded trivially: on a 0–255 scale.
 			const uint8_t luminances[16] = {
-				0,		255,	60,		189,
-				80,		144,	40,		227,
-				90,		161,	207,	227,
-				200,	196,	160,	196
+				0,		255,	64,		192,
+				128,	128,	64,		192,
+				128,	192,	128,	255,
+				192,	192,	128,	255
 			};
 
 			// Chrominances are encoded such that 0–128 is a complete revolution of phase;
@@ -128,7 +138,8 @@ template <class T> class MOS6560 {
 					chrominances = pal_chrominances;
 					display_type = Outputs::CRT::DisplayType::PAL50;
 					timing_.cycles_per_line = 71;
-					timing_.line_counter_increment_offset = 0;
+					timing_.line_counter_increment_offset = 4;
+					timing_.final_line_increment_position = timing_.cycles_per_line - timing_.line_counter_increment_offset;
 					timing_.lines_per_progressive_field = 312;
 					timing_.supports_interlacing = false;
 				break;
@@ -137,23 +148,23 @@ template <class T> class MOS6560 {
 					chrominances = ntsc_chrominances;
 					display_type = Outputs::CRT::DisplayType::NTSC60;
 					timing_.cycles_per_line = 65;
-					timing_.line_counter_increment_offset = 65 - 33;	// TODO: this is a bit of a hack; separate vertical and horizontal counting
+					timing_.line_counter_increment_offset = 40;
+					timing_.final_line_increment_position = 58;
 					timing_.lines_per_progressive_field = 261;
 					timing_.supports_interlacing = true;
 				break;
 			}
 
 			crt_->set_new_display_type(static_cast<unsigned int>(timing_.cycles_per_line*4), display_type);
-			crt_->set_visible_area(Outputs::CRT::Rect(0.1f, 0.05f, 0.9f, 0.9f));
 
-//			switch(output_mode) {
-//				case OutputMode::PAL:
-//					crt_->set_visible_area(crt_->get_rect_for_area(16, 237, 15*4, 55*4, 4.0f / 3.0f));
-//				break;
-//				case OutputMode::NTSC:
-//					crt_->set_visible_area(crt_->get_rect_for_area(16, 237, 11*4, 55*4, 4.0f / 3.0f));
-//				break;
-//			}
+			switch(output_mode) {
+				case OutputMode::PAL:
+					crt_->set_visible_area(Outputs::CRT::Rect(0.1f, 0.07f, 0.9f, 0.9f));
+				break;
+				case OutputMode::NTSC:
+					crt_->set_visible_area(Outputs::CRT::Rect(0.05f, 0.05f, 0.9f, 0.9f));
+				break;
+			}
 
 			for(int c = 0; c < 16; c++) {
 				uint8_t *colour = reinterpret_cast<uint8_t *>(&colours_[c]);
@@ -176,7 +187,6 @@ template <class T> class MOS6560 {
 
 				// keep track of internal time relative to this scanline
 				horizontal_counter_++;
-				full_frame_counter_++;
 				if(horizontal_counter_ == timing_.cycles_per_line) {
 					if(horizontal_drawing_latch_) {
 						current_character_row_++;
@@ -198,9 +208,8 @@ template <class T> class MOS6560 {
 					horizontal_drawing_latch_ = false;
 
 					vertical_counter_ ++;
-					if(vertical_counter_ == (registers_.interlaced ? (is_odd_frame_ ? 262 : 263) : timing_.lines_per_progressive_field)) {
+					if(vertical_counter_ == lines_this_field()) {
 						vertical_counter_ = 0;
-						full_frame_counter_ = 0;
 
 						if(output_mode_ == OutputMode::NTSC) is_odd_frame_ ^= true;
 						current_row_ = 0;
@@ -248,7 +257,7 @@ template <class T> class MOS6560 {
 
 				uint8_t pixel_data;
 				uint8_t colour_data;
-				static_cast<T *>(this)->perform_read(fetch_address, &pixel_data, &colour_data);
+				bus_handler_.perform_read(fetch_address, &pixel_data, &colour_data);
 
 				// TODO: there should be a further two-cycle delay on pixels being output; the reverse bit should
 				// divide the byte it is set for 3:1 and then continue as usual.
@@ -262,7 +271,7 @@ template <class T> class MOS6560 {
 
 				// apply vertical sync
 				if(
-					(vertical_counter_ < 3 && (is_odd_frame_ || !registers_.interlaced)) ||
+					(vertical_counter_ < 3 && is_odd_frame()) ||
 					(registers_.interlaced &&
 						(
 							(vertical_counter_ == 0 && horizontal_counter_ > 32) ||
@@ -291,6 +300,9 @@ template <class T> class MOS6560 {
 				cycles_in_state_++;
 
 				if(this_state_ == State::Pixels) {
+					// TODO: palette changes can happen within half-characters; the below needs to be divided.
+					// Also: a perfect opportunity to rearrange this inner loop for no longer needing to be
+					// two parts with a cooperative owner?
 					if(column_counter_&1) {
 						character_value_ = pixel_data;
 
@@ -331,7 +343,10 @@ template <class T> class MOS6560 {
 						character_code_ = pixel_data;
 						character_colour_ = colour_data;
 					}
+				}
 
+				// Keep counting columns even if sync or the colour burst have interceded.
+				if(column_counter_ >= 0 && column_counter_ < columns_this_line_*2) {
 					column_counter_++;
 				}
 			}
@@ -414,15 +429,15 @@ template <class T> class MOS6560 {
 		*/
 		uint8_t get_register(int address) {
 			address &= 0xf;
-			int current_line = (full_frame_counter_ + timing_.line_counter_increment_offset) / timing_.cycles_per_line;
 			switch(address) {
 				default: return registers_.direct_values[address];
-				case 0x03: return static_cast<uint8_t>(current_line << 7) | (registers_.direct_values[3] & 0x7f);
-				case 0x04: return (current_line >> 1) & 0xff;
+				case 0x03: return static_cast<uint8_t>(raster_value() << 7) | (registers_.direct_values[3] & 0x7f);
+				case 0x04: return (raster_value() >> 1) & 0xff;
 			}
 		}
 
 	private:
+		BusHandler &bus_handler_;
 		std::unique_ptr<Outputs::CRT::CRT> crt_;
 
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
@@ -453,7 +468,29 @@ template <class T> class MOS6560 {
 		unsigned int cycles_in_state_;
 
 		// counters that cover an entire field
-		int horizontal_counter_ = 0, vertical_counter_ = 0, full_frame_counter_;
+		int horizontal_counter_ = 0, vertical_counter_ = 0;
+		const int lines_this_field() {
+			// Necessary knowledge here: only the NTSC 6560 supports interlaced video.
+			return registers_.interlaced ? (is_odd_frame_ ? 262 : 263) : timing_.lines_per_progressive_field;
+		}
+		const int raster_value() {
+			const int bonus_line = (horizontal_counter_ + timing_.line_counter_increment_offset) / timing_.cycles_per_line;
+			const int line = vertical_counter_ + bonus_line;
+			const int final_line = lines_this_field();
+
+			if(line < final_line)
+				return line;
+
+			if(is_odd_frame()) {
+				return (horizontal_counter_ >= timing_.final_line_increment_position) ? 0 : final_line - 1;
+			} else {
+				return line % final_line;
+			}
+			// Cf. http://www.sleepingelephant.com/ipw-web/bulletin/bb/viewtopic.php?f=14&t=7237&start=15#p80737
+		}
+		bool is_odd_frame() {
+			return is_odd_frame_ || !registers_.interlaced;
+		}
 
 		// latches dictating start and length of drawing
 		bool vertical_drawing_latch_, horizontal_drawing_latch_;
@@ -483,12 +520,14 @@ template <class T> class MOS6560 {
 		struct {
 			int cycles_per_line;
 			int line_counter_increment_offset;
+			int final_line_increment_position;
 			int lines_per_progressive_field;
 			bool supports_interlacing;
 		} timing_;
 		OutputMode output_mode_;
 };
 
+}
 }
 
 #endif /* _560_hpp */
