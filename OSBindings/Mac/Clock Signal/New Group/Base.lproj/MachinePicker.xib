@@ -60,11 +60,11 @@
                             </tabViewItem>
                             <tabViewItem label="Amstrad CPC" identifier="cpc" id="JmB-OF-xcM">
                                 <view key="view" id="5zS-Nj-Ynx">
-                                    <rect key="frame" x="10" y="33" width="516" height="92"/>
+                                    <rect key="frame" x="10" y="33" width="554" height="54"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
                                         <popUpButton verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="00d-sg-Krh">
-                                            <rect key="frame" x="54" y="65" width="94" height="26"/>
+                                            <rect key="frame" x="54" y="27" width="94" height="26"/>
                                             <popUpButtonCell key="cell" type="push" title="CPC6128" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" tag="6128" imageScaling="proportionallyDown" inset="2" selectedItem="klh-ZE-Agp" id="hVJ-h6-iea">
                                                 <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
                                                 <font key="font" metaFont="menu"/>
@@ -78,7 +78,7 @@
                                             </popUpButtonCell>
                                         </popUpButton>
                                         <textField horizontalHuggingPriority="251" verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="q9q-sl-J0q">
-                                            <rect key="frame" x="8" y="70" width="42" height="17"/>
+                                            <rect key="frame" x="8" y="32" width="42" height="17"/>
                                             <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" title="Model" id="Cw3-q5-1bC">
                                                 <font key="font" metaFont="system"/>
                                                 <color key="textColor" name="labelColor" catalog="System" colorSpace="catalog"/>
@@ -356,7 +356,7 @@ Gw
                         </connections>
                     </button>
                     <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" setsMaxLayoutWidthAtFirstLayout="YES" translatesAutoresizingMaskIntoConstraints="NO" id="9YM-5x-pc0">
-                        <rect key="frame" x="20" y="14" width="398" height="34"/>
+                        <rect key="frame" x="18" y="14" width="398" height="34"/>
                         <textFieldCell key="cell" sendsActionOnEndEditing="YES" id="xTm-Oy-oz5">
                             <font key="font" metaFont="system"/>
                             <string key="title">If you use File -&gt; Open... to select a disk, tape or cartridge directly, the emulator will select and configure a machine for you.</string>
@@ -366,17 +366,17 @@ Gw
                     </textField>
                 </subviews>
                 <constraints>
-                    <constraint firstAttribute="trailing" secondItem="VUb-QG-x7c" secondAttribute="trailing" constant="20" id="Bem-7v-AY6"/>
                     <constraint firstItem="JQy-Cj-AOK" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" id="FMm-eV-4eu"/>
-                    <constraint firstAttribute="bottom" secondItem="JQy-Cj-AOK" secondAttribute="bottom" constant="20" id="Kvh-1K-iI8"/>
                     <constraint firstItem="9YM-5x-pc0" firstAttribute="centerY" secondItem="JQy-Cj-AOK" secondAttribute="centerY" id="LM5-2z-qQj"/>
                     <constraint firstItem="hKn-1l-OSN" firstAttribute="top" secondItem="VUb-QG-x7c" secondAttribute="bottom" constant="20" id="TqB-gT-0bf"/>
                     <constraint firstItem="hKn-1l-OSN" firstAttribute="leading" secondItem="JQy-Cj-AOK" secondAttribute="trailing" constant="11" id="f3Q-Om-rI0"/>
-                    <constraint firstItem="9YM-5x-pc0" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="22" id="g8a-if-Ogh"/>
-                    <constraint firstItem="VUb-QG-x7c" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" id="j1W-rQ-Ypd"/>
-                    <constraint firstAttribute="trailing" secondItem="hKn-1l-OSN" secondAttribute="trailing" constant="20" id="mJg-vd-ddP"/>
-                    <constraint firstItem="JQy-Cj-AOK" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="9YM-5x-pc0" secondAttribute="trailing" constant="8" id="nlb-iJ-JUF"/>
-                    <constraint firstAttribute="bottom" secondItem="hKn-1l-OSN" secondAttribute="bottom" constant="20" id="rG2-Ea-klR"/>
+                    <constraint firstItem="9YM-5x-pc0" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" symbolic="YES" id="g8a-if-Ogh"/>
+                    <constraint firstItem="VUb-QG-x7c" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" symbolic="YES" id="j1W-rQ-Ypd"/>
+                    <constraint firstAttribute="trailing" secondItem="hKn-1l-OSN" secondAttribute="trailing" constant="20" symbolic="YES" id="mJg-vd-ddP"/>
+                    <constraint firstItem="JQy-Cj-AOK" firstAttribute="leading" relation="greaterThanOrEqual" secondItem="9YM-5x-pc0" secondAttribute="trailing" constant="8" symbolic="YES" id="nlb-iJ-JUF"/>
+                    <constraint firstItem="hKn-1l-OSN" firstAttribute="baseline" secondItem="JQy-Cj-AOK" secondAttribute="baseline" id="nta-6V-2bl"/>
+                    <constraint firstItem="VUb-QG-x7c" firstAttribute="centerX" secondItem="EiT-Mj-1SZ" secondAttribute="centerX" id="otT-6z-ybI"/>
+                    <constraint firstAttribute="bottom" secondItem="hKn-1l-OSN" secondAttribute="bottom" constant="20" symbolic="YES" id="rG2-Ea-klR"/>
                     <constraint firstItem="VUb-QG-x7c" firstAttribute="top" secondItem="EiT-Mj-1SZ" secondAttribute="top" constant="20" id="zT3-Ea-QQJ"/>
                 </constraints>
             </view>
