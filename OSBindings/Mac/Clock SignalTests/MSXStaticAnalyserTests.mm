@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 11/03/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #import <XCTest/XCTest.h>
@@ -212,7 +212,7 @@ static NSDictionary<NSString *, MSXROMRecord *> *romRecordsBySHA1 = @{
 		for(int c = 0; c < CC_SHA1_DIGEST_LENGTH; c++) [sha1 appendFormat:@"%02x", sha1Bytes[c]];
 
 		// get an analysis of the file
-		std::vector<std::unique_ptr<Analyser::Static::Target>> targets = Analyser::Static::GetTargets([fullPath fileSystemRepresentation]);
+		auto targets = Analyser::Static::GetTargets([fullPath fileSystemRepresentation]);
 
 		// grab the ROM record
 		MSXROMRecord *romRecord = romRecordsBySHA1[sha1];

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 10/07/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef Storage_hpp
@@ -35,7 +35,7 @@ struct Time {
 	}
 
 	/*!
-		Reduces this @c Time to its simplest form — eliminates all common factors from @c length
+		Reduces this @c Time to its simplest form; eliminates all common factors from @c length
 		and @c clock_rate.
 	*/
 	void simplify() {
@@ -47,12 +47,8 @@ struct Time {
 	/*!
 		@returns the floating point conversion of this @c Time. This will often be less precise.
 	*/
-	inline float get_float() const {
-		return static_cast<float>(length) / static_cast<float>(clock_rate);
-	}
-
-	inline unsigned int get_unsigned_int() const {
-		return length / clock_rate;
+	template <typename T> T get() const {
+		return static_cast<T>(length) / static_cast<T>(clock_rate);
 	}
 
 	inline bool operator < (const Time &other) const {

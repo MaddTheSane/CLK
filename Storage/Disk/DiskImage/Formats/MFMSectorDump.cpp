@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 30/09/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "MFMSectorDump.hpp"
@@ -33,7 +33,7 @@ std::shared_ptr<Track> MFMSectorDump::get_track_at_position(Track::Address addre
 		file_.read(sectors, sizeof(sectors));
 	}
 
-	return track_for_sectors(sectors, static_cast<uint8_t>(address.position), static_cast<uint8_t>(address.head), first_sector_, sector_size_, is_double_density_);
+	return track_for_sectors(sectors, sectors_per_track_, static_cast<uint8_t>(address.position.as_int()), static_cast<uint8_t>(address.head), first_sector_, sector_size_, is_double_density_);
 }
 
 void MFMSectorDump::set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) {
@@ -42,7 +42,7 @@ void MFMSectorDump::set_tracks(const std::map<Track::Address, std::shared_ptr<Tr
 	// TODO: it would be more efficient from a file access and locking point of view to parse the sectors
 	// in one loop, then write in another.
 
-	for(auto &track : tracks) {
+	for(const auto &track : tracks) {
 		// Assumption here: sector IDs will run from 0.
 		decode_sectors(*track.second, parsed_track, first_sector_, first_sector_ + static_cast<uint8_t>(sectors_per_track_-1), sector_size_, is_double_density_);
 		long file_offset = get_file_offset_for_position(track.first);

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 04/10/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 import Foundation
@@ -14,7 +14,7 @@ class BCDTest: XCTestCase, CSTestMachineTrapHandler {
 	func testBCD() {
 		if let filename = Bundle(for: type(of: self)).path(forResource: "BCDTEST_beeb", ofType: nil) {
 			if let bcdTest = try? Data(contentsOf: URL(fileURLWithPath: filename)) {
-				let machine = CSTestMachine6502()
+				let machine = CSTestMachine6502(is65C02: false)
 				machine.trapHandler = self
 
 				machine.setData(bcdTest, atAddress: 0x2900)

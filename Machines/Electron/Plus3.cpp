@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 25/09/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "Plus3.hpp"
@@ -11,14 +11,12 @@
 using namespace Electron;
 
 Plus3::Plus3() : WD1770(P1770) {
+	drives_.emplace_back(new Storage::Disk::Drive(8000000, 300, 2));
+	drives_.emplace_back(new Storage::Disk::Drive(8000000, 300, 2));
 	set_control_register(last_control_, 0xff);
 }
 
-void Plus3::set_disk(std::shared_ptr<Storage::Disk::Disk> disk, int drive) {
-	if(!drives_[drive]) {
-		drives_[drive].reset(new Storage::Disk::Drive(8000000, 300, 2));
-		if(drive == selected_drive_) set_drive(drives_[drive]);
-	}
+void Plus3::set_disk(std::shared_ptr<Storage::Disk::Disk> disk, size_t drive) {
 	drives_[drive]->set_disk(disk);
 }
 
@@ -42,8 +40,8 @@ void Plus3::set_control_register(uint8_t control, uint8_t changes) {
 		}
 	}
 	if(changes & 0x04) {
-		if(drives_[0]) drives_[0]->set_head((control & 0x04) ? 1 : 0);
-		if(drives_[1]) drives_[1]->set_head((control & 0x04) ? 1 : 0);
+		drives_[0]->set_head((control & 0x04) ? 1 : 0);
+		drives_[1]->set_head((control & 0x04) ? 1 : 0);
 	}
 	if(changes & 0x08) set_is_double_density(!(control & 0x08));
 }
@@ -52,4 +50,12 @@ void Plus3::set_motor_on(bool on) {
 	// TODO: this status should transfer if the selected drive changes. But the same goes for
 	// writing state, so plenty of work to do in general here.
 	get_drive().set_motor_on(on);
+}
+
+void Plus3::set_activity_observer(Activity::Observer *observer) {
+	size_t index = 0;
+	for(const auto &drive: drives_) {
+		drive->set_activity_observer(observer, "Drive " + std::to_string(index+1), true);
+		++index;
+	}
 }

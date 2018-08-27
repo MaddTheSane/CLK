@@ -3,13 +3,17 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 02/04/2018.
-//  Copyright © 2018 Thomas Harte. All rights reserved.
+//  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
 import Cocoa
 
 class MachinePicker: NSObject {
 	@IBOutlet var machineSelector: NSTabView?
+
+	// MARK: - Apple II properties
+	@IBOutlet var appleIIModelButton: NSPopUpButton?
+	@IBOutlet var appleIIDiskControllerButton: NSPopUpButton?
 
 	// MARK: - Electron properties
 	@IBOutlet var electronDFSButton: NSButton?
@@ -23,7 +27,7 @@ class MachinePicker: NSObject {
 
 	// MARK: - Oric properties
 	@IBOutlet var oricModelTypeButton: NSPopUpButton?
-	@IBOutlet var oricHasMicrodriveButton: NSButton?
+	@IBOutlet var oricDiskInterfaceButton: NSPopUpButton?
 
 	// MARK: - Vic-20 properties
 	@IBOutlet var vic20RegionButton: NSPopUpButton?
@@ -46,6 +50,10 @@ class MachinePicker: NSObject {
 			machineSelector?.selectTabViewItem(withIdentifier: machineIdentifier as Any)
 		}
 
+		// Apple II settings
+		appleIIModelButton?.selectItem(withTag: standardUserDefaults.integer(forKey: "new.appleIIModel"))
+		appleIIDiskControllerButton?.selectItem(withTag: standardUserDefaults.integer(forKey: "new.appleIIDiskController"))
+
 		// Electron settings
 		electronDFSButton?.state = standardUserDefaults.bool(forKey: "new.electronDFS") ? .on : .off
 		electronADFSButton?.state = standardUserDefaults.bool(forKey: "new.electronADFS") ? .on : .off
@@ -57,7 +65,7 @@ class MachinePicker: NSObject {
 		msxHasDiskDriveButton?.state = standardUserDefaults.bool(forKey: "new.msxDiskDrive") ? .on : .off
 
 		// Oric settings
-		oricHasMicrodriveButton?.state = standardUserDefaults.bool(forKey: "new.oricMicrodrive") ? .on : .off
+		oricDiskInterfaceButton?.selectItem(withTag: standardUserDefaults.integer(forKey: "new.oricDiskInterface"))
 		oricModelTypeButton?.selectItem(withTag: standardUserDefaults.integer(forKey: "new.oricModel"))
 
 		// Vic-20 settings
@@ -79,6 +87,10 @@ class MachinePicker: NSObject {
 		// Machine type
 		standardUserDefaults.set(machineSelector!.selectedTabViewItem!.identifier as! String, forKey: "new.machine")
 
+		// Apple II settings
+		standardUserDefaults.set(appleIIModelButton!.selectedTag(), forKey: "new.appleIIModel")
+		standardUserDefaults.set(appleIIDiskControllerButton!.selectedTag(), forKey: "new.appleIIDiskController")
+
 		// Electron settings
 		standardUserDefaults.set(electronDFSButton!.state == .on, forKey: "new.electronDFS")
 		standardUserDefaults.set(electronADFSButton!.state == .on, forKey: "new.electronADFS")
@@ -90,7 +102,7 @@ class MachinePicker: NSObject {
 		standardUserDefaults.set(msxHasDiskDriveButton?.state == .on, forKey: "new.msxDiskDrive")
 
 		// Oric settings
-		standardUserDefaults.set(oricHasMicrodriveButton?.state == .on, forKey: "new.oricMicrodrive")
+		standardUserDefaults.set(oricDiskInterfaceButton!.selectedTag(), forKey: "new.oricDiskInterface")
 		standardUserDefaults.set(oricModelTypeButton!.selectedTag(), forKey: "new.oricModel")
 
 		// Vic-20 settings
@@ -114,6 +126,26 @@ class MachinePicker: NSObject {
 			case "electron":
 				return CSStaticAnalyser(electronDFS: electronDFSButton!.state == .on, adfs: electronADFSButton!.state == .on)!
 
+			case "appleii":
+				var model: CSMachineAppleIIModel = .appleII
+				switch appleIIModelButton!.selectedTag() {
+					case 1:		model = .appleIIPlus
+					case 2:		model = .appleIIe
+					case 3:		model = .appleEnhancedIIe
+					case 0:		fallthrough
+					default:	model = .appleII
+				}
+
+				var diskController: CSMachineAppleIIDiskController = .none
+				switch appleIIDiskControllerButton!.selectedTag() {
+					case 13:	diskController = .thirteenSector
+					case 16:	diskController = .sixteenSector
+					case 0:		fallthrough
+					default: 	diskController = .none
+				}
+
+				return CSStaticAnalyser(appleIIModel: model, diskController: diskController)
+
 			case "cpc":
 				switch cpcModelTypeButton!.selectedItem!.tag {
 					case 464:	return CSStaticAnalyser(amstradCPCModel: .model464)
@@ -126,11 +158,21 @@ class MachinePicker: NSObject {
 				return CSStaticAnalyser(msxHasDiskDrive: msxHasDiskDriveButton!.state == .on)
 
 			case "oric":
-				let hasMicrodrive = oricHasMicrodriveButton!.state == .on
-				switch oricModelTypeButton!.selectedItem!.tag {
-					case 1:		return CSStaticAnalyser(oricModel: .oric1, hasMicrodrive: hasMicrodrive)
-					default:	return CSStaticAnalyser(oricModel: .oricAtmos, hasMicrodrive: hasMicrodrive)
+				var diskInterface: CSMachineOricDiskInterface = .none
+				switch oricDiskInterfaceButton!.selectedTag() {
+					case 1:		diskInterface = .microdisc
+					case 2:		diskInterface = .pravetz
+					default: 	break;
+
 				}
+				var model: CSMachineOricModel = .oric1
+				switch oricModelTypeButton!.selectedItem!.tag {
+					case 1:		model = .oricAtmos
+					case 2:		model = .pravetz
+					default:	break;
+				}
+
+				return CSStaticAnalyser(oricModel: model, diskInterface: diskInterface)
 
 			case "vic20":
 				let memorySize = Kilobytes(vic20MemorySizeButton!.selectedItem!.tag)

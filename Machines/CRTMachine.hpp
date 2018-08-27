@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 31/05/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef CRTMachine_hpp
@@ -26,7 +26,7 @@ namespace CRTMachine {
 	that optionally provide a speaker, and that nominate a clock rate and can announce to a delegate
 	should that clock rate change.
 */
-class Machine: public ROMMachine::Machine {
+class Machine {
 	public:
 		/*!
 			Causes the machine to set up its CRT and, if it has one, speaker. The caller guarantees

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 06/06/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef _522_hpp
@@ -112,6 +112,9 @@ template <class T> class MOS6522: public MOS6522Base {
 
 		/*! Gets a register value. */
 		uint8_t get_register(int address);
+
+		/*! @returns the bus handler. */
+		T &bus_handler();
 
 	private:
 		T &bus_handler_;

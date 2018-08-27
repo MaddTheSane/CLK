@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 29/07/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef Storage_Disk_Encodings_CommodoreGCR_hpp
@@ -43,7 +43,7 @@ namespace CommodoreGCR {
 	unsigned int decoding_from_quintet(unsigned int quintet);
 
 	/*!
-		@returns the byte composted of the low five bit five-bit GCR
+		@returns the byte composed by splitting the dectet into two qintets, decoding each and composing the resulting nibbles.
 	*/
 	unsigned int decoding_from_dectet(unsigned int dectet);
 }

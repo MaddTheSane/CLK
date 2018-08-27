@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 05/08/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef CPCDSK_hpp
@@ -20,24 +20,20 @@ namespace Storage {
 namespace Disk {
 
 /*!
-	Provides a @c Disk containing an Amstrad CPC-type disk image — some arrangement of sectors with status bits.
+	Provides a @c Disk containing an Amstrad CPC-type disk image: some arrangement of sectors with status bits.
 */
 class CPCDSK: public DiskImage {
 	public:
 		/*!
 			Construct an @c AcornADF containing content from the file with name @c file_name.
 
-			@throws ErrorCantOpen if this file can't be opened.
-			@throws ErrorNotAcornADF if the file doesn't appear to contain an Acorn .ADF format image.
+			@throws Storage::FileHolder::Error::CantOpen if this file can't be opened.
+			@throws Error::InvalidFormat if the file doesn't appear to contain an Acorn .ADF format image.
 		*/
 		CPCDSK(const std::string &file_name);
 
-		enum {
-			ErrorNotCPCDSK,
-		};
-
 		// implemented to satisfy @c Disk
-		int get_head_position_count() override;
+		HeadPosition get_maximum_head_position() override;
 		int get_head_count() override;
 		bool get_is_read_only() override;
 

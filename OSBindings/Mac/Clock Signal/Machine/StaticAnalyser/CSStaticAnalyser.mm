@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 31/08/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #import "CSStaticAnalyser.h"
@@ -15,6 +15,7 @@
 
 #include "../../../../../Analyser/Static/Acorn/Target.hpp"
 #include "../../../../../Analyser/Static/AmstradCPC/Target.hpp"
+#include "../../../../../Analyser/Static/AppleII/Target.hpp"
 #include "../../../../../Analyser/Static/Commodore/Target.hpp"
 #include "../../../../../Analyser/Static/MSX/Target.hpp"
 #include "../../../../../Analyser/Static/Oric/Target.hpp"
@@ -23,7 +24,7 @@
 #import "Clock_Signal-Swift.h"
 
 @implementation CSStaticAnalyser {
-	std::vector<std::unique_ptr<Analyser::Static::Target>> _targets;
+	Analyser::Static::TargetList _targets;
 }
 
 - (instancetype)initWithFileAtURL:(NSURL *)url {
@@ -80,14 +81,22 @@
 	return self;
 }
 
-- (instancetype)initWithOricModel:(CSMachineOricModel)model hasMicrodrive:(BOOL)hasMicrodrive {
+- (instancetype)initWithOricModel:(CSMachineOricModel)model diskInterface:(CSMachineOricDiskInterface)diskInterface {
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::Oric::Target;
 		std::unique_ptr<Target> target(new Target);
 		target->machine = Analyser::Machine::Oric;
-		target->use_atmos_rom = (model == CSMachineOricModelOricAtmos);
-		target->has_microdrive = !!hasMicrodrive;
+		switch(model) {
+			case CSMachineOricModelOric1:		target->rom = Target::ROM::BASIC10;	break;
+			case CSMachineOricModelOricAtmos:	target->rom = Target::ROM::BASIC11;	break;
+			case CSMachineOricModelPravetz:		target->rom = Target::ROM::Pravetz;	break;
+		}
+		switch(diskInterface) {
+			case CSMachineOricDiskInterfaceNone:		target->disk_interface = Target::DiskInterface::None;		break;
+			case CSMachineOricDiskInterfaceMicrodisc:	target->disk_interface = Target::DiskInterface::Microdisc;	break;
+			case CSMachineOricDiskInterfacePravetz:		target->disk_interface = Target::DiskInterface::Pravetz;	break;
+		}
 		_targets.push_back(std::move(target));
 	}
 	return self;
@@ -153,9 +162,34 @@ static Analyser::Static::ZX8081::Target::MemoryModel ZX8081MemoryModelFromSize(K
 	return self;
 }
 
+- (instancetype)initWithAppleIIModel:(CSMachineAppleIIModel)model diskController:(CSMachineAppleIIDiskController)diskController {
+	self = [super init];
+	if(self) {
+		using Target = Analyser::Static::AppleII::Target;
+		std::unique_ptr<Target> target(new Target);
+		target->machine = Analyser::Machine::AppleII;
+		switch(model) {
+			default: 									target->model = Target::Model::II; 				break;
+			case CSMachineAppleIIModelAppleIIPlus:		target->model = Target::Model::IIplus;			break;
+			case CSMachineAppleIIModelAppleIIe:			target->model = Target::Model::IIe;				break;
+			case CSMachineAppleIIModelAppleEnhancedIIe:	target->model = Target::Model::EnhancedIIe;		break;
+		}
+		switch(diskController) {
+			default:
+			case CSMachineAppleIIDiskControllerNone:			target->disk_controller = Target::DiskController::None;				break;
+			case CSMachineAppleIIDiskControllerSixteenSector:	target->disk_controller = Target::DiskController::SixteenSector;	break;
+			case CSMachineAppleIIDiskControllerThirteenSector:	target->disk_controller = Target::DiskController::ThirteenSector;	break;
+		}
+		_targets.push_back(std::move(target));
+	}
+	return self;
+
+}
+
 - (NSString *)optionsPanelNibName {
 	switch(_targets.front()->machine) {
-		case Analyser::Machine::AmstradCPC:	return nil;
+		case Analyser::Machine::AmstradCPC:	return @"CompositeOptions";
+//		case Analyser::Machine::AppleII:	return @"AppleIIOptions";
 		case Analyser::Machine::Atari2600:	return @"Atari2600Options";
 		case Analyser::Machine::Electron:	return @"QuickLoadCompositeOptions";
 		case Analyser::Machine::MSX:		return @"QuickLoadCompositeOptions";
@@ -166,7 +200,7 @@ static Analyser::Static::ZX8081::Target::MemoryModel ZX8081MemoryModelFromSize(K
 	}
 }
 
-- (std::vector<std::unique_ptr<Analyser::Static::Target>> &)targets {
+- (Analyser::Static::TargetList &)targets {
 	return _targets;
 }
 

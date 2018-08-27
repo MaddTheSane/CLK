@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 29/08/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "StaticAnalyser.hpp"
@@ -50,14 +50,14 @@ static std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>>
 		//		1/(2^32) *
 		//		( ((2^24)-1)/(2^24)*(1/4)		+		1/(2^24)	) *
 		//		1/4
-		//	= something very improbable — around 1/16th of 1 in 2^32, but not exactly.
+		//	= something very improbable, around 1/16th of 1 in 2^32, but not exactly.
 		acorn_cartridges.push_back(cartridge);
 	}
 
 	return acorn_cartridges;
 }
 
-void Analyser::Static::Acorn::AddTargets(const Media &media, std::vector<std::unique_ptr<::Analyser::Static::Target>> &destination) {
+Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(const Media &media, const std::string &file_name, TargetPlatform::IntType potential_platforms) {
 	std::unique_ptr<Target> target(new Target);
 	target->machine = Machine::Electron;
 	target->confidence = 0.5; // TODO: a proper estimation
@@ -69,13 +69,13 @@ void Analyser::Static::Acorn::AddTargets(const Media &media, std::vector<std::un
 	target->media.cartridges = AcornCartridgesFrom(media.cartridges);
 
 	// if there are any tapes, attempt to get data from the first
-	if(media.tapes.size() > 0) {
+	if(!media.tapes.empty()) {
 		std::shared_ptr<Storage::Tape::Tape> tape = media.tapes.front();
 		std::vector<File> files = GetFiles(tape);
 		tape->reset();
 
 		// continue if there are any files
-		if(files.size()) {
+		if(!files.empty()) {
 			bool is_basic = true;
 
 			// protected files are always for *RUNning only
@@ -103,7 +103,7 @@ void Analyser::Static::Acorn::AddTargets(const Media &media, std::vector<std::un
 		}
 	}
 
-	if(media.disks.size() > 0) {
+	if(!media.disks.empty()) {
 		std::shared_ptr<Storage::Disk::Disk> disk = media.disks.front();
 		std::unique_ptr<Catalogue> dfs_catalogue, adfs_catalogue;
 		dfs_catalogue = GetDFSCatalogue(disk);
@@ -121,7 +121,9 @@ void Analyser::Static::Acorn::AddTargets(const Media &media, std::vector<std::un
 		}
 	}
 
-	if(target->media.tapes.size() || target->media.disks.size() || target->media.cartridges.size()) {
-		destination.push_back(std::move(target));
+	TargetList targets;
+	if(!target->media.empty()) {
+		targets.push_back(std::move(target));
 	}
+	return targets;
 }

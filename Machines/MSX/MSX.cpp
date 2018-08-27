@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 24/11/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "MSX.hpp"
@@ -23,14 +23,17 @@
 #include "../../Components/1770/1770.hpp"
 #include "../../Components/9918/9918.hpp"
 #include "../../Components/8255/i8255.hpp"
+#include "../../Components/AudioToggle/AudioToggle.hpp"
 #include "../../Components/AY38910/AY38910.hpp"
 #include "../../Components/KonamiSCC/KonamiSCC.hpp"
 
 #include "../../Storage/Tape/Parsers/MSX.hpp"
 #include "../../Storage/Tape/Tape.hpp"
 
+#include "../../Activity/Source.hpp"
 #include "../CRTMachine.hpp"
-#include "../ConfigurationTarget.hpp"
+#include "../JoystickMachine.hpp"
+#include "../MediaTarget.hpp"
 #include "../KeyboardMachine.hpp"
 
 #include "../../Outputs/Speaker/Implementation/CompoundSource.hpp"
@@ -50,83 +53,98 @@ std::vector<std::unique_ptr<Configurable::Option>> get_options() {
 	);
 }
 
-/*!
-	Provides a sample source that can programmatically be set to one of two values.
-*/
-class AudioToggle: public Outputs::Speaker::SampleSource {
-	public:
-		AudioToggle(Concurrency::DeferringAsyncTaskQueue &audio_queue) :
-			audio_queue_(audio_queue) {}
-
-		void get_samples(std::size_t number_of_samples, std::int16_t *target) {
-			for(std::size_t sample = 0; sample < number_of_samples; ++sample) {
-				target[sample] = level_;
-			}
-		}
-
-		void set_sample_volume_range(std::int16_t range) {
-			volume_ = range;
-		}
-
-		void skip_samples(const std::size_t number_of_samples) {}
-
-		void set_output(bool enabled) {
-			if(is_enabled_ == enabled) return;
-			is_enabled_ = enabled;
-			audio_queue_.defer([=] {
-				level_ = enabled ? volume_ : 0;
-			});
-		}
-
-		bool get_output() {
-			return is_enabled_;
-		}
-
-	private:
-		bool is_enabled_ = false;
-		int16_t level_ = 0, volume_ = 0;
-		Concurrency::DeferringAsyncTaskQueue &audio_queue_;
-};
-
 class AYPortHandler: public GI::AY38910::PortHandler {
 	public:
-		AYPortHandler(Storage::Tape::BinaryTapePlayer &tape_player) : tape_player_(tape_player) {}
+		AYPortHandler(Storage::Tape::BinaryTapePlayer &tape_player) : tape_player_(tape_player) {
+			joysticks_.emplace_back(new Joystick);
+			joysticks_.emplace_back(new Joystick);
+		}
 
 		void set_port_output(bool port_b, uint8_t value) {
 			if(port_b) {
-				// Bits 0–3: touchpad handshaking (?)
-				// Bit 4—5: monostable timer pulses
+				// Bits 0-3: touchpad handshaking (?)
+				// Bit 4-5: monostable timer pulses
+
 				// Bit 6: joystick select
+				selected_joystick_ = (value >> 6) & 1;
+
 				// Bit 7: code LED, if any
 			}
 		}
 
 		uint8_t get_port_input(bool port_b) {
 			if(!port_b) {
-				// Bits 0–5: Joystick (up, down, left, right, A, B)
+				// Bits 0-5: Joystick (up, down, left, right, A, B)
 				// Bit 6: keyboard switch (not universal)
-
 				// Bit 7: tape input
-				return 0x7f | (tape_player_.get_input() ? 0x00 : 0x80);
+				return
+					(static_cast<Joystick *>(joysticks_[selected_joystick_].get())->get_state() & 0x3f) |
+					0x40 |
+					(tape_player_.get_input() ? 0x00 : 0x80);
 			}
 			return 0xff;
 		}
 
+		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() {
+			return joysticks_;
+		}
+
 	private:
 		Storage::Tape::BinaryTapePlayer &tape_player_;
+
+		std::vector<std::unique_ptr<Inputs::Joystick>> joysticks_;
+		size_t selected_joystick_ = 0;
+		class Joystick: public Inputs::ConcreteJoystick {
+			public:
+				Joystick() :
+					ConcreteJoystick({
+						Input(Input::Up),
+						Input(Input::Down),
+						Input(Input::Left),
+						Input(Input::Right),
+						Input(Input::Fire, 0),
+						Input(Input::Fire, 1),
+					}) {}
+
+				void did_set_input(const Input &input, bool is_active) override {
+					uint8_t mask = 0;
+					switch(input.type) {
+						default: return;
+						case Input::Up:		mask = 0x01;	break;
+						case Input::Down:	mask = 0x02;	break;
+						case Input::Left:	mask = 0x04;	break;
+						case Input::Right:	mask = 0x08;	break;
+						case Input::Fire:
+							if(input.info.control.index >= 2) return;
+							mask = input.info.control.index ? 0x20 : 0x10;
+						break;
+					}
+
+					if(is_active) state_ &= ~mask; else state_ |= mask;
+				}
+
+				uint8_t get_state() {
+					return state_;
+				}
+
+			private:
+				uint8_t state_ = 0xff;
+		};
 };
 
 class ConcreteMachine:
 	public Machine,
 	public CPU::Z80::BusHandler,
 	public CRTMachine::Machine,
-	public ConfigurationTarget::Machine,
+	public MediaTarget::Machine,
 	public KeyboardMachine::Machine,
 	public Configurable::Device,
+	public JoystickMachine::Machine,
 	public MemoryMap,
-	public Sleeper::SleepObserver {
+	public ClockingHint::Observer,
+	public Activity::Source {
 	public:
-		ConcreteMachine():
+		ConcreteMachine(const Analyser::Static::MSX::Target &target, const ROMMachine::ROMFetcher &rom_fetcher):
 			z80_(*this),
 			i8255_(i8255_port_handler_),
 			ay_(audio_queue_),
@@ -143,10 +161,55 @@ class ConcreteMachine:
 
 			ay_.set_port_handler(&ay_port_handler_);
 			speaker_.set_input_rate(3579545.0f / 2.0f);
-			tape_player_.set_sleep_observer(this);
+			tape_player_.set_clocking_hint_observer(this);
 
 			// Set the AY to 50% of available volume, the toggle to 10% and leave 40% for an SCC.
 			mixer_.set_relative_volumes({0.5f, 0.1f, 0.4f});
+
+			// Fetch the necessary ROMs.
+			std::vector<std::string> rom_names = {"msx.rom"};
+			if(target.has_disk_drive) {
+				rom_names.push_back("disk.rom");
+			}
+			const auto roms = rom_fetcher("MSX", rom_names);
+
+			if(!roms[0] || (target.has_disk_drive && !roms[1])) {
+				throw ROMMachine::Error::MissingROMs;
+			}
+
+			memory_slots_[0].source = std::move(*roms[0]);
+			memory_slots_[0].source.resize(32768);
+
+			for(size_t c = 0; c < 8; ++c) {
+				for(size_t slot = 0; slot < 3; ++slot) {
+					memory_slots_[slot].read_pointers[c] = unpopulated_;
+					memory_slots_[slot].write_pointers[c] = scratch_;
+				}
+
+				memory_slots_[3].read_pointers[c] =
+				memory_slots_[3].write_pointers[c] = &ram_[c * 8192];
+			}
+
+			map(0, 0, 0, 32768);
+			page_memory(0);
+
+			// Add a disk cartridge if any disks were supplied.
+			if(target.has_disk_drive) {
+				memory_slots_[2].set_handler(new DiskROM(memory_slots_[2].source));
+				memory_slots_[2].source = std::move(*roms[1]);
+				memory_slots_[2].source.resize(16384);
+
+				map(2, 0, 0x4000, 0x2000);
+				unmap(2, 0x6000, 0x2000);
+			}
+
+			// Insert the media.
+			insert_media(target.media);
+
+			// Type whatever has been requested.
+			if(!target.loading_command.empty()) {
+				type_string(target.loading_command);
+			}
 		}
 
 		~ConcreteMachine() {
@@ -187,25 +250,6 @@ class ConcreteMachine:
 			}
 		}
 
-		void configure_as_target(const Analyser::Static::Target *target) override {
-			auto *const msx_target = dynamic_cast<const Analyser::Static::MSX::Target *>(target);
-
-			// Add a disk cartridge if any disks were supplied.
-			if(msx_target->has_disk_drive) {
-				map(2, 0, 0x4000, 0x2000);
-				unmap(2, 0x6000, 0x2000);
-				memory_slots_[2].set_handler(new DiskROM(memory_slots_[2].source));
-			}
-
-			// Insert the media.
-			insert_media(target->media);
-
-			// Type whatever has been requested.
-			if(target->loading_command.length()) {
-				type_string(target->loading_command);
-			}
-		}
-
 		bool insert_media(const Analyser::Static::Media &media) override {
 			if(!media.cartridges.empty()) {
 				const auto &segment = media.cartridges.front()->get_segments().front();
@@ -237,12 +281,14 @@ class ConcreteMachine:
 			}
 
 			if(!media.disks.empty()) {
-				DiskROM *disk_rom = dynamic_cast<DiskROM *>(memory_slots_[2].handler.get());
-				int drive = 0;
-				for(auto &disk : media.disks) {
-					disk_rom->set_disk(disk, drive);
-					drive++;
-					if(drive == 2) break;
+				DiskROM *disk_rom = get_disk_rom();
+				if(disk_rom) {
+					size_t drive = 0;
+					for(auto &disk : media.disks) {
+						disk_rom->set_disk(disk, drive);
+						drive++;
+						if(drive == 2) break;
+					}
 				}
 			}
 
@@ -500,39 +546,6 @@ class ConcreteMachine:
 			audio_queue_.perform();
 		}
 
-		// Obtains the system ROMs.
-		bool set_rom_fetcher(const std::function<std::vector<std::unique_ptr<std::vector<uint8_t>>>(const std::string &machine, const std::vector<std::string> &names)> &roms_with_names) override {
-			auto roms = roms_with_names(
-				"MSX",
-				{
-					"msx.rom",
-					"disk.rom"
-				});
-
-			if(!roms[0] || !roms[1]) return false;
-
-			memory_slots_[0].source = std::move(*roms[0]);
-			memory_slots_[0].source.resize(32768);
-
-			memory_slots_[2].source = std::move(*roms[1]);
-			memory_slots_[2].source.resize(16384);
-
-			for(size_t c = 0; c < 8; ++c) {
-				for(size_t slot = 0; slot < 3; ++slot) {
-					memory_slots_[slot].read_pointers[c] = unpopulated_;
-					memory_slots_[slot].write_pointers[c] = scratch_;
-				}
-
-				memory_slots_[3].read_pointers[c] =
-				memory_slots_[3].write_pointers[c] = &ram_[c * 8192];
-			}
-
-			map(0, 0, 0, 32768);
-			page_memory(0);
-
-			return true;
-		}
-
 		void set_keyboard_line(int line) {
 			selected_key_line_ = line;
 		}
@@ -588,19 +601,35 @@ class ConcreteMachine:
 		}
 
 		// MARK: - Sleeper
-		void set_component_is_sleeping(void *component, bool is_sleeping) override {
-			tape_player_is_sleeping_ = tape_player_.is_sleeping();
+		void set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference clocking) override {
+			tape_player_is_sleeping_ = tape_player_.preferred_clocking() == ClockingHint::Preference::None;
 			set_use_fast_tape();
 		}
 
+		// MARK: - Activity::Source
+		void set_activity_observer(Activity::Observer *observer) override {
+			DiskROM *disk_rom = get_disk_rom();
+			if(disk_rom) {
+				disk_rom->set_activity_observer(observer);
+			}
+		}
+
+		// MARK: - Joysticks
+		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() override {
+			return ay_port_handler_.get_joysticks();
+		}
+
 	private:
+		DiskROM *get_disk_rom() {
+			return dynamic_cast<DiskROM *>(memory_slots_[2].handler.get());
+		}
 		void update_audio() {
 			speaker_.run_for(audio_queue_, time_since_ay_update_.divide_cycles(Cycles(2)));
 		}
 
 		class i8255PortHandler: public Intel::i8255::PortHandler {
 			public:
-				i8255PortHandler(ConcreteMachine &machine, AudioToggle &audio_toggle, Storage::Tape::BinaryTapePlayer &tape_player) :
+				i8255PortHandler(ConcreteMachine &machine, Audio::Toggle &audio_toggle, Storage::Tape::BinaryTapePlayer &tape_player) :
 					machine_(machine), audio_toggle_(audio_toggle), tape_player_(tape_player) {}
 
 				void set_value(int port, uint8_t value) {
@@ -621,7 +650,7 @@ class ConcreteMachine:
 								audio_toggle_.set_output(new_audio_level);
 							}
 
-							// b0–b3: keyboard line
+							// b0-b3: keyboard line
 							machine_.set_keyboard_line(value & 0xf);
 						} break;
 						default: printf("What what what what?\n"); break;
@@ -637,7 +666,7 @@ class ConcreteMachine:
 
 			private:
 				ConcreteMachine &machine_;
-				AudioToggle &audio_toggle_;
+				Audio::Toggle &audio_toggle_;
 				Storage::Tape::BinaryTapePlayer &tape_player_;
 		};
 
@@ -647,10 +676,10 @@ class ConcreteMachine:
 
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
 		GI::AY38910::AY38910 ay_;
-		AudioToggle audio_toggle_;
+		Audio::Toggle audio_toggle_;
 		Konami::SCC scc_;
-		Outputs::Speaker::CompoundSource<GI::AY38910::AY38910, AudioToggle, Konami::SCC> mixer_;
-		Outputs::Speaker::LowpassSpeaker<Outputs::Speaker::CompoundSource<GI::AY38910::AY38910, AudioToggle, Konami::SCC>> speaker_;
+		Outputs::Speaker::CompoundSource<GI::AY38910::AY38910, Audio::Toggle, Konami::SCC> mixer_;
+		Outputs::Speaker::LowpassSpeaker<Outputs::Speaker::CompoundSource<GI::AY38910::AY38910, Audio::Toggle, Konami::SCC>> speaker_;
 
 		Storage::Tape::BinaryTapePlayer tape_player_;
 		bool tape_player_is_sleeping_ = false;
@@ -705,8 +734,10 @@ class ConcreteMachine:
 
 using namespace MSX;
 
-Machine *Machine::MSX() {
-	return new ConcreteMachine;
+Machine *Machine::MSX(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
+	using Target = Analyser::Static::MSX::Target;
+	const Target *const msx_target = dynamic_cast<const Target *>(target);
+	return new ConcreteMachine(*msx_target, rom_fetcher);
 }
 
 Machine::~Machine() {}

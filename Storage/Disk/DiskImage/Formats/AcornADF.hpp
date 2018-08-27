@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 25/09/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef AcornADF_hpp
@@ -17,23 +17,19 @@ namespace Storage {
 namespace Disk {
 
 /*!
-	Provides a @c Disk containing an ADF disk image — a decoded sector dump of an Acorn ADFS disk.
+	Provides a @c Disk containing an ADF disk image: a decoded sector dump of an Acorn ADFS disk.
 */
 class AcornADF: public MFMSectorDump {
 	public:
 		/*!
 			Construct an @c AcornADF containing content from the file with name @c file_name.
 
-			@throws ErrorCantOpen if this file can't be opened.
-			@throws ErrorNotAcornADF if the file doesn't appear to contain an Acorn .ADF format image.
+			@throws Storage::FileHolder::Error::CantOpen if this file can't be opened.
+			@throws Error::InvalidFormat if the file doesn't appear to contain an Acorn .ADF format image.
 		*/
 		AcornADF(const std::string &file_name);
 
-		enum {
-			ErrorNotAcornADF,
-		};
-
-		int get_head_position_count() override;
+		HeadPosition get_maximum_head_position() override;
 		int get_head_count() override;
 
 	private:

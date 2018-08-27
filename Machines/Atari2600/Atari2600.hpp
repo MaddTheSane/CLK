@@ -3,11 +3,15 @@
 //  CLK
 //
 //  Created by Thomas Harte on 14/07/2015.
-//  Copyright © 2015 Thomas Harte. All rights reserved.
+//  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
 #ifndef Atari2600_cpp
 #define Atari2600_cpp
+
+#include "../../Configurable/Configurable.hpp"
+#include "../../Analyser/Static/StaticAnalyser.hpp"
+#include "../ROMMachine.hpp"
 
 #include "Atari2600Inputs.h"
 
@@ -21,7 +25,7 @@ class Machine {
 		virtual ~Machine();
 
 		/// Creates and returns an Atari 2600 on the heap.
-		static Machine *Atari2600();
+		static Machine *Atari2600(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
 
 		/// Sets the switch @c input to @c state.
 		virtual void set_switch_is_enabled(Atari2600Switch input, bool state) = 0;

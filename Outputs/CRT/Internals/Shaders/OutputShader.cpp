@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 27/04/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "OutputShader.hpp"
@@ -20,7 +20,7 @@ std::string OutputShader::get_input_name(Input input) {
 		case Input::Vertical:	return "vertical";
 
 		// Intended to be unreachable.
-		default: assert(false);
+		default: assert(false); return "";
 	}
 }
 
@@ -83,7 +83,7 @@ std::unique_ptr<OutputShader> OutputShader::make_shader(const char *fragment_met
 
 		"void main(void)"
 		"{"
-			"fragColour = vec4(pow(" << colour_expression << ", vec3(gamma)), 0.5);"//*cos(lateralVarying)
+			"fragColour = vec4(pow(" << colour_expression << ", vec3(gamma)), 0.8);"//*cos(lateralVarying)
 		"}";
 
 	return std::unique_ptr<OutputShader>(new OutputShader(vertex_shader.str(), fragment_shader.str(), {
@@ -94,13 +94,19 @@ std::unique_ptr<OutputShader> OutputShader::make_shader(const char *fragment_met
 
 void OutputShader::set_output_size(unsigned int output_width, unsigned int output_height, Outputs::CRT::Rect visible_area) {
 	GLfloat outputAspectRatioMultiplier = (static_cast<float>(output_width) / static_cast<float>(output_height)) / (4.0f / 3.0f);
-
 	GLfloat bonusWidth = (outputAspectRatioMultiplier - 1.0f) * visible_area.size.width;
-	visible_area.origin.x -= bonusWidth * 0.5f * visible_area.size.width;
+
+	right_extent_ = (1.0f / outputAspectRatioMultiplier) / visible_area.size.width;
+
+	visible_area.origin.x -= bonusWidth * 0.5f;
 	visible_area.size.width *= outputAspectRatioMultiplier;
 
 	set_uniform("boundsOrigin", (GLfloat)visible_area.origin.x, (GLfloat)visible_area.origin.y);
 	set_uniform("boundsSize", (GLfloat)visible_area.size.width, (GLfloat)visible_area.size.height);
+}
+
+float OutputShader::get_right_extent() {
+	return right_extent_;
 }
 
 void OutputShader::set_source_texture_unit(GLenum unit) {

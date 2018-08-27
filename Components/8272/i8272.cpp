@@ -3,13 +3,12 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 05/08/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "i8272.hpp"
-//#include "../../Storage/Disk/Encodings/MFM/Encoder.hpp"
 
-#include <cstdio>
+#include "../../Outputs/Log.hpp"
 
 using namespace Intel::i8272;
 
@@ -83,8 +82,10 @@ i8272::i8272(BusHandler &bus_handler, Cycles clock_rate) :
 	posit_event(static_cast<int>(Event8272::CommandByte));
 }
 
-bool i8272::is_sleeping() {
-	return is_sleeping_ && Storage::Disk::MFMController::is_sleeping();
+ClockingHint::Preference i8272::preferred_clocking() {
+	const auto mfm_controller_preferred_clocking = Storage::Disk::MFMController::preferred_clocking();
+	if(mfm_controller_preferred_clocking != ClockingHint::Preference::None) return mfm_controller_preferred_clocking;
+	return is_sleeping_ ? ClockingHint::Preference::None : ClockingHint::Preference::JustInTime;
 }
 
 void i8272::run_for(Cycles cycles) {
@@ -113,9 +114,9 @@ void i8272::run_for(Cycles cycles) {
 				while(steps--) {
 					// Perform a step.
 					int direction = (drives_[c].target_head_position < drives_[c].head_position) ? -1 : 1;
-					printf("Target %d versus believed %d\n", drives_[c].target_head_position, drives_[c].head_position);
+					LOG("Target " << PADDEC(0) << drives_[c].target_head_position << " versus believed " << static_cast<int>(drives_[c].head_position));
 					select_drive(c);
-					get_drive().step(direction);
+					get_drive().step(Storage::Disk::HeadPosition(direction));
 					if(drives_[c].target_head_position >= 0) drives_[c].head_position += direction;
 
 					// Check for completion.
@@ -159,7 +160,7 @@ void i8272::run_for(Cycles cycles) {
 	}
 
 	is_sleeping_ = !delay_time_ && !drives_seeking_ && !head_timers_running_;
-	if(is_sleeping_) update_sleep_observer();
+	if(is_sleeping_) update_clocking_observer();
 }
 
 void i8272::set_register(int address, uint8_t value) {
@@ -198,7 +199,7 @@ uint8_t i8272::get_register(int address) {
 
 #define MS_TO_CYCLES(x)			x * 8000
 #define WAIT_FOR_EVENT(mask)	resume_point_ = __LINE__; interesting_event_mask_ = static_cast<int>(mask); return; case __LINE__:
-#define WAIT_FOR_TIME(ms)		resume_point_ = __LINE__; interesting_event_mask_ = static_cast<int>(Event8272::Timer); delay_time_ = MS_TO_CYCLES(ms); is_sleeping_ = false; update_sleep_observer(); case __LINE__: if(delay_time_) return;
+#define WAIT_FOR_TIME(ms)		resume_point_ = __LINE__; interesting_event_mask_ = static_cast<int>(Event8272::Timer); delay_time_ = MS_TO_CYCLES(ms); is_sleeping_ = false; update_clocking_observer(); case __LINE__: if(delay_time_) return;
 
 #define PASTE(x, y) x##y
 #define CONCAT(x, y) PASTE(x, y)
@@ -257,7 +258,7 @@ uint8_t i8272::get_register(int address) {
 		if(drives_[active_drive_].head_unload_delay[active_head_] == 0) {	\
 			head_timers_running_++;	\
 			is_sleeping_ = false;	\
-			update_sleep_observer();	\
+			update_clocking_observer();	\
 		}	\
 		drives_[active_drive_].head_unload_delay[active_head_] = MS_TO_CYCLES(head_unload_time_);\
 	}
@@ -384,17 +385,17 @@ void i8272::posit_event(int event_type) {
 		// the index hole limit is breached or a sector is found with a cylinder, head, sector and size equal to the
 		// values in the internal registers.
 			index_hole_limit_ = 2;
-//			printf("Seeking %02x %02x %02x %02x\n", cylinder_, head_, sector_, size_);
+//			LOG("Seeking " << PADDEC(0) << cylinder_ << " " << head_ " " << sector_ << " " << size_);
 		find_next_sector:
 			FIND_HEADER();
 			if(!index_hole_limit_) {
 				// Two index holes have passed wihout finding the header sought.
-//				printf("Not found\n");
+//				LOG("Not found");
 				SetNoData();
 				goto abort;
 			}
 			index_hole_count_ = 0;
-//			printf("Header\n");
+//			LOG("Header");
 			READ_HEADER();
 			if(index_hole_count_) {
 				// This implies an index hole was sighted within the header. Error out.
@@ -405,11 +406,11 @@ void i8272::posit_event(int event_type) {
 				// This implies a CRC error in the header; mark as such but continue.
 				SetDataError();
 			}
-//			printf("Considering %02x %02x %02x %02x [%04x]\n", header_[0], header_[1], header_[2], header_[3], get_crc_generator().get_value());
+//			LOG("Considering << PADHEX(2) << header_[0] << " " << header_[1] << " " << header_[2] << " " << header_[3] << " [" << get_crc_generator().get_value() << "]");
 			if(header_[0] != cylinder_ || header_[1] != head_ || header_[2] != sector_ || header_[3] != size_) goto find_next_sector;
 
 			// Branch to whatever is supposed to happen next
-//			printf("Proceeding\n");
+//			LOG("Proceeding");
 			switch(command_[0] & 0x1f) {
 				case CommandReadData:
 				case CommandReadDeletedData:
@@ -423,7 +424,13 @@ void i8272::posit_event(int event_type) {
 
 	// Performs the read data or read deleted data command.
 	read_data:
-			printf("Read [deleted] data [%02x %02x %02x %02x ... %02x %02x]\n", command_[2], command_[3], command_[4], command_[5], command_[6], command_[8]);
+			LOG(PADHEX(2) << "Read [deleted] data ["
+				<< static_cast<int>(command_[2]) << " "
+				<< static_cast<int>(command_[3]) << " "
+				<< static_cast<int>(command_[4]) << " "
+				<< static_cast<int>(command_[5]) << " ... "
+				<< static_cast<int>(command_[6]) << " "
+				<< static_cast<int>(command_[8]) << "]");
 		read_next_data:
 			goto read_write_find_header;
 
@@ -434,7 +441,7 @@ void i8272::posit_event(int event_type) {
 			ClearControlMark();
 			if(event_type == static_cast<int>(Event::Token)) {
 				if(get_latest_token().type != Token::Data && get_latest_token().type != Token::DeletedData) {
-					// Something other than a data mark came next — impliedly an ID or index mark.
+					// Something other than a data mark came next, impliedly an ID or index mark.
 					SetMissingAddressMark();
 					SetMissingDataAddressMark();
 					goto abort;	// TODO: or read_next_data?
@@ -507,7 +514,13 @@ void i8272::posit_event(int event_type) {
 			goto post_st012chrn;
 
 	write_data:
-			printf("Write [deleted] data [%02x %02x %02x %02x ... %02x %02x]\n", command_[2], command_[3], command_[4], command_[5], command_[6], command_[8]);
+			LOG(PADHEX(2) << "Write [deleted] data ["
+				<< static_cast<int>(command_[2]) << " "
+				<< static_cast<int>(command_[3]) << " "
+				<< static_cast<int>(command_[4]) << " "
+				<< static_cast<int>(command_[5]) << " ... "
+				<< static_cast<int>(command_[6]) << " "
+				<< static_cast<int>(command_[8]) << "]");
 
 			if(get_drive().get_is_read_only()) {
 				SetNotWriteable();
@@ -542,7 +555,7 @@ void i8272::posit_event(int event_type) {
 				goto write_loop;
 			}
 
-			printf("Wrote %d bytes\n", distance_into_section_);
+			LOG("Wrote " << PADDEC(0) << distance_into_section_ << " bytes");
 			write_crc();
 			expects_input_ = false;
 			WAIT_FOR_EVENT(Event::DataWritten);
@@ -558,7 +571,7 @@ void i8272::posit_event(int event_type) {
 	// Performs the read ID command.
 	read_id:
 		// Establishes the drive and head being addressed, and whether in double density mode.
-			printf("Read ID [%02x %02x]\n", command_[0], command_[1]);
+			LOG(PADHEX(2) << "Read ID [" << static_cast<int>(command_[0]) << " " << static_cast<int>(command_[1]) << "]");
 
 		// Sets a maximum index hole limit of 2 then waits either until it finds a header mark or sees too many index holes.
 		// If a header mark is found, reads in the following bytes that produce a header. Otherwise branches to data not found.
@@ -580,7 +593,11 @@ void i8272::posit_event(int event_type) {
 
 	// Performs read track.
 	read_track:
-			printf("Read track [%02x %02x %02x %02x]\n", command_[2], command_[3], command_[4], command_[5]);
+			LOG(PADHEX(2) << "Read track ["
+				<< static_cast<int>(command_[2]) << " "
+				<< static_cast<int>(command_[3]) << " "
+				<< static_cast<int>(command_[4]) << " "
+				<< static_cast<int>(command_[5]) << "]");
 
 			// Wait for the index hole.
 			WAIT_FOR_EVENT(Event::IndexHole);
@@ -621,7 +638,7 @@ void i8272::posit_event(int event_type) {
 
 	// Performs format [/write] track.
 	format_track:
-			printf("Format track\n");
+			LOG("Format track");
 			if(get_drive().get_is_read_only()) {
 				SetNotWriteable();
 				goto abort;
@@ -665,7 +682,12 @@ void i8272::posit_event(int event_type) {
 				break;
 			}
 
-			printf("W: %02x %02x %02x %02x, %04x\n", header_[0], header_[1], header_[2], header_[3], get_crc_generator().get_value());
+			LOG(PADHEX(2) << "W:"
+				<< static_cast<int>(header_[0]) << " "
+				<< static_cast<int>(header_[1]) << " "
+				<< static_cast<int>(header_[2]) << " "
+				<< static_cast<int>(header_[3]) << ", "
+				<< get_crc_generator().get_value());
 			write_crc();
 
 			// Write the sector body.
@@ -697,15 +719,15 @@ void i8272::posit_event(int event_type) {
 		goto post_st012chrn;
 
 	scan_low:
-		printf("Scan low unimplemented!!\n");
+		ERROR("Scan low unimplemented!!");
 		goto wait_for_command;
 
 	scan_low_or_equal:
-		printf("Scan low or equal unimplemented!!\n");
+		ERROR("Scan low or equal unimplemented!!");
 		goto wait_for_command;
 
 	scan_high_or_equal:
-		printf("Scan high or equal unimplemented!!\n");
+		ERROR("Scan high or equal unimplemented!!");
 		goto wait_for_command;
 
 	// Performs both recalibrate and seek commands. These commands occur asynchronously, so the actual work
@@ -720,7 +742,7 @@ void i8272::posit_event(int event_type) {
 				if(drives_[drive].phase != Drive::Seeking) {
 					drives_seeking_++;
 					is_sleeping_ = false;
-					update_sleep_observer();
+					update_clocking_observer();
 				}
 
 				// Set currently seeking, with a step to occur right now (yes, it sounds like jamming these
@@ -736,11 +758,11 @@ void i8272::posit_event(int event_type) {
 				// up in run_for understands to mean 'keep going until track 0 is active').
 				if(command_.size() > 2) {
 					drives_[drive].target_head_position = command_[2];
-					printf("Seek to %02x\n", command_[2]);
+					LOG(PADHEX(2) << "Seek to " << static_cast<int>(command_[2]));
 				} else {
 					drives_[drive].target_head_position = -1;
 					drives_[drive].head_position = 0;
-					printf("Recalibrate\n");
+					LOG("Recalibrate");
 				}
 
 				// Check whether any steps are even needed; if not then mark as completed already.
@@ -753,7 +775,7 @@ void i8272::posit_event(int event_type) {
 
 	// Performs sense interrupt status.
 	sense_interrupt_status:
-			printf("Sense interrupt status\n");
+			LOG("Sense interrupt status");
 			{
 				// Find the first drive that is in the CompletedSeeking state.
 				int found_drive = -1;
@@ -781,7 +803,7 @@ void i8272::posit_event(int event_type) {
 	// Performs specify.
 	specify:
 		// Just store the values, and terminate the command.
-			printf("Specify\n");
+			LOG("Specify");
 			step_rate_time_ = 16 - (command_[1] >> 4);			// i.e. 1 to 16ms
 			head_unload_time_ = (command_[1] & 0x0f) << 4;		// i.e. 16 to 240ms
 			head_load_time_ = command_[2] & ~1;					// i.e. 2 to 254 ms in increments of 2ms
@@ -792,7 +814,7 @@ void i8272::posit_event(int event_type) {
 			goto wait_for_command;
 
 	sense_drive_status:
-			printf("Sense drive status\n");
+			LOG("Sense drive status");
 			{
 				int drive = command_[1] & 3;
 				select_drive(drive);
@@ -828,14 +850,14 @@ void i8272::posit_event(int event_type) {
 
 			goto post_result;
 
-	// Posts whatever is in result_stack_ as a result phase. Be aware that it is a stack — the
+	// Posts whatever is in result_stack_ as a result phase. Be aware that it is a stack, so the
 	// last thing in it will be returned first.
 	post_result:
-			printf("Result to %02x, main %02x: ", command_[0] & 0x1f, main_status_);
+			LOGNBR(PADHEX(2) << "Result to " << static_cast<int>(command_[0] & 0x1f) << ", main " << static_cast<int>(main_status_) << "; ");
 			for(std::size_t c = 0; c < result_stack_.size(); c++) {
-				printf("%02x ", result_stack_[result_stack_.size() - 1 - c]);
+				LOGNBR(" " << static_cast<int>(result_stack_[result_stack_.size() - 1 - c]));
 			}
-			printf("\n");
+			LOGNBR(std::endl);
 
 			// Set ready to send data to the processor, no longer in non-DMA execution phase.
 			is_executing_ = false;

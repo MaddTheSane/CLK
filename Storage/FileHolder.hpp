@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 21/11/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef FileHolder_hpp
@@ -20,8 +20,8 @@ namespace Storage {
 
 class FileHolder final {
 	public:
-		enum {
-			ErrorCantOpen = -1
+		enum class Error {
+			CantOpen = -1
 		};
 
 		enum class FileMode {
@@ -39,7 +39,7 @@ class FileHolder final {
 				ReadWrite	attempt to open this file for random access reading and writing. If that fails,
 							will attept to open in Read mode.
 				Read		attempts to open this file for reading only.
-				Rewrite		opens the file for rewriting — none of the original content is preserved; whatever
+				Rewrite		opens the file for rewriting; none of the original content is preserved; whatever
 							the caller outputs will replace the existing file.
 
 			@raises ErrorCantOpen if the file cannot be opened.
@@ -51,6 +51,28 @@ class FileHolder final {
 			and returning the four assembled in little endian order.
 		*/
 		uint32_t get32le();
+
+		/*!
+			Writes @c value using successive @c put8s, in little endian order.
+		*/
+		template <typename T> void put_le(T value) {
+			auto bytes = sizeof(T);
+			while(bytes--) {
+				put8(value&0xff);
+				value >>= 8;
+			}
+		}
+
+		/*!
+			Writes @c value using successive @c put8s, in big endian order.
+		*/
+		template <typename T> void put_be(T value) {
+			auto shift = sizeof(T) * 8;
+			while(shift) {
+				shift -= 8;
+				put8((value >> shift)&0xff);
+			}
+		}
 
 		/*!
 			Performs @c get8 four times on @c file, casting each result to a @c uint32_t
@@ -113,7 +135,7 @@ class FileHolder final {
 		/*! Writes @c buffer one byte at a time in order, writing @c size bytes in total. */
 		std::size_t write(const uint8_t *buffer, std::size_t size);
 
-		/*! Moves @c bytes from the anchor indicated by @c whence — SEEK_SET, SEEK_CUR or SEEK_END. */
+		/*! Moves @c bytes from the anchor indicated by @c whence: SEEK_SET, SEEK_CUR or SEEK_END. */
 		void seek(long offset, int whence);
 
 		/*! @returns The current cursor position within this file. */
@@ -184,7 +206,7 @@ class FileHolder final {
 		bool check_signature(const char *signature, std::size_t length = 0);
 
 		/*!
-			Determines and returns the file extension — everything from the final character
+			Determines and returns the file extension: everything from the final character
 			back to the first dot. The string is converted to lowercase before being returned.
 		*/
 		std::string extension();

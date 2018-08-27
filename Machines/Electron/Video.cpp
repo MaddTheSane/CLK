@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 10/12/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "Video.hpp"
@@ -55,13 +55,14 @@ VideoOutput::VideoOutput(uint8_t *memory) : ram_(memory) {
 		"vec3 rgb_sample(usampler2D sampler, vec2 coordinate, vec2 icoordinate)"
 		"{"
 			"uint texValue = texture(sampler, coordinate).r;"
-			"texValue >>= 4 - (int(icoordinate.x * 8) & 4);"
+			"texValue >>= 4 - (int(icoordinate.x) & 4);"
 			"return vec3( uvec3(texValue) & uvec3(4u, 2u, 1u));"
 		"}");
+	crt_->set_integer_coordinate_multiplier(8.0f);
 	std::unique_ptr<Outputs::CRT::TextureBuilder::Bookender> bookender(new FourBPPBookender);
 	crt_->set_bookender(std::move(bookender));
 	// TODO: as implied below, I've introduced a clock's latency into the graphics pipeline somehow. Investigate.
-	crt_->set_visible_area(crt_->get_rect_for_area(first_graphics_line - 3, 256, (first_graphics_cycle+1) * crt_cycles_multiplier, 80 * crt_cycles_multiplier, 4.0f / 3.0f));
+	crt_->set_visible_area(crt_->get_rect_for_area(first_graphics_line - 1, 256, (first_graphics_cycle+1) * crt_cycles_multiplier, 80 * crt_cycles_multiplier, 4.0f / 3.0f));
 }
 
 // MARK: - CRT getter
@@ -97,7 +98,10 @@ void VideoOutput::start_pixel_line() {
 }
 
 void VideoOutput::end_pixel_line() {
-	if(current_output_target_) crt_->output_data(static_cast<unsigned int>((current_output_target_ - initial_output_target_) * current_output_divider_), current_output_divider_);
+	if(current_output_target_) {
+		const unsigned int data_length = static_cast<unsigned int>(current_output_target_ - initial_output_target_);
+		crt_->output_data(data_length * current_output_divider_, data_length);
+	}
 	current_character_row_++;
 }
 
@@ -115,7 +119,10 @@ void VideoOutput::output_pixels(unsigned int number_of_cycles) {
 		}
 
 		if(!initial_output_target_ || divider != current_output_divider_) {
-			if(current_output_target_) crt_->output_data(static_cast<unsigned int>((current_output_target_ - initial_output_target_) * current_output_divider_), current_output_divider_);
+			if(current_output_target_) {
+				const unsigned int data_length = static_cast<unsigned int>(current_output_target_ - initial_output_target_);
+				crt_->output_data(data_length * current_output_divider_, data_length);
+			}
 			current_output_divider_ = divider;
 			initial_output_target_ = current_output_target_ = crt_->allocate_write_area(640 / current_output_divider_, 4);
 		}
@@ -381,7 +388,7 @@ unsigned int VideoOutput::get_cycles_until_next_ram_availability(int from_time) 
 	// Apply the standard cost of aligning to the available 1Mhz of RAM bandwidth.
 	result += 1 + (position&1);
 
-	// In Modes 0–3 there is also a complete block on any access while pixels are being fetched.
+	// In Modes 0-3 there is also a complete block on any access while pixels are being fetched.
 	if(screen_mode_ < 4) {
 		const int current_column = graphics_column(position + (position&1));
 		int current_line = graphics_line(position);
@@ -397,7 +404,7 @@ unsigned int VideoOutput::get_cycles_until_next_ram_availability(int from_time) 
 				if(current_line >= output_position_line) {
 					// Get the number of lines since then if still in the same frame.
 					int lines_since_output_position = current_line - output_position_line;
-				
+
 					// Therefore get the character row at the proposed time, modulo 10.
 					implied_row = (current_character_row_ + lines_since_output_position) % 10;
 				} else {

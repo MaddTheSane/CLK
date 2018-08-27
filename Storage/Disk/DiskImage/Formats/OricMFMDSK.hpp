@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 21/11/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef OricMFMDSK_hpp
@@ -18,7 +18,7 @@ namespace Storage {
 namespace Disk {
 
 /*!
-	Provides a @c Disk containing an Oric MFM-stype disk image — a stream of the MFM data bits with clocks omitted.
+	Provides a @c Disk containing an Oric MFM-stype disk image: a stream of the MFM data bits with clocks omitted.
 */
 class OricMFMDSK: public DiskImage {
 	public:
@@ -29,12 +29,8 @@ class OricMFMDSK: public DiskImage {
 		*/
 		OricMFMDSK(const std::string &file_name);
 
-		enum {
-			ErrorNotOricMFMDSK,
-		};
-
 		// implemented to satisfy @c DiskImage
-		int get_head_position_count() override;
+		HeadPosition get_maximum_head_position() override;
 		int get_head_count() override;
 		bool get_is_read_only() override;
 

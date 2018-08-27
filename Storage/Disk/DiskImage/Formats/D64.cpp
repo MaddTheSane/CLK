@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 01/08/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "D64.hpp"
@@ -19,10 +19,10 @@ using namespace Storage::Disk;
 
 D64::D64(const std::string &file_name) :
 		file_(file_name) {
-	// in D64, this is it for validation without imposing potential false-negative tests — check that
+	// in D64, this is it for validation without imposing potential false-negative tests: check that
 	// the file size appears to be correct. Stone-age stuff.
 	if(file_.stats().st_size != 174848 && file_.stats().st_size != 196608)
-		throw ErrorNotD64;
+		throw Error::InvalidFormat;
 
 	number_of_tracks_ = (file_.stats().st_size == 174848) ? 35 : 40;
 
@@ -35,18 +35,14 @@ D64::D64(const std::string &file_name) :
 	}
 }
 
-int D64::get_head_position_count() {
-	return number_of_tracks_*2;
+HeadPosition D64::get_maximum_head_position() {
+	return HeadPosition(number_of_tracks_);
 }
 
 std::shared_ptr<Track> D64::get_track_at_position(Track::Address address) {
-	// every other track is missing, as is any head above 0
-	if(address.position&1 || address.head)
-		return std::shared_ptr<Track>();
-
 	// figure out where this track starts on the disk
 	int offset_to_track = 0;
-	int tracks_to_traverse = address.position >> 1;
+	int tracks_to_traverse = address.position.as_int();
 
 	int zone_sizes[] = {17, 7, 6, 10};
 	int sectors_by_zone[] = {21, 19, 18, 17};
@@ -83,20 +79,15 @@ std::shared_ptr<Track> D64::get_track_at_position(Track::Address address) {
 	//
 	// = 349 GCR bytes per sector
 
-	PCMSegment track;
 	std::size_t track_bytes = 349 * static_cast<std::size_t>(sectors_by_zone[zone]);
-	track.number_of_bits = static_cast<unsigned int>(track_bytes) * 8;
-	track.data.resize(track_bytes);
-	uint8_t *data = &track.data[0];
-
-	memset(data, 0, track_bytes);
+	std::vector<uint8_t> data(track_bytes);
 
 	for(int sector = 0; sector < sectors_by_zone[zone]; sector++) {
-		uint8_t *sector_data = &data[sector * 349];
+		uint8_t *sector_data = &data[static_cast<size_t>(sector) * 349];
 		sector_data[0] = sector_data[1] = sector_data[2] = 0xff;
 
 		uint8_t sector_number = static_cast<uint8_t>(sector);						// sectors count from 0
-		uint8_t track_number = static_cast<uint8_t>((address.position >> 1) + 1);	// tracks count from 1
+		uint8_t track_number = static_cast<uint8_t>(address.position.as_int() + 1);	// tracks count from 1
 		uint8_t checksum = static_cast<uint8_t>(sector_number ^ track_number ^ disk_id_ ^ (disk_id_ >> 8));
 		uint8_t header_start[4] = {
 			0x08, checksum, sector_number, track_number
@@ -145,5 +136,5 @@ std::shared_ptr<Track> D64::get_track_at_position(Track::Address address) {
 		Encodings::CommodoreGCR::encode_block(&sector_data[target_data_offset], end_of_data);
 	}
 
-	return std::shared_ptr<Track>(new PCMTrack(std::move(track)));
+	return std::shared_ptr<Track>(new PCMTrack(PCMSegment(data)));
 }

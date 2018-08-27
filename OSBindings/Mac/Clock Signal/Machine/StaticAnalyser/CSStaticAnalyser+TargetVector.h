@@ -3,13 +3,13 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 24/01/2018.
-//  Copyright © 2018 Thomas Harte. All rights reserved.
+//  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
 #import "CSStaticAnalyser.h"
 
 @interface CSStaticAnalyser (ResultVector)
 
-- (std::vector<std::unique_ptr<Analyser::Static::Target>> &)targets;
+- (Analyser::Static::TargetList &)targets;
 
 @end

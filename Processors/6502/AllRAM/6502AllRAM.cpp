@@ -3,7 +3,7 @@
 //  CLK
 //
 //  Created by Thomas Harte on 13/07/2015.
-//  Copyright © 2015 Thomas Harte. All rights reserved.
+//  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
 #include "6502AllRAM.hpp"
@@ -15,7 +15,7 @@ using namespace CPU::MOS6502;
 
 namespace {
 
-class ConcreteAllRAMProcessor: public AllRAMProcessor, public BusHandler {
+template <Personality personality> class ConcreteAllRAMProcessor: public AllRAMProcessor, public BusHandler {
 	public:
 		ConcreteAllRAMProcessor() :
 			mos6502_(*this) {
@@ -63,11 +63,20 @@ class ConcreteAllRAMProcessor: public AllRAMProcessor, public BusHandler {
 		}
 
 	private:
-		CPU::MOS6502::Processor<ConcreteAllRAMProcessor, false> mos6502_;
+		CPU::MOS6502::Processor<personality, ConcreteAllRAMProcessor, false> mos6502_;
 };
 
 }
 
-AllRAMProcessor *AllRAMProcessor::Processor() {
-	return new ConcreteAllRAMProcessor;
+AllRAMProcessor *AllRAMProcessor::Processor(Personality personality) {
+#define Bind(p) case p: return new ConcreteAllRAMProcessor<p>();
+	switch(personality) {
+		default:
+		Bind(Personality::P6502)
+		Bind(Personality::PNES6502)
+		Bind(Personality::PSynertek65C02)
+		Bind(Personality::PWDC65C02)
+		Bind(Personality::PRockwell65C02)
+	}
+#undef Bind
 }

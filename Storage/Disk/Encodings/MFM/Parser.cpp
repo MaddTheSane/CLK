@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 24/09/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "Parser.hpp"
@@ -32,14 +32,14 @@ void Parser::install_sectors_from_track(const Storage::Disk::Track::Address &add
 		is_mfm_);
 
 	std::map<int, Storage::Encodings::MFM::Sector> sectors_by_id;
-	for(auto &sector : sectors) {
+	for(const auto &sector : sectors) {
 		sectors_by_id.insert(std::make_pair(sector.second.address.sector, std::move(sector.second)));
 	}
 	sectors_by_address_by_track_.insert(std::make_pair(address, std::move(sectors_by_id)));
 }
 
 Sector *Parser::get_sector(int head, int track, uint8_t sector) {
-	Disk::Track::Address address(head, track);
+	Disk::Track::Address address(head, Storage::Disk::HeadPosition(track));
 	install_sectors_from_track(address);
 
 	auto sectors = sectors_by_address_by_track_.find(address);

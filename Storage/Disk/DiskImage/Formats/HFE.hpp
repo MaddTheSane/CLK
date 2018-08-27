@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 17/08/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef HFE_hpp
@@ -18,25 +18,21 @@ namespace Storage {
 namespace Disk {
 
 /*!
-	Provides a @c Disk containing an HFE disk image — a bit stream representation of a floppy.
+	Provides a @c DiskImage containing an HFE: a bit stream representation of a floppy.
 */
 class HFE: public DiskImage {
 	public:
 		/*!
-			Construct an @c SSD containing content from the file with name @c file_name.
+			Construct an @c HFE containing content from the file with name @c file_name.
 
-			@throws ErrorCantOpen if this file can't be opened.
-			@throws ErrorNotSSD if the file doesn't appear to contain a .SSD format image.
+			@throws Storage::FileHolder::Error::CantOpen if this file can't be opened.
+			@throws Error::InvalidFormat if the file doesn't appear to contain an .HFE format image.
+			@throws Error::UnknownVersion if the file looks correct but is an unsupported version.
 		*/
 		HFE(const std::string &file_name);
-		~HFE();
-
-		enum {
-			ErrorNotHFE,
-		};
 
 		// implemented to satisfy @c Disk
-		int get_head_position_count() override;
+		HeadPosition get_maximum_head_position() override;
 		int get_head_count() override;
 		bool get_is_read_only() override;
 		void set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) override;

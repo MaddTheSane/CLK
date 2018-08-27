@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 06/06/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef Machines_ZX8081_Video_hpp
@@ -31,7 +31,7 @@ class Video {
 		/// @returns The CRT this video feed is feeding.
 		Outputs::CRT::CRT *get_crt();
 
-		/// Advances time by @c cycles.
+		/// Advances time by @c half-cycles.
 		void run_for(const HalfCycles);
 		/// Forces output to catch up to the current output position.
 		void flush();
@@ -45,7 +45,7 @@ class Video {
 		bool sync_ = false;
 		uint8_t *line_data_ = nullptr;
 		uint8_t *line_data_pointer_ = nullptr;
-		unsigned int cycles_since_update_ = 0;
+		HalfCycles time_since_update_ = 0;
 		std::unique_ptr<Outputs::CRT::CRT> crt_;
 
 		void flush(bool next_sync);

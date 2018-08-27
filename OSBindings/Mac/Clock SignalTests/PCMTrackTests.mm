@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 18/12/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #import <XCTest/XCTest.h>
@@ -19,13 +19,11 @@
 {
 	Storage::Disk::PCMSegment quickSegment, slowSegment;
 
-	quickSegment.data = {0xff};
-	quickSegment.number_of_bits = 8;
+	quickSegment.data = {true, true, true, true, true, true, true, true};
 	quickSegment.length_of_a_bit.length = 1;
 	quickSegment.length_of_a_bit.clock_rate = 100;
 
-	slowSegment.data = {0xff};
-	slowSegment.number_of_bits = 8;
+	slowSegment.data = {true, true, true, true, true, true, true, true};
 	slowSegment.length_of_a_bit.length = 1;
 	slowSegment.length_of_a_bit.clock_rate = 3;
 
@@ -49,6 +47,46 @@
 
 	Storage::Time transition_length = events[0].length + events.back().length;
 	XCTAssert(events[8].length == transition_length, "Time taken in transition between speed zones should be half of a bit length in the first part plus half of a bit length in the second");
+}
+
+- (void)testComplicatedTrackSeek {
+	std::vector<Storage::Disk::PCMSegment> segments;
+
+	Storage::Disk::PCMSegment sync_segment;
+	sync_segment.data.resize(10*8);
+	std::fill(sync_segment.data.begin(), sync_segment.data.end(), true);
+
+	Storage::Disk::PCMSegment header_segment;
+	header_segment.data.resize(14*8);
+	std::fill(header_segment.data.begin(), header_segment.data.end(), true);
+
+	Storage::Disk::PCMSegment data_segment;
+	data_segment.data.resize(349*8);
+	std::fill(data_segment.data.begin(), data_segment.data.end(), true);
+
+	for(std::size_t c = 0; c < 16; ++c) {
+		segments.push_back(sync_segment);
+		segments.push_back(header_segment);
+		segments.push_back(sync_segment);
+		segments.push_back(data_segment);
+		segments.push_back(sync_segment);
+	}
+
+	Storage::Disk::PCMTrack track(segments);
+	Storage::Time late_time(967445, 2045454);
+	const auto offset = track.seek_to(late_time);
+	XCTAssert(offset <= late_time, "Found location should be at or before sought time");
+
+	const auto difference = late_time - offset;
+	const double difference_duration = difference.get<double>();
+	XCTAssert(difference_duration >= 0.0 && difference_duration < 0.005, "Next event should occur soon");
+
+	const double offset_duration = offset.get<double>();
+	XCTAssert(offset_duration >= 0.0 && offset_duration < 0.5, "Next event should occur soon");
+
+	auto next_event = track.get_next_event();
+	double next_event_duration = next_event.length.get<double>();
+	XCTAssert(next_event_duration >= 0.0 && next_event_duration < 0.005, "Next event should occur soon");
 }
 
 @end

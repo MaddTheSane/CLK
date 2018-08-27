@@ -3,13 +3,14 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 09/03/2018.
-//  Copyright © 2018 Thomas Harte. All rights reserved.
+//  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
 #ifndef Analyser_Static_Acorn_Target_h
 #define Analyser_Static_Acorn_Target_h
 
 #include "../StaticAnalyser.hpp"
+#include <string>
 
 namespace Analyser {
 namespace Static {
@@ -19,6 +20,7 @@ struct Target: public ::Analyser::Static::Target {
 	bool has_adfs = false;
 	bool has_dfs = false;
 	bool should_shift_restart = false;
+	std::string loading_command;
 };
 
 }

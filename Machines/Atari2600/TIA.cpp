@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 28/01/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "TIA.hpp"
@@ -124,19 +124,19 @@ void TIA::set_output_mode(Atari2600::TIA::OutputMode output_mode) {
 
 	if(output_mode == OutputMode::NTSC) {
 		crt_->set_svideo_sampling_function(
-			"vec2 svideo_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase)"
+			"vec2 svideo_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase, float amplitude)"
 			"{"
 				"uint c = texture(texID, coordinate).r;"
 				"uint y = c & 14u;"
 				"uint iPhase = (c >> 4);"
 
 				"float phaseOffset = 6.283185308 * float(iPhase) / 13.0 + 5.074880441076923;"
-				"return vec2(float(y) / 14.0, step(1, iPhase) * cos(phase + phaseOffset));"
+				"return vec2(float(y) / 14.0, step(1, iPhase) * cos(phase - phaseOffset));"
 			"}");
 		display_type = Outputs::CRT::DisplayType::NTSC60;
 	} else {
 		crt_->set_svideo_sampling_function(
-			"vec2 svideo_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase)"
+			"vec2 svideo_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase, float amplitude)"
 			"{"
 				"uint c = texture(texID, coordinate).r;"
 				"uint y = c & 14u;"
@@ -437,7 +437,10 @@ void TIA::output_for_cycles(int number_of_cycles) {
 	if(output_mode_ & blank_flag) {
 		if(pixel_target_) {
 			output_pixels(pixels_start_location_, output_cursor);
-			if(crt_) crt_->output_data(static_cast<unsigned int>(output_cursor - pixels_start_location_) * 2, 2);
+			if(crt_) {
+				const unsigned int data_length = static_cast<unsigned int>(output_cursor - pixels_start_location_);
+				crt_->output_data(data_length * 2, data_length);
+			}
 			pixel_target_ = nullptr;
 			pixels_start_location_ = 0;
 		}
@@ -459,7 +462,8 @@ void TIA::output_for_cycles(int number_of_cycles) {
 		}
 
 		if(horizontal_counter_ == cycles_per_line && crt_) {
-			crt_->output_data(static_cast<unsigned int>(output_cursor - pixels_start_location_) * 2, 2);
+			const unsigned int data_length = static_cast<unsigned int>(output_cursor - pixels_start_location_);
+			crt_->output_data(data_length * 2, data_length);
 			pixel_target_ = nullptr;
 			pixels_start_location_ = 0;
 		}

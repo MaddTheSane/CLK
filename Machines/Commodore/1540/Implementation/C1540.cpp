@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 05/07/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "../C1540.hpp"
@@ -16,7 +16,7 @@
 
 using namespace Commodore::C1540;
 
-MachineBase::MachineBase() :
+MachineBase::MachineBase(Personality personality, const ROMMachine::ROMFetcher &rom_fetcher) :
 		Storage::Disk::Controller(1000000),
 		m6502_(*this),
 		drive_(new Storage::Disk::Drive(1000000, 300, 2)),
@@ -38,9 +38,22 @@ MachineBase::MachineBase() :
 
 	// attach the only drive there is
 	set_drive(drive_);
+
+	std::string rom_name;
+	switch(personality) {
+		case Personality::C1540:	rom_name = "1540.bin";	break;
+		case Personality::C1541:	rom_name = "1541.bin";	break;
+	}
+
+	auto roms = rom_fetcher("Commodore1540", {rom_name});
+	if(!roms[0]) {
+		throw ROMMachine::Error::MissingROMs;
+	}
+	std::memcpy(rom_, roms[0]->data(), std::min(sizeof(rom_), roms[0]->size()));
 }
 
-Machine::Machine(Commodore::C1540::Machine::Personality personality) : personality_(personality) {}
+Machine::Machine(Personality personality, const ROMMachine::ROMFetcher &rom_fetcher) :
+	MachineBase(personality, rom_fetcher) {}
 
 void Machine::set_serial_bus(std::shared_ptr<::Commodore::Serial::Bus> serial_bus) {
 	Commodore::Serial::AttachPortAndBus(serial_port_, serial_bus);
@@ -50,10 +63,10 @@ Cycles MachineBase::perform_bus_operation(CPU::MOS6502::BusOperation operation, 
 	/*
 		Memory map (given that I'm unsure yet on any potential mirroring):
 
-			0x0000–0x07ff	RAM
-			0x1800–0x180f	the serial-port VIA
-			0x1c00–0x1c0f	the drive VIA
-			0xc000–0xffff	ROM
+			0x0000-0x07ff	RAM
+			0x1800-0x180f	the serial-port VIA
+			0x1c00-0x1c0f	the drive VIA
+			0xc000-0xffff	ROM
 	*/
 	if(address < 0x800) {
 		if(isReadOperation(operation))
@@ -82,19 +95,6 @@ Cycles MachineBase::perform_bus_operation(CPU::MOS6502::BusOperation operation, 
 	return Cycles(1);
 }
 
-bool Machine::set_rom_fetcher(const std::function<std::vector<std::unique_ptr<std::vector<uint8_t>>>(const std::string &machine, const std::vector<std::string> &names)> &roms_with_names) {
-	std::string rom_name;
-	switch(personality_) {
-		case Personality::C1540:	rom_name = "1540.bin";	break;
-		case Personality::C1541:	rom_name = "1541.bin";	break;
-	}
-
-	auto roms = roms_with_names("Commodore1540", {rom_name});
-	if(!roms[0]) return false;
-	std::memcpy(rom_, roms[0]->data(), std::min(sizeof(rom_), roms[0]->size()));
-	return true;
-}
-
 void Machine::set_disk(std::shared_ptr<Storage::Disk::Disk> disk) {
 	drive_->set_disk(disk);
 }
@@ -106,6 +106,11 @@ void Machine::run_for(const Cycles cycles) {
 	drive_->set_motor_on(drive_motor);
 	if(drive_motor)
 		Storage::Disk::Controller::run_for(cycles);
+}
+
+void MachineBase::set_activity_observer(Activity::Observer *observer) {
+	drive_VIA_.bus_handler().set_activity_observer(observer);
+	drive_->set_activity_observer(observer, "Drive", false);
 }
 
 // MARK: - 6522 delegate
@@ -142,7 +147,7 @@ void MachineBase::process_index_hole()	{}
 // MARK: - Drive VIA delegate
 
 void MachineBase::drive_via_did_step_head(void *driveVIA, int direction) {
-	drive_->step(direction);
+	drive_->step(Storage::Disk::HeadPosition(direction, 2));
 }
 
 void MachineBase::drive_via_did_set_data_density(void *driveVIA, int density) {
@@ -209,8 +214,6 @@ void DriveVIA::set_delegate(Delegate *delegate) {
 }
 
 // write protect tab uncovered
-DriveVIA::DriveVIA() : port_b_(0xff), port_a_(0xff), delegate_(nullptr) {}
-
 uint8_t DriveVIA::get_port_input(MOS::MOS6522::Port port) {
 	return port ? port_b_ : port_a_;
 }
@@ -255,11 +258,19 @@ void DriveVIA::set_port_output(MOS::MOS6522::Port port, uint8_t value, uint8_t d
 				delegate_->drive_via_did_set_data_density(this, (value >> 5)&3);
 			}
 
-			// TODO: something with the drive LED
-//			printf("LED: %s\n", value&8 ? "On" : "Off");
+			// post the LED status
+			if(observer_) observer_->set_led_status("Drive", !!(value&8));
 
 			previous_port_b_output_ = value;
 		}
+	}
+}
+
+void DriveVIA::set_activity_observer(Activity::Observer *observer) {
+	observer_ = observer;
+	if(observer) {
+		observer->register_led("Drive");
+		observer->set_led_status("Drive", !!(previous_port_b_output_&8));
 	}
 }
 

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 28/04/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef IntermediateShader_hpp
@@ -19,7 +19,7 @@ namespace OpenGL {
 class IntermediateShader: public Shader {
 public:
 	using Shader::Shader;
-	
+
 	enum class Input {
 		/// Contains the 2d start position of this run's input data.
 		InputStart,
@@ -125,7 +125,7 @@ public:
 	void set_colour_conversion_matrices(float *fromRGB, float *toRGB);
 
 	/*!
-		Sets the proportions of the input and output areas that should be considered the whole width — 1.0 means use all available
+		Sets the proportions of the input and output areas that should be considered the whole width: 1.0 means use all available
 		space, 0.5 means use half, etc.
 	*/
 	void set_width_scalers(float input_scaler, float output_scaler);
@@ -134,6 +134,11 @@ public:
 		Sets source and target vertical offsets.
 	*/
 	void set_is_double_height(bool is_double_height, float input_offset = 0.0f, float output_offset = 0.0f);
+
+	/*!
+		Sets the multiplier applied in the vertex shader to iCoordinates.
+	*/
+	void set_integer_coordinate_multiplier(float);
 
 private:
 	static std::unique_ptr<IntermediateShader> make_shader(const std::string &fragment_shader, bool use_usampler, bool input_is_inputPosition);

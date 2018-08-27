@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 25/09/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef Drive_hpp
@@ -11,17 +11,18 @@
 
 #include "Disk.hpp"
 #include "Track/PCMSegment.hpp"
-#include "Track/PCMPatchedTrack.hpp"
+#include "Track/PCMTrack.hpp"
 
 #include "../TimedEventLoop.hpp"
-#include "../../ClockReceiver/Sleeper.hpp"
+#include "../../Activity/Observer.hpp"
+#include "../../ClockReceiver/ClockingHintSource.hpp"
 
 #include <memory>
 
 namespace Storage {
 namespace Disk {
 
-class Drive: public Sleeper, public TimedEventLoop {
+class Drive: public ClockingHint::Source, public TimedEventLoop {
 	public:
 		Drive(unsigned int input_clock_rate, int revolutions_per_minute, int number_of_heads);
 		~Drive();
@@ -45,7 +46,7 @@ class Drive: public Sleeper, public TimedEventLoop {
 			Steps the disk head the specified number of tracks. Positive numbers step inwards (i.e. away from track 0),
 			negative numbers step outwards (i.e. towards track 0).
 		*/
-		void step(int direction);
+		void step(HeadPosition offset);
 
 		/*!
 			Sets the current read head.
@@ -110,17 +111,32 @@ class Drive: public Sleeper, public TimedEventLoop {
 				If the drive is in write mode, announces that all queued bits have now been written.
 				If the controller provides further bits now then there will be no gap in written data.
 			*/
-			virtual void process_write_completed() = 0;
+			virtual void process_write_completed() {}
 
 			/// Informs the delegate of the passing of @c cycles.
-			virtual void advance(const Cycles cycles) = 0;
+			virtual void advance(const Cycles cycles) {}
 		};
 
 		/// Sets the current event delegate.
 		void set_event_delegate(EventDelegate *);
 
 		// As per Sleeper.
-		bool is_sleeping();
+		ClockingHint::Preference preferred_clocking() override;
+
+		/// Adds an activity observer; it'll be notified of disk activity.
+		/// The caller can specify whether to add an LED based on disk motor.
+		void set_activity_observer(Activity::Observer *observer, const std::string &name, bool add_motor_led);
+
+		/*!
+			Attempts to step to the specified offset and returns the track there if one exists; an uninitialised
+			track otherwise.
+
+			This is unambiguously **NOT A REALISTIC DRIVE FUNCTION**; real drives cannot step to a given offset.
+			So it is **NOT FOR HARDWARE EMULATION USAGE**.
+
+			It's for the benefit of user-optional fast-loading mechanisms **ONLY**.
+		*/
+		std::shared_ptr<Track> step_to(HeadPosition offset);
 
 	private:
 		// Drives contain an entire disk; from that a certain track
@@ -130,7 +146,7 @@ class Drive: public Sleeper, public TimedEventLoop {
 		bool has_disk_ = false;
 
 		// Contains the multiplier that converts between track-relative lengths
-		// to real-time lengths — so it's the reciprocal of rotation speed.
+		// to real-time lengths. So it's the reciprocal of rotation speed.
 		Time rotational_multiplier_;
 
 		// A count of time since the index hole was last seen. Which is used to
@@ -139,7 +155,7 @@ class Drive: public Sleeper, public TimedEventLoop {
 		int cycles_since_index_hole_ = 0;
 
 		// A record of head position and active head.
-		int head_position_ = 0;
+		HeadPosition head_position_;
 		int head_ = 0;
 		int available_heads_ = 0;
 
@@ -152,8 +168,8 @@ class Drive: public Sleeper, public TimedEventLoop {
 		bool clamp_writing_to_index_hole_ = false;
 
 		// If writing is occurring then the drive will be accumulating a write segment,
-		// for addition to a patched track.
-		std::shared_ptr<PCMPatchedTrack> patched_track_;
+		// for addition to a (high-resolution) PCM track.
+		std::shared_ptr<PCMTrack> patched_track_;
 		PCMSegment write_segment_;
 		Time write_start_time_;
 
@@ -166,9 +182,9 @@ class Drive: public Sleeper, public TimedEventLoop {
 		Time cycles_per_bit_;
 
 		// TimedEventLoop call-ins and state.
-		void process_next_event();
+		void process_next_event() override;
 		void get_next_event(const Time &duration_already_passed);
-		void advance(const Cycles cycles);
+		void advance(const Cycles cycles) override;
 		Track::Event current_event_;
 
 		// Helper for track changes.
@@ -189,6 +205,15 @@ class Drive: public Sleeper, public TimedEventLoop {
 
 		void setup_track();
 		void invalidate_track();
+
+		// Activity observer description.
+		Activity::Observer *observer_ = nullptr;
+		std::string drive_name_;
+		bool announce_motor_led_ = false;
+
+		// A rotating random data source.
+		uint64_t random_source_;
+		Time random_interval_;
 };
 
 

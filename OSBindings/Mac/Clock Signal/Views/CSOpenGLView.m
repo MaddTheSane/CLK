@@ -3,7 +3,7 @@
 //  CLK
 //
 //  Created by Thomas Harte on 16/07/2015.
-//  Copyright © 2015 Thomas Harte. All rights reserved.
+//  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
 #import "CSOpenGLView.h"
@@ -160,6 +160,11 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
 - (void)flagsChanged:(NSEvent *)theEvent
 {
 	[self.responderDelegate flagsChanged:theEvent];
+}
+
+- (void)paste:(id)sender
+{
+	[self.responderDelegate paste:sender];
 }
 
 #pragma mark - NSDraggingDestination

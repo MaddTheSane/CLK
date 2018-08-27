@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 08/01/2018.
-//  Copyright © 2018 Thomas Harte. All rights reserved.
+//  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
 #include "DMK.hpp"
@@ -35,9 +35,9 @@ std::unique_ptr<Storage::Encodings::MFM::Encoder> new_encoder(Storage::Disk::PCM
 DMK::DMK(const std::string &file_name) :
 	file_(file_name) {
 	// Determine whether this DMK represents a read-only disk (whether intentionally,
-	// or by virtue of placement).
+	// or by virtue of filesystem placement).
 	uint8_t read_only_byte = file_.get8();
-	if(read_only_byte != 0x00 && read_only_byte != 0xff) throw ErrorNotDMK;
+	if(read_only_byte != 0x00 && read_only_byte != 0xff) throw Error::InvalidFormat;
 	is_read_only_ = (read_only_byte == 0xff) || file_.get_is_known_read_only();
 
 	// Read track count and size.
@@ -46,7 +46,7 @@ DMK::DMK(const std::string &file_name) :
 
 	// Track length must be at least 0x80, as that's the size of the IDAM
 	// table before track contents.
-	if(track_length_ < 0x80) throw ErrorNotDMK;
+	if(track_length_ < 0x80) throw Error::InvalidFormat;
 
 	// Read the file flags and apply them.
 	uint8_t flags = file_.get8();
@@ -58,11 +58,11 @@ DMK::DMK(const std::string &file_name) :
 	// "in the emulator's native format".
 	file_.seek(0xc, SEEK_SET);
 	uint32_t format = file_.get32le();
-	if(format) throw ErrorNotDMK;
+	if(format) throw Error::InvalidFormat;
 }
 
-int DMK::get_head_position_count() {
-	return head_position_count_;
+HeadPosition DMK::get_maximum_head_position() {
+	return HeadPosition(head_position_count_);
 }
 
 int DMK::get_head_count() {
@@ -76,7 +76,7 @@ bool DMK::get_is_read_only() {
 }
 
 long DMK::get_file_offset_for_position(Track::Address address) {
-	return (address.head*head_count_ + address.position) * track_length_ + 16;
+	return (address.head*head_count_ + address.position.as_int()) * track_length_ + 16;
 }
 
 std::shared_ptr<::Storage::Disk::Track> DMK::get_track_at_position(::Storage::Disk::Track::Address address) {
@@ -139,7 +139,7 @@ std::shared_ptr<::Storage::Disk::Track> DMK::get_track_at_position(::Storage::Di
 
 		// Now at the IDAM, which will always be an FE regardless of FM/MFM encoding,
 		// presumably through misunderstanding of the designer? Write out a real IDAM
-		// for the current density, then the rest of the ID — four bytes for the address
+		// for the current density, then the rest of the ID: four bytes for the address
 		// plus two for the CRC. Keep a copy of the header while we're here, so that the
 		// size of the sector is known momentarily.
 		std::size_t step_rate = (!is_double_density && !is_purely_single_density_) ? 2 : 1;
@@ -177,11 +177,6 @@ std::shared_ptr<::Storage::Disk::Track> DMK::get_track_at_position(::Storage::Di
 		}
 
 		idam_pointer++;
-	}
-
-	// All segments should be exactly their number of bits in length.
-	for(auto &segment : segments) {
-		segment.number_of_bits = static_cast<unsigned int>(segment.data.size() * 8);
 	}
 
 	return std::make_shared<PCMTrack>(segments);

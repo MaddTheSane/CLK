@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 23/02/2018.
-//  Copyright © 2018 Thomas Harte. All rights reserved.
+//  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
 #include "ColecoVision.hpp"
@@ -14,7 +14,6 @@
 #include "../../Components/AY38910/AY38910.hpp"	// For the Super Game Module.
 #include "../../Components/SN76489/SN76489.hpp"
 
-#include "../ConfigurationTarget.hpp"
 #include "../CRTMachine.hpp"
 #include "../JoystickMachine.hpp"
 
@@ -32,30 +31,29 @@ const int sn76489_divider = 2;
 namespace Coleco {
 namespace Vision {
 
-class Joystick: public Inputs::Joystick {
+class Joystick: public Inputs::ConcreteJoystick {
 	public:
-		std::vector<DigitalInput> get_inputs() override {
-			return {
-				DigitalInput(DigitalInput::Up),
-				DigitalInput(DigitalInput::Down),
-				DigitalInput(DigitalInput::Left),
-				DigitalInput(DigitalInput::Right),
+		Joystick() :
+			ConcreteJoystick({
+				Input(Input::Up),
+				Input(Input::Down),
+				Input(Input::Left),
+				Input(Input::Right),
 
-				DigitalInput(DigitalInput::Fire, 0),
-				DigitalInput(DigitalInput::Fire, 1),
+				Input(Input::Fire, 0),
+				Input(Input::Fire, 1),
 
-				DigitalInput('0'),	DigitalInput('1'),	DigitalInput('2'),
-				DigitalInput('3'),	DigitalInput('4'),	DigitalInput('5'),
-				DigitalInput('6'),	DigitalInput('7'),	DigitalInput('8'),
-				DigitalInput('9'),	DigitalInput('*'),	DigitalInput('#'),
-			};
-		}
+				Input('0'),	Input('1'),	Input('2'),
+				Input('3'),	Input('4'),	Input('5'),
+				Input('6'),	Input('7'),	Input('8'),
+				Input('9'),	Input('*'),	Input('#'),
+			}) {}
 
-		void set_digital_input(const DigitalInput &digital_input, bool is_active) override {
+		void did_set_input(const Input &digital_input, bool is_active) override {
 			switch(digital_input.type) {
 				default: return;
 
-				case DigitalInput::Key:
+				case Input::Key:
 					if(!is_active) keypad_ |= 0xf;
 					else {
 						uint8_t mask = 0xf;
@@ -78,11 +76,11 @@ class Joystick: public Inputs::Joystick {
 					}
 				break;
 
-				case DigitalInput::Up: 		if(is_active) direction_ &= ~0x01; else direction_ |= 0x01;	break;
-				case DigitalInput::Right:	if(is_active) direction_ &= ~0x02; else direction_ |= 0x02;	break;
-				case DigitalInput::Down:	if(is_active) direction_ &= ~0x04; else direction_ |= 0x04;	break;
-				case DigitalInput::Left:	if(is_active) direction_ &= ~0x08; else direction_ |= 0x08;	break;
-				case DigitalInput::Fire:
+				case Input::Up: 	if(is_active) direction_ &= ~0x01; else direction_ |= 0x01;	break;
+				case Input::Right:	if(is_active) direction_ &= ~0x02; else direction_ |= 0x02;	break;
+				case Input::Down:	if(is_active) direction_ &= ~0x04; else direction_ |= 0x04;	break;
+				case Input::Left:	if(is_active) direction_ &= ~0x08; else direction_ |= 0x08;	break;
+				case Input::Fire:
 					switch(digital_input.info.control.index) {
 						default: break;
 						case 0:	if(is_active) direction_ &= ~0x40; else direction_ |= 0x40;	break;
@@ -109,11 +107,10 @@ class ConcreteMachine:
 	public Machine,
 	public CPU::Z80::BusHandler,
 	public CRTMachine::Machine,
-	public ConfigurationTarget::Machine,
 	public JoystickMachine::Machine {
 
 	public:
-		ConcreteMachine() :
+		ConcreteMachine(const Analyser::Static::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
 			z80_(*this),
 			sn76489_(TI::SN76489::Personality::SN76489, audio_queue_, sn76489_divider),
 			ay_(audio_queue_),
@@ -123,6 +120,36 @@ class ConcreteMachine:
 			set_clock_rate(3579545);
 			joysticks_.emplace_back(new Joystick);
 			joysticks_.emplace_back(new Joystick);
+
+			const auto roms = rom_fetcher(
+				"ColecoVision",
+				{ "coleco.rom" });
+
+			if(!roms[0]) {
+				throw ROMMachine::Error::MissingROMs;
+			}
+
+			bios_ = *roms[0];
+			bios_.resize(8192);
+
+			if(!target.media.cartridges.empty()) {
+				const auto &segment = target.media.cartridges.front()->get_segments().front();
+				cartridge_ = segment.data;
+				if(cartridge_.size() >= 32768)
+					cartridge_address_limit_ = 0xffff;
+				else
+					cartridge_address_limit_ = static_cast<uint16_t>(0x8000 + cartridge_.size() - 1);
+
+				if(cartridge_.size() > 32768) {
+					cartridge_pages_[0] = &cartridge_[cartridge_.size() - 16384];
+					cartridge_pages_[1] = cartridge_.data();
+					is_megacart_ = true;
+				} else {
+					cartridge_pages_[0] = cartridge_.data();
+					cartridge_pages_[1] = cartridge_.data() + 16384;
+					is_megacart_ = false;
+				}
+			}
 		}
 
 		~ConcreteMachine() {
@@ -154,52 +181,21 @@ class ConcreteMachine:
 			z80_.run_for(cycles);
 		}
 
-		void configure_as_target(const Analyser::Static::Target *target) override {
-			// Insert the media.
-			insert_media(target->media);
-		}
-
-		bool insert_media(const Analyser::Static::Media &media) override {
-			if(!media.cartridges.empty()) {
-				const auto &segment = media.cartridges.front()->get_segments().front();
-				cartridge_ = segment.data;
-				if(cartridge_.size() >= 32768)
-					cartridge_address_limit_ = 0xffff;
-				else
-					cartridge_address_limit_ = static_cast<uint16_t>(0x8000 + cartridge_.size() - 1);
-
-				if(cartridge_.size() > 32768) {
-					cartridge_pages_[0] = &cartridge_[cartridge_.size() - 16384];
-					cartridge_pages_[1] = cartridge_.data();
-					is_megacart_ = true;
-				} else {
-					cartridge_pages_[0] = cartridge_.data();
-					cartridge_pages_[1] = cartridge_.data() + 16384;
-					is_megacart_ = false;
-				}
-			}
-
-			return true;
-		}
-
-		// Obtains the system ROMs.
-		bool set_rom_fetcher(const std::function<std::vector<std::unique_ptr<std::vector<uint8_t>>>(const std::string &machine, const std::vector<std::string> &names)> &roms_with_names) override {
-			auto roms = roms_with_names(
-				"ColecoVision",
-				{ "coleco.rom" });
-
-			if(!roms[0]) return false;
-
-			bios_ = *roms[0];
-			bios_.resize(8192);
-
-			return true;
-		}
-
 		// MARK: Z80::BusHandler
 		forceinline HalfCycles perform_machine_cycle(const CPU::Z80::PartialMachineCycle &cycle) {
-			time_since_vdp_update_ += cycle.length;
-			time_since_sn76489_update_ += cycle.length;
+			// The SN76489 will use its ready line to trigger the Z80's wait for three
+			// cycles when accessed. Everything else runs at full speed. Short-circuit
+			// that whole piece of communications by just accruing the time here if applicable.
+			const HalfCycles penalty(
+				(
+					cycle.operation == CPU::Z80::PartialMachineCycle::Output &&
+					((*cycle.address >> 5) & 7) == 7
+				) ? 6 : 0
+			);
+			const HalfCycles length = cycle.length + penalty;
+
+			time_since_vdp_update_ += length;
+			time_since_sn76489_update_ += length;
 
 			uint16_t address = cycle.address ? *cycle.address : 0x0000;
 			switch(cycle.operation) {
@@ -329,13 +325,13 @@ class ConcreteMachine:
 			}
 
 			if(time_until_interrupt_ > 0) {
-				time_until_interrupt_ -= cycle.length;
+				time_until_interrupt_ -= length;
 				if(time_until_interrupt_ <= HalfCycles(0)) {
 					z80_.set_non_maskable_interrupt_line(true, time_until_interrupt_);
 				}
 			}
 
-			return HalfCycles(0);
+			return penalty;
 		}
 
 		void flush() {
@@ -398,8 +394,8 @@ class ConcreteMachine:
 
 using namespace Coleco::Vision;
 
-Machine *Machine::ColecoVision() {
-	return new ConcreteMachine;
+Machine *Machine::ColecoVision(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
+	return new ConcreteMachine(*target, rom_fetcher);
 }
 
 Machine::~Machine() {}

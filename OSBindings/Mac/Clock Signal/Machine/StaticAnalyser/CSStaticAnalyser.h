@@ -3,13 +3,26 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 31/08/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>
 #import <AppKit/NSNib.h>
 
 @class CSMachine;
+
+typedef NS_ENUM(NSInteger, CSMachineAppleIIModel) {
+	CSMachineAppleIIModelAppleII,
+	CSMachineAppleIIModelAppleIIPlus,
+	CSMachineAppleIIModelAppleIIe,
+	CSMachineAppleIIModelAppleEnhancedIIe
+};
+
+typedef NS_ENUM(NSInteger, CSMachineAppleIIDiskController) {
+	CSMachineAppleIIDiskControllerNone,
+	CSMachineAppleIIDiskControllerSixteenSector,
+	CSMachineAppleIIDiskControllerThirteenSector
+};
 
 typedef NS_ENUM(NSInteger, CSMachineCPCModel) {
 	CSMachineCPCModel464,
@@ -19,7 +32,14 @@ typedef NS_ENUM(NSInteger, CSMachineCPCModel) {
 
 typedef NS_ENUM(NSInteger, CSMachineOricModel) {
 	CSMachineOricModelOric1,
-	CSMachineOricModelOricAtmos
+	CSMachineOricModelOricAtmos,
+	CSMachineOricModelPravetz
+};
+
+typedef NS_ENUM(NSInteger, CSMachineOricDiskInterface) {
+	CSMachineOricDiskInterfaceNone,
+	CSMachineOricDiskInterfaceMicrodisc,
+	CSMachineOricDiskInterfacePravetz
 };
 
 typedef NS_ENUM(NSInteger, CSMachineVic20Region) {
@@ -39,10 +59,11 @@ typedef int Kilobytes;
 - (instancetype)initWithElectronDFS:(BOOL)dfs adfs:(BOOL)adfs;
 - (instancetype)initWithAmstradCPCModel:(CSMachineCPCModel)model;
 - (instancetype)initWithMSXHasDiskDrive:(BOOL)hasDiskDrive;
-- (instancetype)initWithOricModel:(CSMachineOricModel)model hasMicrodrive:(BOOL)hasMicrodrive;
+- (instancetype)initWithOricModel:(CSMachineOricModel)model diskInterface:(CSMachineOricDiskInterface)diskInterface;
 - (instancetype)initWithVic20Region:(CSMachineVic20Region)region memorySize:(Kilobytes)memorySize hasC1540:(BOOL)hasC1540;
 - (instancetype)initWithZX80MemorySize:(Kilobytes)memorySize useZX81ROM:(BOOL)useZX81ROM;
 - (instancetype)initWithZX81MemorySize:(Kilobytes)memorySize;
+- (instancetype)initWithAppleIIModel:(CSMachineAppleIIModel)model diskController:(CSMachineAppleIIDiskController)diskController;
 
 @property(nonatomic, readonly) NSNibName optionsPanelNibName;
 @property(nonatomic, readonly) NSString *displayName;

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 15/08/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef UnformattedTrack_hpp
@@ -19,9 +19,9 @@ namespace Disk {
 */
 class UnformattedTrack: public Track {
 	public:
-		Event get_next_event();
-		Time seek_to(const Time &time_since_index_hole);
-		Track *clone();
+		Event get_next_event() override;
+		Time seek_to(const Time &time_since_index_hole) override;
+		Track *clone() const override;
 };
 
 }

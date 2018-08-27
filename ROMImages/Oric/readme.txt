@@ -6,3 +6,5 @@ basic10.rom
 basic11.rom
 colour.rom
 microdisc.rom
+8dos.rom
+pravetz.rom

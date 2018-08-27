@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 01/09/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 /*
@@ -12,8 +12,8 @@
 	6502.hpp, but it's implementation stuff.
 */
 
-template <typename T, bool uses_ready_line> void Processor<T, uses_ready_line>::run_for(const Cycles cycles) {
-	static const MicroOp doBranch[] = {
+template <Personality personality, typename T, bool uses_ready_line> void Processor<personality, T, uses_ready_line>::run_for(const Cycles cycles) {
+	static const MicroOp do_branch[] = {
 		CycleReadFromPC,
 		CycleAddSignedOperandToPC,
 		OperationMoveToNextProgram
@@ -34,40 +34,62 @@ template <typename T, bool uses_ready_line> void Processor<T, uses_ready_line>::
 	uint8_t *busValue = bus_value_;
 
 #define checkSchedule(op) \
-if(!scheduled_program_counter_) {\
-if(interrupt_requests_) {\
-	if(interrupt_requests_ & (InterruptRequestFlags::Reset | InterruptRequestFlags::PowerOn)) {\
-		interrupt_requests_ &= ~InterruptRequestFlags::PowerOn;\
-		scheduled_program_counter_ = get_reset_program();\
-	} else if(interrupt_requests_ & InterruptRequestFlags::NMI) {\
-		interrupt_requests_ &= ~InterruptRequestFlags::NMI;\
-		scheduled_program_counter_ = get_nmi_program();\
-	} else if(interrupt_requests_ & InterruptRequestFlags::IRQ) {\
-		scheduled_program_counter_ = get_irq_program();\
-	} \
-} else {\
-	scheduled_program_counter_ = fetch_decode_execute;\
-}\
-op;\
-}
+	if(!scheduled_program_counter_) {\
+	if(interrupt_requests_) {\
+		if(interrupt_requests_ & (InterruptRequestFlags::Reset | InterruptRequestFlags::PowerOn)) {\
+			interrupt_requests_ &= ~InterruptRequestFlags::PowerOn;\
+			scheduled_program_counter_ = get_reset_program();\
+		} else if(interrupt_requests_ & InterruptRequestFlags::NMI) {\
+			interrupt_requests_ &= ~InterruptRequestFlags::NMI;\
+			scheduled_program_counter_ = get_nmi_program();\
+		} else if(interrupt_requests_ & InterruptRequestFlags::IRQ) {\
+			scheduled_program_counter_ = get_irq_program();\
+		} \
+	} else {\
+		scheduled_program_counter_ = fetch_decode_execute;\
+	}\
+		op;\
+	}
 
 #define bus_access() \
-interrupt_requests_ = (interrupt_requests_ & ~InterruptRequestFlags::IRQ) | irq_request_history_;	\
-irq_request_history_ = irq_line_ & inverse_interrupt_flag_;	\
-number_of_cycles -= bus_handler_.perform_bus_operation(nextBusOperation, busAddress, busValue);	\
-nextBusOperation = BusOperation::None;	\
-if(number_of_cycles <= Cycles(0)) break;
+	interrupt_requests_ = (interrupt_requests_ & ~InterruptRequestFlags::IRQ) | irq_request_history_;	\
+	irq_request_history_ = irq_line_ & inverse_interrupt_flag_;	\
+	number_of_cycles -= bus_handler_.perform_bus_operation(nextBusOperation, busAddress, busValue);	\
+	nextBusOperation = BusOperation::None;	\
+	if(number_of_cycles <= Cycles(0)) break;
 
 	checkSchedule();
 	Cycles number_of_cycles = cycles + cycles_left_to_run_;
 
 	while(number_of_cycles > Cycles(0)) {
 
+		// Deal with a potential RDY state, if this 6502 has anything connected to ready.
 		while(uses_ready_line && ready_is_active_ && number_of_cycles > Cycles(0)) {
 			number_of_cycles -= bus_handler_.perform_bus_operation(BusOperation::Ready, busAddress, busValue);
 		}
 
-		if(!uses_ready_line || !ready_is_active_) {
+		// Deal with a potential STP state, if this 6502 implements STP.
+		while(has_stpwai(personality) && stop_is_active_ && number_of_cycles > Cycles(0)) {
+			number_of_cycles -= bus_handler_.perform_bus_operation(BusOperation::Ready, busAddress, busValue);
+			if(interrupt_requests_ & InterruptRequestFlags::Reset) {
+				stop_is_active_ = false;
+				checkSchedule();
+				break;
+			}
+		}
+
+		// Deal with a potential WAI state, if this 6502 implements WAI.
+		while(has_stpwai(personality) && wait_is_active_ && number_of_cycles > Cycles(0)) {
+			number_of_cycles -= bus_handler_.perform_bus_operation(BusOperation::Ready, busAddress, busValue);
+			interrupt_requests_ |= (irq_line_ & inverse_interrupt_flag_);
+			if(interrupt_requests_ & InterruptRequestFlags::NMI || irq_line_) {
+				wait_is_active_ = false;
+				checkSchedule();
+				break;
+			}
+		}
+
+		if((!uses_ready_line || !ready_is_active_) && (!has_stpwai(personality) || (!wait_is_active_ && !stop_is_active_))) {
 			if(nextBusOperation != BusOperation::None) {
 				bus_access();
 			}
@@ -93,11 +115,25 @@ if(number_of_cycles <= Cycles(0)) break;
 					} break;
 
 					case CycleFetchOperand:
-						read_mem(operand_, pc_.full);
+						// This is supposed to produce the 65C02's 1-cycle NOPs; they're
+						// treated as a special case because they break the rule that
+						// governs everything else on the 6502: that two bytes will always
+						// be fetched.
+						if(
+							!is_65c02(personality) ||
+							(operation_&7) != 3 ||
+							operation_ == 0xcb ||
+							operation_ == 0xdb
+						) {
+							read_mem(operand_, pc_.full);
+							break;
+						} else {
+							continue;
+						}
 					break;
 
 					case OperationDecodeOperation:
-						scheduled_program_counter_ = operations[operation_];
+						scheduled_program_counter_ = operations_[operation_];
 					continue;
 
 					case OperationMoveToNextProgram:
@@ -115,6 +151,8 @@ if(number_of_cycles <= Cycles(0)) break;
 					case CyclePushPCL:					push(pc_.bytes.low);											break;
 					case CyclePushOperand:				push(operand_);													break;
 					case CyclePushA:					push(a_);														break;
+					case CyclePushX:					push(x_);														break;
+					case CyclePushY:					push(y_);														break;
 					case CycleNoWritePush: {
 						uint16_t targetAddress = s_ | 0x100; s_--;
 						read_mem(operand_, targetAddress);
@@ -127,28 +165,44 @@ if(number_of_cycles <= Cycles(0)) break;
 					case CycleReadFromPC:				throwaway_read(pc_.full);										break;
 
 					case OperationBRKPickVector:
-						// NMI can usurp BRK-vector operations
-						nextAddress.full = (interrupt_requests_ & InterruptRequestFlags::NMI) ? 0xfffa : 0xfffe;
-						interrupt_requests_ &= ~InterruptRequestFlags::NMI;	// TODO: this probably doesn't happen now?
+						if(is_65c02(personality)) {
+							nextAddress.full = 0xfffe;
+						} else {
+							// NMI can usurp BRK-vector operations on the pre-C 6502s.
+							nextAddress.full = (interrupt_requests_ & InterruptRequestFlags::NMI) ? 0xfffa : 0xfffe;
+							interrupt_requests_ &= ~InterruptRequestFlags::NMI;
+						}
 					continue;
 					case OperationNMIPickVector:		nextAddress.full = 0xfffa;											continue;
 					case OperationRSTPickVector:		nextAddress.full = 0xfffc;											continue;
 					case CycleReadVectorLow:			read_mem(pc_.bytes.low, nextAddress.full);							break;
 					case CycleReadVectorHigh:			read_mem(pc_.bytes.high, nextAddress.full+1);						break;
-					case OperationSetI:					inverse_interrupt_flag_ = 0;										continue;
+					case OperationSetIRQFlags:
+						inverse_interrupt_flag_ = 0;
+						if(is_65c02(personality)) decimal_flag_ = false;
+					continue;
+					case OperationSetNMIRSTFlags:
+						if(is_65c02(personality)) decimal_flag_ = false;
+					continue;
 
 					case CyclePullPCL:					s_++; read_mem(pc_.bytes.low, s_ | 0x100);							break;
 					case CyclePullPCH:					s_++; read_mem(pc_.bytes.high, s_ | 0x100);							break;
 					case CyclePullA:					s_++; read_mem(a_, s_ | 0x100);										break;
+					case CyclePullX:					s_++; read_mem(x_, s_ | 0x100);										break;
+					case CyclePullY:					s_++; read_mem(y_, s_ | 0x100);										break;
 					case CyclePullOperand:				s_++; read_mem(operand_, s_ | 0x100);								break;
 					case OperationSetFlagsFromOperand:	set_flags(operand_);												continue;
 					case OperationSetOperandFromFlagsWithBRKSet: operand_ = get_flags() | Flag::Break;						continue;
 					case OperationSetOperandFromFlags:  operand_ = get_flags();												continue;
 					case OperationSetFlagsFromA:		zero_result_ = negative_result_ = a_;								continue;
+					case OperationSetFlagsFromX:		zero_result_ = negative_result_ = x_;								continue;
+					case OperationSetFlagsFromY:		zero_result_ = negative_result_ = y_;								continue;
 
-					case CycleIncrementPCAndReadStack:	pc_.full++; throwaway_read(s_ | 0x100);								break;
-					case CycleReadPCLFromAddress:		read_mem(pc_.bytes.low, address_.full);								break;
-					case CycleReadPCHFromAddress:		address_.bytes.low++; read_mem(pc_.bytes.high, address_.full);		break;
+					case CycleIncrementPCAndReadStack:	pc_.full++; throwaway_read(s_ | 0x100);													break;
+					case CycleReadPCLFromAddress:		read_mem(pc_.bytes.low, address_.full);													break;
+					case CycleReadPCHFromAddressLowInc:	address_.bytes.low++; read_mem(pc_.bytes.high, address_.full);							break;
+					case CycleReadPCHFromAddressFixed:	if(!address_.bytes.low) address_.bytes.high++; read_mem(pc_.bytes.high, address_.full);	break;
+					case CycleReadPCHFromAddressInc:	address_.full++; read_mem(pc_.bytes.high, address_.full);								break;
 
 					case CycleReadAndIncrementPC: {
 						uint16_t oldPC = pc_.full;
@@ -156,12 +210,20 @@ if(number_of_cycles <= Cycles(0)) break;
 						throwaway_read(oldPC);
 					} break;
 
-// MARK: - JAM
+// MARK: - JAM, WAI, STP
 
-					case CycleScheduleJam: {
+					case OperationScheduleJam: {
 						is_jammed_ = true;
-						scheduled_program_counter_ = operations[CPU::MOS6502::JamOpcode];
+						scheduled_program_counter_ = operations_[CPU::MOS6502::JamOpcode];
 					} continue;
+
+					case OperationScheduleStop:
+						stop_is_active_ = true;
+					break;
+
+					case OperationScheduleWait:
+						wait_is_active_ = true;
+					break;
 
 // MARK: - Bitwise
 
@@ -175,10 +237,12 @@ if(number_of_cycles <= Cycles(0)) break;
 					case OperationLDX:	x_ = negative_result_ = zero_result_ = operand_;			continue;
 					case OperationLDY:	y_ = negative_result_ = zero_result_ = operand_;			continue;
 					case OperationLAX:	a_ = x_ = negative_result_ = zero_result_ = operand_;		continue;
+					case OperationCopyOperandToA:		a_ = operand_;								continue;
 
 					case OperationSTA:	operand_ = a_;											continue;
 					case OperationSTX:	operand_ = x_;											continue;
 					case OperationSTY:	operand_ = y_;											continue;
+					case OperationSTZ:	operand_ = 0;											continue;
 					case OperationSAX:	operand_ = a_ & x_;										continue;
 					case OperationSHA:	operand_ = a_ & x_ & (address_.bytes.high+1);			continue;
 					case OperationSHX:	operand_ = x_ & (address_.bytes.high+1);				continue;
@@ -208,12 +272,32 @@ if(number_of_cycles <= Cycles(0)) break;
 						carry_flag_ = ((~temp16) >> 8)&1;
 					} continue;
 
-// MARK: - BIT
+// MARK: - BIT, TSB, TRB
 
 					case OperationBIT:
 						zero_result_ = operand_ & a_;
 						negative_result_ = operand_;
 						overflow_flag_ = operand_&Flag::Overflow;
+					continue;
+					case OperationBITNoNV:
+						zero_result_ = operand_ & a_;
+					continue;
+					case OperationTRB:
+						zero_result_ = operand_ & a_;
+						operand_ &= ~a_;
+					continue;
+					case OperationTSB:
+						zero_result_ = operand_ & a_;
+						operand_ |= a_;
+					continue;
+
+// MARK: - RMB and SMB
+
+					case OperationRMB:
+						operand_ &= ~(1 << (operation_ >> 4));
+					continue;
+					case OperationSMB:
+						operand_ |= 1 << ((operation_ >> 4)&7);
 					continue;
 
 // MARK: - ADC/SBC (and INS)
@@ -221,7 +305,7 @@ if(number_of_cycles <= Cycles(0)) break;
 					case OperationINS:
 						operand_++;			// deliberate fallthrough
 					case OperationSBC:
-						if(decimal_flag_) {
+						if(decimal_flag_ && has_decimal_mode(personality)) {
 							const uint16_t notCarry = carry_flag_ ^ 0x1;
 							const uint16_t decimalResult = static_cast<uint16_t>(a_) - static_cast<uint16_t>(operand_) - notCarry;
 							uint16_t temp16;
@@ -239,6 +323,12 @@ if(number_of_cycles <= Cycles(0)) break;
 
 							carry_flag_ = (temp16 > 0xff) ? 0 : Flag::Carry;
 							a_ = static_cast<uint8_t>(temp16);
+
+							if(is_65c02(personality)) {
+								negative_result_ = zero_result_ = a_;
+								read_mem(operand_, address_.full);
+								break;
+							}
 							continue;
 						} else {
 							operand_ = ~operand_;
@@ -246,7 +336,7 @@ if(number_of_cycles <= Cycles(0)) break;
 
 					// deliberate fallthrough
 					case OperationADC:
-						if(decimal_flag_) {
+						if(decimal_flag_ && has_decimal_mode(personality)) {
 							const uint16_t decimalResult = static_cast<uint16_t>(a_) + static_cast<uint16_t>(operand_) + static_cast<uint16_t>(carry_flag_);
 
 							uint8_t low_nibble = (a_ & 0xf) + (operand_ & 0xf) + carry_flag_;
@@ -259,6 +349,12 @@ if(number_of_cycles <= Cycles(0)) break;
 							carry_flag_ = (result >> 8) ? 1 : 0;
 							a_ = static_cast<uint8_t>(result);
 							zero_result_ = static_cast<uint8_t>(decimalResult);
+
+							if(is_65c02(personality)) {
+								negative_result_ = zero_result_ = a_;
+								read_mem(operand_, address_.full);
+								break;
+							}
 						} else {
 							const uint16_t result = static_cast<uint16_t>(a_) + static_cast<uint16_t>(operand_) + static_cast<uint16_t>(carry_flag_);
 							overflow_flag_ = (( (result^a_)&(result^operand_) )&0x80) >> 1;
@@ -345,6 +441,8 @@ if(number_of_cycles <= Cycles(0)) break;
 
 					case OperationINC: operand_++; negative_result_ = zero_result_ = operand_; continue;
 					case OperationDEC: operand_--; negative_result_ = zero_result_ = operand_; continue;
+					case OperationINA: a_++; negative_result_ = zero_result_ = a_; continue;
+					case OperationDEA: a_--; negative_result_ = zero_result_ = a_; continue;
 					case OperationINX: x_++; negative_result_ = zero_result_ = x_; continue;
 					case OperationDEX: x_--; negative_result_ = zero_result_ = x_; continue;
 					case OperationINY: y_++; negative_result_ = zero_result_ = y_; continue;
@@ -368,32 +466,42 @@ if(number_of_cycles <= Cycles(0)) break;
 
 // MARK: - Addressing Mode Work
 
+#define page_crossing_stall_read()	\
+	if(is_65c02(personality)) {	\
+		throwaway_read(pc_.full - 1);	\
+	} else {	\
+		throwaway_read(address_.full);	\
+	}
+
 					case CycleAddXToAddressLow:
 						nextAddress.full = address_.full + x_;
 						address_.bytes.low = nextAddress.bytes.low;
-						if(address_.bytes.high != nextAddress.bytes.high) {
-							throwaway_read(address_.full);
+						if(address_.bytes.high != nextAddress.bytes.high) {		
+							page_crossing_stall_read();
 							break;
 						}
 					continue;
 					case CycleAddXToAddressLowRead:
 						nextAddress.full = address_.full + x_;
 						address_.bytes.low = nextAddress.bytes.low;
-						throwaway_read(address_.full);
+						page_crossing_stall_read();
 					break;
 					case CycleAddYToAddressLow:
 						nextAddress.full = address_.full + y_;
 						address_.bytes.low = nextAddress.bytes.low;
 						if(address_.bytes.high != nextAddress.bytes.high) {
-							throwaway_read(address_.full);
+							page_crossing_stall_read();
 							break;
 						}
 					continue;
 					case CycleAddYToAddressLowRead:
 						nextAddress.full = address_.full + y_;
 						address_.bytes.low = nextAddress.bytes.low;
-						throwaway_read(address_.full);
+						page_crossing_stall_read();
 					break;
+
+#undef page_crossing_stall_read
+
 					case OperationCorrectAddressHigh:
 						address_.full = nextAddress.full;
 					continue;
@@ -403,6 +511,9 @@ if(number_of_cycles <= Cycles(0)) break;
 					break;
 					case CycleAddXToOperandFetchAddressLow:
 						operand_ += x_;
+						read_mem(address_.bytes.low, operand_);
+					break;
+					case CycleFetchAddressLowFromOperand:
 						read_mem(address_.bytes.low, operand_);
 					break;
 					case CycleIncrementOperandFetchAddressHigh:
@@ -449,12 +560,14 @@ if(number_of_cycles <= Cycles(0)) break;
 					case OperationIncrementPC:			pc_.full++;						continue;
 					case CycleFetchOperandFromAddress:	read_mem(operand_, address_.full);	break;
 					case CycleWriteOperandToAddress:	write_mem(operand_, address_.full);	break;
-					case OperationCopyOperandFromA:		operand_ = a_;					continue;
-					case OperationCopyOperandToA:		a_ = operand_;					continue;
 
 // MARK: - Branching
 
-#define BRA(condition)	pc_.full++; if(condition) scheduled_program_counter_ = doBranch
+#define BRA(condition)	\
+	pc_.full++; \
+	if(condition) {	\
+		scheduled_program_counter_ = do_branch;	\
+	}
 
 					case OperationBPL: BRA(!(negative_result_&0x80));				continue;
 					case OperationBMI: BRA(negative_result_&0x80);					continue;
@@ -464,6 +577,9 @@ if(number_of_cycles <= Cycles(0)) break;
 					case OperationBCS: BRA(carry_flag_);							continue;
 					case OperationBNE: BRA(zero_result_);							continue;
 					case OperationBEQ: BRA(!zero_result_);							continue;
+					case OperationBRA: BRA(true);									continue;
+
+#undef BRA
 
 					case CycleAddSignedOperandToPC:
 						nextAddress.full = static_cast<uint16_t>(pc_.full + (int8_t)operand_);
@@ -473,10 +589,46 @@ if(number_of_cycles <= Cycles(0)) break;
 							pc_.full = nextAddress.full;
 							throwaway_read(halfUpdatedPc);
 							break;
+						} else if(is_65c02(personality)) {
+							// 65C02 modification to all branches: a branch that is taken but requires only a single cycle
+							// to target its destination skips any pending interrupts.
+							// Cf. http://forum.6502.org/viewtopic.php?f=4&t=1634
+							scheduled_program_counter_ = fetch_decode_execute;
 						}
 					continue;
 
-#undef BRA
+					case CycleFetchFromHalfUpdatedPC: {
+						uint16_t halfUpdatedPc = static_cast<uint16_t>(((pc_.bytes.low + (int8_t)operand_) & 0xff) | (pc_.bytes.high << 8));
+						throwaway_read(halfUpdatedPc);
+					} break;
+
+					case OperationAddSignedOperandToPC16:
+						pc_.full = static_cast<uint16_t>(pc_.full + (int8_t)operand_);
+					continue;
+
+					case OperationBBRBBS: {
+						// To reach here, the 6502 has (i) read the operation; (ii) read the first operand;
+						// and (iii) read from the corresponding zero page.
+						const uint8_t mask = static_cast<uint8_t>(1 << ((operation_ >> 4)&7));
+						if((operand_ & mask) == ((operation_ & 0x80) ? mask : 0)) {
+							static const MicroOp do_branch[] = {
+								CycleFetchOperand,			// Fetch offset.
+								OperationIncrementPC,
+								CycleFetchFromHalfUpdatedPC,
+								OperationAddSignedOperandToPC16,
+								OperationMoveToNextProgram
+							};
+							scheduled_program_counter_ = do_branch;
+						} else {
+							static const MicroOp do_not_branch[] = {
+								CycleFetchOperand,
+								OperationIncrementPC,
+								CycleFetchFromHalfUpdatedPC,
+								OperationMoveToNextProgram
+							};
+							scheduled_program_counter_ = do_not_branch;
+						}
+					} break;
 
 // MARK: - Transfers
 
@@ -517,7 +669,10 @@ if(number_of_cycles <= Cycles(0)) break;
 					continue;
 				}
 
-				if(uses_ready_line && ready_line_is_enabled_ && isReadOperation(nextBusOperation)) {
+				if(has_stpwai(personality) && (stop_is_active_ || wait_is_active_)) {
+					break;
+				}
+				if(uses_ready_line && ready_line_is_enabled_ && (is_65c02(personality) || isReadOperation(nextBusOperation))) {
 					ready_is_active_ = true;
 					break;
 				}
@@ -535,7 +690,7 @@ if(number_of_cycles <= Cycles(0)) break;
 	bus_handler_.flush();
 }
 
-template <typename T, bool uses_ready_line> void Processor<T, uses_ready_line>::set_ready_line(bool active) {
+template <Personality personality, typename T, bool uses_ready_line> void Processor<personality, T, uses_ready_line>::set_ready_line(bool active) {
 	assert(uses_ready_line);
 	if(active) {
 		ready_line_is_enabled_ = true;
@@ -583,6 +738,7 @@ inline const ProcessorStorage::MicroOp *ProcessorStorage::get_reset_program() {
 		CycleNoWritePush,
 		OperationRSTPickVector,
 		CycleNoWritePush,
+		OperationSetNMIRSTFlags,
 		CycleReadVectorLow,
 		CycleReadVectorHigh,
 		OperationMoveToNextProgram
@@ -599,7 +755,7 @@ inline const ProcessorStorage::MicroOp *ProcessorStorage::get_irq_program() {
 		OperationBRKPickVector,
 		OperationSetOperandFromFlags,
 		CyclePushOperand,
-		OperationSetI,
+		OperationSetIRQFlags,
 		CycleReadVectorLow,
 		CycleReadVectorHigh,
 		OperationMoveToNextProgram
@@ -616,6 +772,7 @@ inline const ProcessorStorage::MicroOp *ProcessorStorage::get_nmi_program() {
 		OperationNMIPickVector,
 		OperationSetOperandFromFlags,
 		CyclePushOperand,
+		OperationSetNMIRSTFlags,
 		CycleReadVectorLow,
 		CycleReadVectorHigh,
 		OperationMoveToNextProgram

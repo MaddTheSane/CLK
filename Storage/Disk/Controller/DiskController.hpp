@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 14/07/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef Storage_Disk_Controller_hpp
@@ -12,16 +12,15 @@
 #include "../Drive.hpp"
 #include "../DPLL/DigitalPhaseLockedLoop.hpp"
 #include "../Track/PCMSegment.hpp"
-#include "../Track/PCMPatchedTrack.hpp"
 
 #include "../../../ClockReceiver/ClockReceiver.hpp"
-#include "../../../ClockReceiver/Sleeper.hpp"
+#include "../../../ClockReceiver/ClockingHintSource.hpp"
 
 namespace Storage {
 namespace Disk {
 
 /*!
-	Provides the shell for emulating a disk controller — something that is connected to a disk drive and uses a
+	Provides the shell for emulating a disk controller: something that is connected to a disk drive and uses a
 	phase locked loop ('PLL') to decode a bit stream from the surface of the disk.
 
 	Partly abstract; it is expected that subclasses will provide methods to deal with receiving a newly-recognised
@@ -29,7 +28,11 @@ namespace Disk {
 
 	TODO: communication of head size and permissible stepping extents, appropriate simulation of gain.
 */
-class Controller: public DigitalPhaseLockedLoop::Delegate, public Drive::EventDelegate, public Sleeper, public Sleeper::SleepObserver {
+class Controller:
+	public DigitalPhaseLockedLoop::Delegate,
+	public Drive::EventDelegate,
+	public ClockingHint::Source,
+	public ClockingHint::Observer {
 	protected:
 		/*!
 			Constructs a @c Controller that will be run at @c clock_rate.
@@ -65,7 +68,7 @@ class Controller: public DigitalPhaseLockedLoop::Delegate, public Drive::EventDe
 			Should be implemented by subclasses if they implement writing; communicates that
 			all bits supplied to write_bit have now been written.
 		*/
-		virtual void process_write_completed();
+		virtual void process_write_completed() override;
 
 		/*!
 			Puts the controller and the drive returned by get_drive() into write mode, supplying to
@@ -97,9 +100,9 @@ class Controller: public DigitalPhaseLockedLoop::Delegate, public Drive::EventDe
 		Drive &get_drive();
 
 		/*!
-			As per Sleeper.
+			As per ClockingHint::Source.
 		*/
-		bool is_sleeping();
+		ClockingHint::Preference preferred_clocking() override;
 
 	private:
 		Time bit_length_;
@@ -113,14 +116,15 @@ class Controller: public DigitalPhaseLockedLoop::Delegate, public Drive::EventDe
 
 		std::shared_ptr<Drive> empty_drive_;
 
-		void set_component_is_sleeping(void *component, bool is_sleeping);
+		// ClockingHint::Observer.
+		void set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference clocking) override;
 
 		// for Drive::EventDelegate
-		void process_event(const Track::Event &event);
-		void advance(const Cycles cycles);
+		void process_event(const Track::Event &event) override;
+		void advance(const Cycles cycles) override ;
 
 		// to satisfy DigitalPhaseLockedLoop::Delegate
-		void digital_phase_locked_loop_output_bit(int value);
+		void digital_phase_locked_loop_output_bit(int value) override;
 };
 
 }

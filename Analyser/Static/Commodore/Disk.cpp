@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 13/09/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "Disk.hpp"
@@ -45,9 +45,11 @@ class CommodoreGCRParser: public Storage::Disk::Controller {
 
 			if(difference) {
 				int direction = difference < 0 ? -1 : 1;
-				difference *= 2 * direction;
+				difference *= direction;
 
-				for(int c = 0; c < difference; c++) get_drive().step(direction);
+				for(int c = 0; c < difference; c++) {
+					get_drive().step(Storage::Disk::HeadPosition(direction));
+				}
 
 				unsigned int zone = 3;
 				if(track >= 18) zone = 2;

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 28/06/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 import XCTest
@@ -15,7 +15,7 @@ class MOS6502InterruptTests: XCTestCase {
 		super.setUp()
 
 		// create a machine full of NOPs
-		machine = CSTestMachine6502()
+		machine = CSTestMachine6502(is65C02: false)
 		for c in 0...65535 {
 			machine.setValue(0xea, forAddress: UInt16(c))
 		}

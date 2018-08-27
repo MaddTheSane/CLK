@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 06/11/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "Acorn.hpp"
@@ -14,7 +14,7 @@ namespace {
 const int PLLClockRate = 1920000;
 }
 
-Parser::Parser() : crc_(0x1021, 0x0000) {
+Parser::Parser(): crc_(0x1021) {
 	shifter_.set_delegate(this);
 }
 
@@ -75,7 +75,7 @@ Shifter::Shifter() :
 }
 
 void Shifter::process_pulse(const Storage::Tape::Tape::Pulse &pulse) {
-	pll_.run_for(Cycles(static_cast<int>(static_cast<float>(PLLClockRate) * pulse.length.get_float())));
+	pll_.run_for(Cycles(static_cast<int>(static_cast<float>(PLLClockRate) * pulse.length.get<float>())));
 
 	bool is_high = pulse.type == Storage::Tape::Tape::Pulse::High;
 	if(is_high != was_high_) {

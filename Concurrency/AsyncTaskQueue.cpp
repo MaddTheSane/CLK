@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 07/10/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "AsyncTaskQueue.hpp"
@@ -98,7 +98,7 @@ void DeferringAsyncTaskQueue::perform() {
 	std::shared_ptr<std::list<std::function<void(void)>>> deferred_tasks = deferred_tasks_;
 	deferred_tasks_.reset();
 	enqueue([deferred_tasks] {
-		for(auto &function : *deferred_tasks) {
+		for(const auto &function : *deferred_tasks) {
 			function();
 		}
 	});

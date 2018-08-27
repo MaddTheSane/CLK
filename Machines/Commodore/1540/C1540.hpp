@@ -3,11 +3,30 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 05/07/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef Commodore1540_hpp
 #define Commodore1540_hpp
+
+namespace Commodore {
+namespace C1540 {
+
+/// Defines the type of drive this 1540 hardware is configured as.
+enum class Personality {
+	C1540,
+	C1541
+};
+
+/*
+	Implementation note: this is defined up here so that it precedes
+	C1540Base.hpp below. The alternative option was to factor it out,
+	but the whole point of the C1540.hpp/C1540Base.hpp split is supposed
+	to be to create a single file of public interface.
+*/
+
+}
+}
 
 #include "../SerialBus.hpp"
 #include "../../ROMMachine.hpp"
@@ -20,18 +39,9 @@ namespace C1540 {
 /*!
 	Provides an emulation of the C1540.
 */
-class Machine: public MachineBase, public ROMMachine::Machine {
+class Machine: public MachineBase {
 	public:
-		enum Personality {
-			C1540,
-			C1541
-		};
-		Machine(Personality p);
-
-		/*!
-			Sets the source for this drive's ROM image.
-		*/
-		bool set_rom_fetcher(const std::function<std::vector<std::unique_ptr<std::vector<uint8_t>>>(const std::string &machine, const std::vector<std::string> &names)> &roms_with_names);
+		Machine(Personality personality, const ROMMachine::ROMFetcher &rom_fetcher);
 
 		/*!
 			Sets the serial bus to which this drive should attach itself.
@@ -43,9 +53,6 @@ class Machine: public MachineBase, public ROMMachine::Machine {
 
 		/// Inserts @c disk into the drive.
 		void set_disk(std::shared_ptr<Storage::Disk::Disk> disk);
-
-	private:
-		Personality personality_;
 };
 
 }

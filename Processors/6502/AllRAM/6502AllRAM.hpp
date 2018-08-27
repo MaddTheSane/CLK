@@ -3,7 +3,7 @@
 //  CLK
 //
 //  Created by Thomas Harte on 13/07/2015.
-//  Copyright © 2015 Thomas Harte. All rights reserved.
+//  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
 #ifndef MOS6502AllRAM_cpp
@@ -19,7 +19,7 @@ class AllRAMProcessor:
 	public ::CPU::AllRAMProcessor {
 
 	public:
-		static AllRAMProcessor *Processor();
+		static AllRAMProcessor *Processor(Personality personality);
 		virtual ~AllRAMProcessor() {}
 
 		virtual void run_for(const Cycles cycles) = 0;

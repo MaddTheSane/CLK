@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 21/11/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "OricMFMDSK.hpp"
@@ -19,18 +19,18 @@ using namespace Storage::Disk;
 OricMFMDSK::OricMFMDSK(const std::string &file_name) :
 		file_(file_name) {
 	if(!file_.check_signature("MFM_DISK"))
-		throw ErrorNotOricMFMDSK;
+		throw Error::InvalidFormat;
 
 	head_count_ = file_.get32le();
 	track_count_ = file_.get32le();
 	geometry_type_ = file_.get32le();
 
 	if(geometry_type_ < 1 || geometry_type_ > 2)
-		throw ErrorNotOricMFMDSK;
+		throw Error::InvalidFormat;
 }
 
-int OricMFMDSK::get_head_position_count() {
-	return static_cast<int>(track_count_);
+HeadPosition OricMFMDSK::get_maximum_head_position() {
+	return HeadPosition(static_cast<int>(track_count_));
 }
 
 int OricMFMDSK::get_head_count() {
@@ -41,10 +41,10 @@ long OricMFMDSK::get_file_offset_for_position(Track::Address address) {
 	int seek_offset = 0;
 	switch(geometry_type_) {
 		case 1:
-			seek_offset = address.head * static_cast<int>(track_count_) + address.position;
+			seek_offset = address.head * static_cast<int>(track_count_) + address.position.as_int();
 		break;
 		case 2:
-			seek_offset = address.position * static_cast<int>(track_count_ * head_count_) + address.head;
+			seek_offset = address.position.as_int() * static_cast<int>(track_count_ * head_count_) + address.head;
 		break;
 	}
 	return static_cast<long>(seek_offset) * 6400 + 256;
@@ -108,12 +108,11 @@ std::shared_ptr<Track> OricMFMDSK::get_track_at_position(Track::Address address)
 		}
 	}
 
-	segment.number_of_bits = static_cast<unsigned int>(segment.data.size() * 8);
 	return std::make_shared<PCMTrack>(segment);
 }
 
 void OricMFMDSK::set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) {
-	for(auto &track : tracks) {
+	for(const auto &track : tracks) {
 		PCMSegment segment = Storage::Disk::track_serialisation(*track.second, Storage::Encodings::MFM::MFMBitLength);
 		Storage::Encodings::MFM::Shifter shifter;
 		shifter.set_is_double_density(true);
@@ -123,8 +122,8 @@ void OricMFMDSK::set_tracks(const std::map<Track::Address, std::shared_ptr<Track
 		int offset = 0;
 		bool capture_size = false;
 
-		for(unsigned int bit = 0; bit < segment.number_of_bits; ++bit) {
-			shifter.add_input_bit(segment.bit(bit));
+		for(const auto bit : segment.data) {
+			shifter.add_input_bit(bit ? 1 : 0);
 			if(shifter.get_token() == Storage::Encodings::MFM::Shifter::Token::None) continue;
 			parsed_track.push_back(shifter.get_byte());
 

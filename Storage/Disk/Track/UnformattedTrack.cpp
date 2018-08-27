@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 15/08/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "UnformattedTrack.hpp"
@@ -21,6 +21,6 @@ Storage::Time UnformattedTrack::seek_to(const Time &time_since_index_hole) {
 	return Time(0);
 }
 
-Track *UnformattedTrack::clone() {
+Track *UnformattedTrack::clone() const {
 	return new UnformattedTrack;
 }

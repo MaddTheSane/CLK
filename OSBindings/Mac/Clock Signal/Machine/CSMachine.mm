@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 04/01/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #import "CSMachine.h"
@@ -11,25 +11,29 @@
 
 #include "CSROMFetcher.hpp"
 
-#include "ConfigurationTarget.hpp"
+#include "MediaTarget.hpp"
 #include "JoystickMachine.hpp"
 #include "KeyboardMachine.hpp"
 #include "KeyCodes.h"
 #include "MachineForTarget.hpp"
 #include "StandardOptions.hpp"
 #include "Typer.hpp"
+#include "../../../../Activity/Observer.hpp"
 
 #import "CSStaticAnalyser+TargetVector.h"
 #import "NSBundle+DataResource.h"
 #import "NSData+StdVector.h"
 
+#include <bitset>
+
 @interface CSMachine() <CSFastLoading>
 - (void)speaker:(Outputs::Speaker::Speaker *)speaker didCompleteSamples:(const int16_t *)samples length:(int)length;
 - (void)speakerDidChangeInputClock:(Outputs::Speaker::Speaker *)speaker;
+- (void)addLED:(NSString *)led;
 @end
 
 struct LockProtectedDelegate {
-	// Contractual promise is: machine — the pointer **and** the object ** — may be accessed only
+	// Contractual promise is: machine, the pointer **and** the object **, may be accessed only
 	// in sections protected by the machineAccessLock;
 	NSLock *machineAccessLock;
 	__unsafe_unretained CSMachine *machine;
@@ -48,12 +52,34 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate, public LockP
 	}
 };
 
+struct ActivityObserver: public Activity::Observer {
+	void register_led(const std::string &name) override {
+		[machine addLED:[NSString stringWithUTF8String:name.c_str()]];
+	}
+
+	void set_led_status(const std::string &name, bool lit) override {
+		[machine.delegate machine:machine led:[NSString stringWithUTF8String:name.c_str()] didChangeToLit:lit];
+	}
+
+	void announce_drive_event(const std::string &name, DriveEvent event) override {
+		[machine.delegate machine:machine ledShouldBlink:[NSString stringWithUTF8String:name.c_str()]];
+	}
+
+	__unsafe_unretained CSMachine *machine;
+};
+
 @implementation CSMachine {
 	SpeakerDelegate _speakerDelegate;
+	ActivityObserver _activityObserver;
 	NSLock *_delegateMachineAccessLock;
 
 	CSStaticAnalyser *_analyser;
 	std::unique_ptr<Machine::DynamicMachine> _machine;
+	JoystickMachine::Machine *_joystickMachine;
+
+	CSJoystickManager *_joystickManager;
+	std::bitset<65536> _depressedKeys;
+	NSMutableArray<NSString *> *_leds;
 }
 
 - (instancetype)initWithAnalyser:(CSStaticAnalyser *)result {
@@ -65,10 +91,21 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate, public LockP
 		_machine.reset(Machine::MachineForTargets(_analyser.targets, CSROMFetcher(), error));
 		if(!_machine) return nil;
 
+		_inputMode = _machine->keyboard_machine() ? CSMachineKeyboardInputModeKeyboard : CSMachineKeyboardInputModeJoystick;
+
+		_leds = [[NSMutableArray alloc] init];
+		Activity::Source *const activity_source = _machine->activity_source();
+		if(activity_source) {
+			_activityObserver.machine = self;
+			activity_source->set_activity_observer(&_activityObserver);
+		}
+
 		_delegateMachineAccessLock = [[NSLock alloc] init];
 
 		_speakerDelegate.machine = self;
 		_speakerDelegate.machineAccessLock = _delegateMachineAccessLock;
+
+		_joystickMachine = _machine->joystick_machine();
 	}
 	return self;
 }
@@ -129,6 +166,54 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate, public LockP
 
 - (void)runForInterval:(NSTimeInterval)interval {
 	@synchronized(self) {
+		if(_joystickMachine && _joystickManager) {
+			[_joystickManager update];
+
+			// TODO: configurable mapping from physical joypad inputs to machine inputs.
+			// Until then, apply a default mapping.
+
+			size_t c = 0;
+			std::vector<std::unique_ptr<Inputs::Joystick>> &machine_joysticks = _joystickMachine->get_joysticks();
+			for(CSJoystick *joystick in _joystickManager.joysticks) {
+				size_t target = c % machine_joysticks.size();
+				++++c;
+
+				// Post the first two analogue axes presented by the controller as horizontal and vertical inputs,
+				// unless the user seems to be using a hat.
+				// SDL will return a value in the range [-32768, 32767], so map from that to [0, 1.0]
+				if(!joystick.hats.count || !joystick.hats[0].direction) {
+					if(joystick.axes.count > 0) {
+						const float x_axis = joystick.axes[0].position;
+						machine_joysticks[target]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Type::Horizontal), x_axis);
+					}
+					if(joystick.axes.count > 1) {
+						const float y_axis = joystick.axes[1].position;
+						machine_joysticks[target]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Type::Vertical), y_axis);
+					}
+				} else {
+					// Forward hats as directions; hats always override analogue inputs.
+					for(CSJoystickHat *hat in joystick.hats) {
+						machine_joysticks[target]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Type::Up), !!(hat.direction & CSJoystickHatDirectionUp));
+						machine_joysticks[target]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Type::Down), !!(hat.direction & CSJoystickHatDirectionDown));
+						machine_joysticks[target]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Type::Left), !!(hat.direction & CSJoystickHatDirectionLeft));
+						machine_joysticks[target]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Type::Right), !!(hat.direction & CSJoystickHatDirectionRight));
+					}
+				}
+
+				// Forward all fire buttons, mapping as a function of index.
+				if(machine_joysticks[target]->get_number_of_fire_buttons()) {
+					std::vector<bool> button_states((size_t)machine_joysticks[target]->get_number_of_fire_buttons());
+					for(CSJoystickButton *button in joystick.buttons) {
+						if(button.isPressed) button_states[(size_t)(((int)button.index - 1) % machine_joysticks[target]->get_number_of_fire_buttons())] = true;
+					}
+					for(size_t index = 0; index < button_states.size(); ++index) {
+						machine_joysticks[target]->set_input(
+							Inputs::Joystick::Input(Inputs::Joystick::Input::Type::Fire, index),
+							button_states[index]);
+					}
+				}
+			}
+		}
 		_machine->crt_machine()->run_for(interval);
 	}
 }
@@ -158,22 +243,84 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate, public LockP
 		keyboardMachine->type_string([paste UTF8String]);
 }
 
+- (NSBitmapImageRep *)imageRepresentation {
+	// Get the current viewport to establish framebuffer size. Then determine how wide the
+	// centre 4/3 of that would be.
+	GLint dimensions[4];
+	glGetIntegerv(GL_VIEWPORT, dimensions);
+	GLint proportionalWidth = (dimensions[3] * 4) / 3;
+
+	// Grab the framebuffer contents.
+	std::vector<uint8_t> temporaryData(static_cast<size_t>(proportionalWidth * dimensions[3] * 3));
+	glReadPixels((dimensions[2] - proportionalWidth) >> 1, 0, proportionalWidth, dimensions[3], GL_RGB, GL_UNSIGNED_BYTE, temporaryData.data());
+
+	// Generate an NSBitmapImageRep and populate it with a vertical flip
+	// of the original data.
+	NSBitmapImageRep *const result =
+		[[NSBitmapImageRep alloc]
+			initWithBitmapDataPlanes:NULL
+			pixelsWide:proportionalWidth
+			pixelsHigh:dimensions[3]
+			bitsPerSample:8
+			samplesPerPixel:3
+			hasAlpha:NO
+			isPlanar:NO
+			colorSpaceName:NSDeviceRGBColorSpace
+			bytesPerRow:3 * proportionalWidth
+			bitsPerPixel:0];
+
+	const size_t line_size = static_cast<size_t>(proportionalWidth * 3);
+	for(GLint y = 0; y < dimensions[3]; ++y) {
+		memcpy(
+			&result.bitmapData[static_cast<size_t>(y) * line_size],
+			&temporaryData[static_cast<size_t>(dimensions[3] - y - 1) * line_size],
+			line_size);
+	}
+
+	return result;
+}
+
 - (void)applyMedia:(const Analyser::Static::Media &)media {
 	@synchronized(self) {
-		ConfigurationTarget::Machine *const configurationTarget = _machine->configuration_target();
-		if(configurationTarget) configurationTarget->insert_media(media);
+		MediaTarget::Machine *const mediaTarget = _machine->media_target();
+		if(mediaTarget) mediaTarget->insert_media(media);
+	}
+}
+
+- (void)setJoystickManager:(CSJoystickManager *)joystickManager {
+	@synchronized(self) {
+		_joystickManager = joystickManager;
+		if(_joystickMachine) {
+			std::vector<std::unique_ptr<Inputs::Joystick>> &machine_joysticks = _joystickMachine->get_joysticks();
+			for(const auto &joystick: machine_joysticks) {
+				joystick->reset_all_inputs();
+			}
+		}
 	}
 }
 
 - (void)setKey:(uint16_t)key characters:(NSString *)characters isPressed:(BOOL)isPressed {
 	auto keyboard_machine = _machine->keyboard_machine();
-	if(keyboard_machine) {
+	if(self.inputMode == CSMachineKeyboardInputModeKeyboard && keyboard_machine) {
+		// Don't pass anything on if this is not new information.
+		if(_depressedKeys[key] == !!isPressed) return;
+		_depressedKeys[key] = !!isPressed;
+
+		// Pick an ASCII code, if any.
+		char pressedKey = '\0';
+		if(characters.length) {
+			unichar firstCharacter = [characters characterAtIndex:0];
+			if(firstCharacter < 128) {
+				pressedKey = (char)firstCharacter;
+			}
+		}
+
 		@synchronized(self) {
 			Inputs::Keyboard &keyboard = keyboard_machine->get_keyboard();
 
 			// Connect the Carbon-era Mac keyboard scancodes to Clock Signal's 'universal' enumeration in order
 			// to pass into the platform-neutral realm.
-#define BIND(source, dest) case source: keyboard.set_key_pressed(Inputs::Keyboard::Key::dest, isPressed);	break
+#define BIND(source, dest) case source: keyboard.set_key_pressed(Inputs::Keyboard::Key::dest, pressedKey, isPressed);	break
 			switch(key) {
 				BIND(VK_ANSI_0, k0);	BIND(VK_ANSI_1, k1);	BIND(VK_ANSI_2, k2);	BIND(VK_ANSI_3, k3);	BIND(VK_ANSI_4, k4);
 				BIND(VK_ANSI_5, k5);	BIND(VK_ANSI_6, k6);	BIND(VK_ANSI_7, k7);	BIND(VK_ANSI_8, k8);	BIND(VK_ANSI_9, k9);
@@ -231,23 +378,27 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate, public LockP
 	}
 
 	auto joystick_machine = _machine->joystick_machine();
-	if(joystick_machine) {
+	if(self.inputMode == CSMachineKeyboardInputModeJoystick && joystick_machine) {
 		@synchronized(self) {
 			std::vector<std::unique_ptr<Inputs::Joystick>> &joysticks = joystick_machine->get_joysticks();
 			if(!joysticks.empty()) {
+				// Convert to a C++ bool so that the following calls are resolved correctly even if overloaded.
+				bool is_pressed = !!isPressed;
 				switch(key) {
-					case VK_LeftArrow:	joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput::Left, isPressed);	break;
-					case VK_RightArrow:	joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput::Right, isPressed);	break;
-					case VK_UpArrow:	joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput::Up, isPressed);		break;
-					case VK_DownArrow:	joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput::Down, isPressed);	break;
-					case VK_Space:		joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput::Fire, isPressed);	break;
-					case VK_ANSI_A:		joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput(Inputs::Joystick::DigitalInput::Fire, 0), isPressed);	break;
-					case VK_ANSI_S:		joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput(Inputs::Joystick::DigitalInput::Fire, 1), isPressed);	break;
+					case VK_LeftArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Left, is_pressed);		break;
+					case VK_RightArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Right, is_pressed);	break;
+					case VK_UpArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Up, is_pressed);		break;
+					case VK_DownArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Down, is_pressed);		break;
+					case VK_Space:		joysticks[0]->set_input(Inputs::Joystick::Input::Fire, is_pressed);		break;
+					case VK_ANSI_A:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 0), is_pressed);	break;
+					case VK_ANSI_S:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 1), is_pressed);	break;
+					case VK_ANSI_D:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 2), is_pressed);	break;
+					case VK_ANSI_F:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 3), is_pressed);	break;
 					default:
-						if(characters) {
-							joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput([characters characterAtIndex:0]), isPressed);
+						if(characters.length) {
+							joysticks[0]->set_input(Inputs::Joystick::Input([characters characterAtIndex:0]), is_pressed);
 						} else {
-							joysticks[0]->set_digital_input(Inputs::Joystick::DigitalInput::Fire, isPressed);
+							joysticks[0]->set_input(Inputs::Joystick::Input::Fire, is_pressed);
 						}
 					break;
 				}
@@ -365,6 +516,10 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate, public LockP
 	return [[NSString stringWithUTF8String:name.c_str()] lowercaseString];
 }
 
+- (BOOL)canInsertMedia {
+	return !!_machine->media_target();
+}
+
 #pragma mark - Special machines
 
 - (CSAtari2600 *)atari2600 {
@@ -373,6 +528,26 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate, public LockP
 
 - (CSZX8081 *)zx8081 {
 	return [[CSZX8081 alloc] initWithZX8081:_machine->raw_pointer() owner:self];
+}
+
+#pragma mark - Input device queries
+
+- (BOOL)hasJoystick {
+	return !!_machine->joystick_machine();
+}
+
+- (BOOL)hasKeyboard {
+	return !!_machine->keyboard_machine();
+}
+
+#pragma mark - Activity observation
+
+- (void)addLED:(NSString *)led {
+	[_leds addObject:led];
+}
+
+- (NSArray<NSString *> *)leds {
+	return _leds;
 }
 
 @end

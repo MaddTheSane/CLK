@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 28/01/2018.
-//  Copyright © 2018 Thomas Harte. All rights reserved.
+//  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
 #ifndef MultiMachine_hpp
@@ -12,10 +12,10 @@
 #include "../../../Machines/DynamicMachine.hpp"
 
 #include "Implementation/MultiConfigurable.hpp"
-#include "Implementation/MultiConfigurationTarget.hpp"
 #include "Implementation/MultiCRTMachine.hpp"
 #include "Implementation/MultiJoystickMachine.hpp"
 #include "Implementation/MultiKeyboardMachine.hpp"
+#include "Implementation/MultiMediaTarget.hpp"
 
 #include <memory>
 #include <mutex>
@@ -50,11 +50,12 @@ class MultiMachine: public ::Machine::DynamicMachine, public MultiCRTMachine::De
 		static bool would_collapse(const std::vector<std::unique_ptr<DynamicMachine>> &machines);
 		MultiMachine(std::vector<std::unique_ptr<DynamicMachine>> &&machines);
 
-		ConfigurationTarget::Machine *configuration_target() override;
+		Activity::Source *activity_source() override;
+		Configurable::Device *configurable_device() override;
 		CRTMachine::Machine *crt_machine() override;
 		JoystickMachine::Machine *joystick_machine() override;
 		KeyboardMachine::Machine *keyboard_machine() override;
-		Configurable::Device *configurable_device() override;
+		MediaTarget::Machine *media_target() override;
 		void *raw_pointer() override;
 
 	private:
@@ -64,10 +65,10 @@ class MultiMachine: public ::Machine::DynamicMachine, public MultiCRTMachine::De
 		std::mutex machines_mutex_;
 
 		MultiConfigurable configurable_;
-		MultiConfigurationTarget configuration_target_;
 		MultiCRTMachine crt_machine_;
 		MultiJoystickMachine joystick_machine_;
 		MultiKeyboardMachine keyboard_machine_;
+		MultiMediaTarget media_target_;
 
 		void pick_first();
 		bool has_picked_ = false;

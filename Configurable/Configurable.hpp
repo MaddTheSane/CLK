@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 17/11/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef Configurable_h
@@ -69,7 +69,7 @@ struct BooleanSelection: public Selection {
 
 struct ListSelection: public Selection {
 	std::string value;
-	
+
 	ListSelection *list_selection();
 	BooleanSelection *boolean_selection();
 	ListSelection(const std::string value) : value(value) {}

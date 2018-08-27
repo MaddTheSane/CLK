@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 16/07/2015.
-//  Copyright © 2015 Thomas Harte. All rights reserved.
+//  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
 import XCTest
@@ -200,7 +200,7 @@ class WolfgangLorenzTests: XCTestCase, CSTestMachineTrapHandler {
 		if let filename = Bundle(for: type(of: self)).path(forResource: name, ofType: nil) {
 			if let testData = try? Data(contentsOf: URL(fileURLWithPath: filename)) {
 
-				machine = CSTestMachine6502()
+				machine = CSTestMachine6502(is65C02: false)
 				machine.trapHandler = self
 //				machine.logActivity = true
 				output = ""

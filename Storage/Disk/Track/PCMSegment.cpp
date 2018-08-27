@@ -3,10 +3,12 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 17/12/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "PCMSegment.hpp"
+
+#include <cassert>
 
 using namespace Storage::Disk;
 
@@ -43,19 +45,23 @@ void PCMSegmentEventSource::reset() {
 	next_event_.type = Track::Event::FluxTransition;
 }
 
+PCMSegment &PCMSegment::operator +=(const PCMSegment &rhs) {
+	data.insert(data.end(), rhs.data.begin(), rhs.data.end());
+	return *this;
+}
+
 Storage::Disk::Track::Event PCMSegmentEventSource::get_next_event() {
 	// track the initial bit pointer for potentially considering whether this was an
 	// initial index hole or a subsequent one later on
-	std::size_t initial_bit_pointer = bit_pointer_;
+	const std::size_t initial_bit_pointer = bit_pointer_;
 
 	// if starting from the beginning, pull half a bit backward, as if the initial bit
 	// is set, it should be in the centre of its window
 	next_event_.length.length = bit_pointer_ ? 0 : -(segment_->length_of_a_bit.length >> 1);
 
 	// search for the next bit that is set, if any
-	const uint8_t *segment_data = segment_->data.data();
-	while(bit_pointer_ < segment_->number_of_bits) {
-		int bit = segment_data[bit_pointer_ >> 3] & (0x80 >> (bit_pointer_&7));
+	while(bit_pointer_ < segment_->data.size()) {
+		bool bit = segment_->data[bit_pointer_];
 		bit_pointer_++;	// so this always points one beyond the most recent bit returned
 		next_event_.length.length += segment_->length_of_a_bit.length;
 
@@ -70,7 +76,7 @@ Storage::Disk::Track::Event PCMSegmentEventSource::get_next_event() {
 	// allow an extra half bit's length to run from the position of the potential final transition
 	// event to the end of the segment. Otherwise don't allow any extra time, as it's already
 	// been consumed
-	if(initial_bit_pointer <= segment_->number_of_bits) {
+	if(initial_bit_pointer <= segment_->data.size()) {
 		next_event_.length.length += (segment_->length_of_a_bit.length >> 1);
 		bit_pointer_++;
 	}
@@ -78,15 +84,15 @@ Storage::Disk::Track::Event PCMSegmentEventSource::get_next_event() {
 }
 
 Storage::Time PCMSegmentEventSource::get_length() {
-	return segment_->length_of_a_bit * segment_->number_of_bits;
+	return segment_->length_of_a_bit * static_cast<unsigned int>(segment_->data.size());
 }
 
 Storage::Time PCMSegmentEventSource::seek_to(const Time &time_from_start) {
 	// test for requested time being beyond the end
-	Time length = get_length();
+	const Time length = get_length();
 	if(time_from_start >= length) {
 		next_event_.type = Track::Event::IndexHole;
-		bit_pointer_ = segment_->number_of_bits+1;
+		bit_pointer_ = segment_->data.size()+1;
 		return length;
 	}
 
@@ -98,16 +104,23 @@ Storage::Time PCMSegmentEventSource::seek_to(const Time &time_from_start) {
 	half_bit_length.length >>= 1;
 	if(time_from_start < half_bit_length) {
 		bit_pointer_ = 0;
-		Storage::Time zero;
-		return zero;
+		return Storage::Time(0);
 	}
 
 	// adjust for time to get to bit zero and determine number of bits in;
 	// bit_pointer_ always records _the next bit_ that might trigger an event,
 	// so should be one beyond the one reached by a seek.
-	Time relative_time = time_from_start - half_bit_length;
-	bit_pointer_ = 1 + (relative_time / segment_->length_of_a_bit).get_unsigned_int();
+	const Time relative_time = time_from_start - half_bit_length;
+	bit_pointer_ = 1 + (relative_time / segment_->length_of_a_bit).get<unsigned int>();
 
 	// map up to the correct amount of time
 	return half_bit_length + segment_->length_of_a_bit * static_cast<unsigned int>(bit_pointer_ - 1);
+}
+
+const PCMSegment &PCMSegmentEventSource::segment() const {
+	return *segment_;
+}
+
+PCMSegment &PCMSegmentEventSource::segment() {
+	return *segment_;
 }

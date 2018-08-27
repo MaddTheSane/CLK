@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 19/07/2015.
-//  Copyright © 2015 Thomas Harte. All rights reserved.
+//  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
 #include "CRT.hpp"
@@ -19,13 +19,14 @@ void CRT::set_new_timing(unsigned int cycles_per_line, unsigned int height_of_di
 	openGL_output_builder_.set_colour_format(colour_space, colour_cycle_numerator, colour_cycle_denominator);
 
 	const unsigned int millisecondsHorizontalRetraceTime = 7;	// source: Dictionary of Video and Television Technology, p. 234
-	const unsigned int scanlinesVerticalRetraceTime = 10;		// source: ibid
+	const unsigned int scanlinesVerticalRetraceTime = 8;		// source: ibid
 
 																// To quote:
 																//
 																//	"retrace interval; The interval of time for the return of the blanked scanning beam of
-																//	a TV picture tube or camera tube to the starting point of a line or field. It is about 7 µs
-																//	for horizontal retrace and 500 to 750 µs for vertical retrace in NTSC and PAL TV."
+																//	a TV picture tube or camera tube to the starting point of a line or field. It is about
+																//	7 microseconds for horizontal retrace and 500 to 750 microseconds for vertical retrace
+																//  in NTSC and PAL TV."
 
 	time_multiplier_ = IntermediateBufferWidth / cycles_per_line;
 	phase_denominator_ = cycles_per_line * colour_cycle_denominator * time_multiplier_;
@@ -41,8 +42,16 @@ void CRT::set_new_timing(unsigned int cycles_per_line, unsigned int height_of_di
 	// the gist for simple debugging
 	sync_capacitor_charge_threshold_ = ((vertical_sync_half_lines - 2) * cycles_per_line) >> 1;
 
-	// create the two flywheels
-	horizontal_flywheel_.reset(new Flywheel(multiplied_cycles_per_line, (millisecondsHorizontalRetraceTime * multiplied_cycles_per_line) >> 6, multiplied_cycles_per_line >> 6));
+	// Create the two flywheels:
+	//
+	// The horizontal flywheel has an ideal period of `multiplied_cycles_per_line`, will accept syncs
+	// within 1/32nd of that (i.e. tolerates 3.125% error) and takes millisecondsHorizontalRetraceTime
+	// to retrace.
+	//
+	// The vertical slywheel has an ideal period of `multiplied_cycles_per_line * height_of_display`,
+	// will accept syncs within 1/8th of that (i.e. tolerates 12.5% error) and takes scanlinesVerticalRetraceTime
+	// to retrace.
+	horizontal_flywheel_.reset(new Flywheel(multiplied_cycles_per_line, (millisecondsHorizontalRetraceTime * multiplied_cycles_per_line) >> 6, multiplied_cycles_per_line >> 5));
 	vertical_flywheel_.reset(new Flywheel(multiplied_cycles_per_line * height_of_display, scanlinesVerticalRetraceTime * multiplied_cycles_per_line, (multiplied_cycles_per_line * height_of_display) >> 3));
 
 	// figure out the divisor necessary to get the horizontal flywheel into a 16-bit range
@@ -125,11 +134,8 @@ Flywheel::SyncEvent CRT::get_next_horizontal_sync_event(bool hsync_is_requested,
 #define output_position_y()	(*reinterpret_cast<uint16_t *>(&next_output_run[OutputVertexOffsetOfVertical + 0]))
 #define output_tex_y()		(*reinterpret_cast<uint16_t *>(&next_output_run[OutputVertexOffsetOfVertical + 2]))
 
-#define source_input_position_x1()	(*reinterpret_cast<uint16_t *>(&next_run[SourceVertexOffsetOfInputStart + 0]))
 #define source_input_position_y()	(*reinterpret_cast<uint16_t *>(&next_run[SourceVertexOffsetOfInputStart + 2]))
-#define source_input_position_x2()	(*reinterpret_cast<uint16_t *>(&next_run[SourceVertexOffsetOfEnds + 0]))
 #define source_output_position_x1()	(*reinterpret_cast<uint16_t *>(&next_run[SourceVertexOffsetOfOutputStart + 0]))
-#define source_output_position_y()	(*reinterpret_cast<uint16_t *>(&next_run[SourceVertexOffsetOfOutputStart + 2]))
 #define source_output_position_x2()	(*reinterpret_cast<uint16_t *>(&next_run[SourceVertexOffsetOfEnds + 2]))
 #define source_phase()				next_run[SourceVertexOffsetOfPhaseTimeAndAmplitude + 0]
 #define source_amplitude()			next_run[SourceVertexOffsetOfPhaseTimeAndAmplitude + 1]
@@ -172,7 +178,9 @@ void CRT::advance_cycles(unsigned int number_of_cycles, bool hsync_requested, bo
 			// outside of the locked region
 			source_output_position_x1() = static_cast<uint16_t>(horizontal_flywheel_->get_current_output_position());
 			source_phase() = colour_burst_phase_;
-			source_amplitude() = colour_burst_amplitude_;
+
+			// TODO: determine what the PAL phase-shift machines actually do re: the swinging burst.
+			source_amplitude() = phase_alternates_ ? 128 - colour_burst_amplitude_ : 128 + colour_burst_amplitude_;
 		}
 
 		// decrement the number of cycles left to run for and increment the
@@ -217,6 +225,9 @@ void CRT::advance_cycles(unsigned int number_of_cycles, bool hsync_requested, bo
 						output_tex_y() = output_y;
 						output_x2() = static_cast<uint16_t>(horizontal_flywheel_->get_current_output_position());
 					}
+
+					// TODO: below I've assumed a one-to-one correspondance with output runs and input data; that's
+					// obviously not completely sustainable. It's a latent bug.
 					openGL_output_builder_.array_builder.flush(
 						[=] (uint8_t *input_buffer, std::size_t input_size, uint8_t *output_buffer, std::size_t output_size) {
 							openGL_output_builder_.texture_builder.flush(
@@ -264,15 +275,11 @@ void CRT::advance_cycles(unsigned int number_of_cycles, bool hsync_requested, bo
 #undef output_position_y
 #undef output_tex_y
 
-#undef source_input_position_x1
 #undef source_input_position_y
-#undef source_input_position_x2
 #undef source_output_position_x1
-#undef source_output_position_y
 #undef source_output_position_x2
 #undef source_phase
 #undef source_amplitude
-#undef source_phase_time
 
 // MARK: - stream feeding methods
 
@@ -371,12 +378,12 @@ void CRT::output_colour_burst(unsigned int number_of_cycles, uint8_t phase, uint
 	scan.type = Scan::Type::ColourBurst;
 	scan.number_of_cycles = number_of_cycles;
 	scan.phase = phase;
-	scan.amplitude = amplitude;
+	scan.amplitude = amplitude >> 1;
 	output_scan(&scan);
 }
 
 void CRT::output_default_colour_burst(unsigned int number_of_cycles) {
-	output_colour_burst(number_of_cycles, static_cast<uint8_t>((phase_numerator_ * 256) / phase_denominator_ + (is_alernate_line_ ? 128 : 0)));
+	output_colour_burst(number_of_cycles, static_cast<uint8_t>((phase_numerator_ * 256) / phase_denominator_));
 }
 
 void CRT::set_immediate_default_phase(float phase) {
@@ -384,8 +391,8 @@ void CRT::set_immediate_default_phase(float phase) {
 	phase_numerator_ = static_cast<unsigned int>(phase * static_cast<float>(phase_denominator_));
 }
 
-void CRT::output_data(unsigned int number_of_cycles, unsigned int source_divider) {
-	openGL_output_builder_.texture_builder.reduce_previous_allocation_to(number_of_cycles / source_divider);
+void CRT::output_data(unsigned int number_of_cycles, unsigned int number_of_samples) {
+	openGL_output_builder_.texture_builder.reduce_previous_allocation_to(number_of_samples);
 	Scan scan;
 	scan.type = Scan::Type::Data;
 	scan.number_of_cycles = number_of_cycles;

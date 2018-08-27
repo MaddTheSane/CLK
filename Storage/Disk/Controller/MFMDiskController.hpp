@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 05/08/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef MFMDiskController_hpp
@@ -72,7 +72,7 @@ class MFMController: public Controller {
 		Token get_latest_token();
 
 		/// @returns The controller's CRC generator. This is automatically fed during reading.
-		NumberTheory::CRC16 &get_crc_generator();
+		CRC::CCITT &get_crc_generator();
 
 		// Events
 		enum class Event: int {
@@ -120,8 +120,8 @@ class MFMController: public Controller {
 		void write_n_bytes(int quantity, uint8_t value);
 
 		/*!
-			Writes everything that should, per the spec, appear prior to the address contained
-			in an ID mark — proper gaps and the ID mark — and appropriate seeds the CRC generator.
+			Writes everything that should per the spec appear prior to the address contained
+			in an ID mark (i.e. proper gaps and the ID mark) and appropriate seeds the CRC generator.
 		*/
 		void write_id_joiner();
 
@@ -163,7 +163,7 @@ class MFMController: public Controller {
 		int last_bit_;
 
 		// CRC generator
-		NumberTheory::CRC16 crc_generator_;
+		CRC::CCITT crc_generator_;
 };
 
 }

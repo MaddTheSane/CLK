@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 28/01/2018.
-//  Copyright © 2018 Thomas Harte. All rights reserved.
+//  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
 #include "MultiMachine.hpp"
@@ -15,18 +15,22 @@ using namespace Analyser::Dynamic;
 MultiMachine::MultiMachine(std::vector<std::unique_ptr<DynamicMachine>> &&machines) :
 	machines_(std::move(machines)),
 	configurable_(machines_),
-	configuration_target_(machines_),
 	crt_machine_(machines_, machines_mutex_),
 	joystick_machine_(machines),
-	keyboard_machine_(machines_) {
+	keyboard_machine_(machines_),
+	media_target_(machines_) {
 	crt_machine_.set_delegate(this);
 }
 
-ConfigurationTarget::Machine *MultiMachine::configuration_target() {
+Activity::Source *MultiMachine::activity_source() {
+	return nullptr; // TODO
+}
+
+MediaTarget::Machine *MultiMachine::media_target() {
 	if(has_picked_) {
-		return machines_.front()->configuration_target();
+		return machines_.front()->media_target();
 	} else {
-		return &configuration_target_;
+		return &media_target_;
 	}
 }
 
@@ -82,11 +86,11 @@ void MultiMachine::multi_crt_did_run_machines() {
 
 	DynamicMachine *front = machines_.front().get();
 	std::stable_sort(machines_.begin(), machines_.end(),
-        [] (const std::unique_ptr<DynamicMachine> &lhs, const std::unique_ptr<DynamicMachine> &rhs){
-		    CRTMachine::Machine *lhs_crt = lhs->crt_machine();
-		    CRTMachine::Machine *rhs_crt = rhs->crt_machine();
-		    return lhs_crt->get_confidence() > rhs_crt->get_confidence();
-	    });
+		[] (const std::unique_ptr<DynamicMachine> &lhs, const std::unique_ptr<DynamicMachine> &rhs){
+			CRTMachine::Machine *lhs_crt = lhs->crt_machine();
+			CRTMachine::Machine *rhs_crt = rhs->crt_machine();
+			return lhs_crt->get_confidence() > rhs_crt->get_confidence();
+		});
 
 	if(machines_.front().get() != front) {
 		crt_machine_.did_change_machine_order();

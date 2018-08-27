@@ -2,7 +2,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 03/02/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "../CRT.hpp"
@@ -37,7 +37,7 @@ OpenGLOutputBuilder::OpenGLOutputBuilder(std::size_t bytes_per_pixel) :
 		texture_builder(bytes_per_pixel, source_data_texture_unit),
 		array_builder(SourceVertexBufferDataSize, OutputVertexBufferDataSize) {
 	glBlendFunc(GL_SRC_ALPHA, GL_CONSTANT_COLOR);
-	glBlendColor(0.6f, 0.6f, 0.6f, 1.0f);
+	glBlendColor(0.4f, 0.4f, 0.4f, 1.0f);
 
 	// create the output vertex array
 	glGenVertexArrays(1, &output_vertex_array_);
@@ -157,7 +157,7 @@ void OpenGLOutputBuilder::draw_frame(unsigned int output_width, unsigned int out
 		{nullptr, nullptr}
 	};
 
-	// for s-video, there are two steps — it's like composite but skips separation
+	// for s-video, there are two steps: it's like composite but skips separation
 	const RenderStage svideo_render_stages[] = {
 		{svideo_input_shader_program_.get(),					separated_texture_.get(),		{0.0, 0.5, 0.5}},
 		{composite_chrominance_filter_shader_program_.get(),	filtered_texture_.get(),		{0.0, 0.0, 0.0}},
@@ -227,25 +227,33 @@ void OpenGLOutputBuilder::draw_frame(unsigned int output_width, unsigned int out
 			output_shader_program_->set_output_size(output_width, output_height, visible_area_);
 			last_output_width_ = output_width;
 			last_output_height_ = output_height;
+
+			// Configure a right gutter to crop the right-hand 2% of the display.
+			right_overlay_.reset(new OpenGL::Rectangle(output_shader_program_->get_right_extent() * 0.98f, -1.0f, 1.0f, 2.0f));
 		}
 		output_shader_program_->bind();
 
 		// draw
 		glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (GLsizei)array_submission.output_size / OutputVertexSize);
+
+		// mask off the gutter
+		glDisable(GL_BLEND);
+		right_overlay_->draw(0.0, 0.0, 0.0);
 	}
 
 #ifdef GL_NV_texture_barrier
 //	glTextureBarrierNV();
 #endif
 
-	// copy framebuffer to the intended place
+	// Copy framebuffer to the intended place; apply a threshold so that any persistent errors in
+	// the lower part of the colour channels are invisible.
 	glDisable(GL_BLEND);
 	glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(target_framebuffer_));
 	glViewport(0, 0, (GLsizei)output_width, (GLsizei)output_height);
 
 	glActiveTexture(pixel_accumulation_texture_unit);
 	framebuffer_->bind_texture();
-	framebuffer_->draw(static_cast<float>(output_width) / static_cast<float>(output_height));
+	framebuffer_->draw(static_cast<float>(output_width) / static_cast<float>(output_height), 4.0f / 255.0f);
 
 	fence_ = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 	draw_mutex_.unlock();
@@ -435,7 +443,7 @@ void OpenGLOutputBuilder::set_colour_space_uniforms() {
 	GLfloat rgbToYIQ[] = {0.299f, 0.596f, 0.211f, 0.587f, -0.274f, -0.523f, 0.114f, -0.322f, 0.312f};
 	GLfloat yiqToRGB[] = {1.0f, 1.0f, 1.0f, 0.956f, -0.272f, -1.106f, 0.621f, -0.647f, 1.703f};
 
-	GLfloat *fromRGB, *toRGB;
+	GLfloat *fromRGB = nullptr, *toRGB = nullptr;
 
 	switch(colour_space_) {
 		case ColourSpace::YIQ:
@@ -514,4 +522,12 @@ void OpenGLOutputBuilder::set_timing_uniforms() {
 	if(rgb_input_shader_program_) {
 		rgb_input_shader_program_->set_width_scalers(1.0f, 1.0f);
 	}
+	set_integer_coordinate_multiplier(integer_coordinate_multiplier_);
+}
+
+void OpenGLOutputBuilder::set_integer_coordinate_multiplier(float multiplier) {
+	integer_coordinate_multiplier_ = multiplier;
+	if(composite_input_shader_program_) composite_input_shader_program_->set_integer_coordinate_multiplier(multiplier);
+	if(svideo_input_shader_program_) svideo_input_shader_program_->set_integer_coordinate_multiplier(multiplier);
+	if(rgb_input_shader_program_) rgb_input_shader_program_->set_integer_coordinate_multiplier(multiplier);
 }

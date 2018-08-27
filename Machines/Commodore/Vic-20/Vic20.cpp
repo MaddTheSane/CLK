@@ -3,14 +3,15 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 04/06/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "Vic20.hpp"
 
 #include "Keyboard.hpp"
 
-#include "../../ConfigurationTarget.hpp"
+#include "../../../Activity/Source.hpp"
+#include "../../MediaTarget.hpp"
 #include "../../CRTMachine.hpp"
 #include "../../KeyboardMachine.hpp"
 #include "../../JoystickMachine.hpp"
@@ -61,21 +62,9 @@ enum JoystickInput {
 	Fire = 0x20
 };
 
-enum ROM {
-	CharactersDanish = 0,
-	CharactersEnglish,
-	CharactersJapanese,
-	CharactersSwedish,
-	KernelDanish,
-	KernelJapanese,
-	KernelNTSC,
-	KernelPAL,
-	KernelSwedish
-};
-
 /*!
-	Models the user-port VIA, which is the Vic's connection point for controlling its tape recorder —
-	sensing the presence or absence of a tape and controlling the tape motor — and reading the current
+	Models the user-port VIA, which is the Vic's connection point for controlling its tape recorder;
+	sensing the presence or absence of a tape and controlling the tape motor; and reading the current
 	state from its serial port. Most of the joystick input is also exposed here.
 */
 class UserPortVIA: public MOS::MOS6522::IRQDelegatePortHandler {
@@ -256,31 +245,28 @@ class Vic6560BusHandler {
 /*!
 	Interfaces a joystick to the two VIAs.
 */
-class Joystick: public Inputs::Joystick {
+class Joystick: public Inputs::ConcreteJoystick {
 	public:
 		Joystick(UserPortVIA &user_port_via_port_handler, KeyboardVIA &keyboard_via_port_handler) :
+			ConcreteJoystick({
+				Input(Input::Up),
+				Input(Input::Down),
+				Input(Input::Left),
+				Input(Input::Right),
+				Input(Input::Fire)
+			}),
 			user_port_via_port_handler_(user_port_via_port_handler),
 			keyboard_via_port_handler_(keyboard_via_port_handler) {}
 
-		std::vector<DigitalInput> get_inputs() override {
-			return {
-				DigitalInput(DigitalInput::Up),
-				DigitalInput(DigitalInput::Down),
-				DigitalInput(DigitalInput::Left),
-				DigitalInput(DigitalInput::Right),
-				DigitalInput(DigitalInput::Fire)
-			};
-		}
-
-		void set_digital_input(const DigitalInput &digital_input, bool is_active) override {
+		void did_set_input(const Input &digital_input, bool is_active) override {
 			JoystickInput mapped_input;
 			switch(digital_input.type) {
 				default: return;
-				case DigitalInput::Up: mapped_input = Up;		break;
-				case DigitalInput::Down: mapped_input = Down;	break;
-				case DigitalInput::Left: mapped_input = Left;	break;
-				case DigitalInput::Right: mapped_input = Right;	break;
-				case DigitalInput::Fire: mapped_input = Fire;	break;
+				case Input::Up:		mapped_input = Up;		break;
+				case Input::Down:	mapped_input = Down;	break;
+				case Input::Left:	mapped_input = Left;	break;
+				case Input::Right:	mapped_input = Right;	break;
+				case Input::Fire:	mapped_input = Fire;	break;
 			}
 
 			user_port_via_port_handler_.set_joystick_state(mapped_input, is_active);
@@ -294,7 +280,7 @@ class Joystick: public Inputs::Joystick {
 
 class ConcreteMachine:
 	public CRTMachine::Machine,
-	public ConfigurationTarget::Machine,
+	public MediaTarget::Machine,
 	public KeyboardMachine::Machine,
 	public JoystickMachine::Machine,
 	public Configurable::Device,
@@ -303,9 +289,10 @@ class ConcreteMachine:
 	public Utility::TypeRecipient,
 	public Storage::Tape::BinaryTapePlayer::Delegate,
 	public Machine,
-	public Sleeper::SleepObserver {
+	public ClockingHint::Observer,
+	public Activity::Source {
 	public:
-		ConcreteMachine() :
+		ConcreteMachine(const Analyser::Static::Commodore::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
 				m6502_(*this),
 				user_port_via_port_handler_(new UserPortVIA),
 				keyboard_via_port_handler_(new KeyboardVIA),
@@ -329,131 +316,72 @@ class ConcreteMachine:
 			user_port_via_port_handler_->set_interrupt_delegate(this);
 			keyboard_via_port_handler_->set_interrupt_delegate(this);
 			tape_->set_delegate(this);
-			tape_->set_sleep_observer(this);
+			tape_->set_clocking_hint_observer(this);
 
 			// install a joystick
 			joysticks_.emplace_back(new Joystick(*user_port_via_port_handler_, *keyboard_via_port_handler_));
-		}
 
-		// Obtains the system ROMs.
-		bool set_rom_fetcher(const std::function<std::vector<std::unique_ptr<std::vector<uint8_t>>>(const std::string &machine, const std::vector<std::string> &names)> &roms_with_names) override {
-			rom_fetcher_ = roms_with_names;
-
-			auto roms = roms_with_names(
-				"Vic20",
-				{
-					"characters-danish.bin",
-					"characters-english.bin",
-					"characters-japanese.bin",
-					"characters-swedish.bin",
-					"kernel-danish.bin",
-					"kernel-japanese.bin",
-					"kernel-ntsc.bin",
-					"kernel-pal.bin",
-					"kernel-swedish.bin",
-					"basic.bin"
-				});
-
-			for(std::size_t index = 0; index < roms.size(); ++index) {
-				auto &data = roms[index];
-				if(!data) return false;
-				if(index < 9) roms_[index] = std::move(*data); else basic_rom_ = std::move(*data);
+			std::vector<std::string> rom_names = { "basic.bin" };
+			switch(target.region) {
+				default:
+					rom_names.push_back("characters-english.bin");
+					rom_names.push_back("kernel-pal.bin");
+				break;
+				case Analyser::Static::Commodore::Target::Region::American:
+					rom_names.push_back("characters-english.bin");
+					rom_names.push_back("kernel-ntsc.bin");
+				break;
+				case Analyser::Static::Commodore::Target::Region::Danish:
+					rom_names.push_back("characters-danish.bin");
+					rom_names.push_back("kernel-danish.bin");
+				break;
+				case Analyser::Static::Commodore::Target::Region::Japanese:
+					rom_names.push_back("characters-japanese.bin");
+					rom_names.push_back("kernel-japanese.bin");
+				break;
+				case Analyser::Static::Commodore::Target::Region::Swedish:
+					rom_names.push_back("characters-swedish.bin");
+					rom_names.push_back("kernel-japanese.bin");
+				break;
 			}
+
+			const auto roms = rom_fetcher("Vic20", rom_names);
+
+			for(const auto &rom: roms) {
+				if(!rom) {
+					throw ROMMachine::Error::MissingROMs;
+				}
+			}
+
+			basic_rom_ = std::move(*roms[0]);
+			character_rom_ = std::move(*roms[1]);
+			kernel_rom_ = std::move(*roms[2]);
 
 			// Characters ROMs should be 4kb.
-			for(std::size_t index = 0; index < 4; ++index) roms_[index].resize(4096);
+			character_rom_.resize(4096);
 			// Kernel ROMs and the BASIC ROM should be 8kb.
-			for(std::size_t index = 4; index < roms.size(); ++index) roms_[index].resize(8192);
+			kernel_rom_.resize(8192);
 
-			return true;
-		}
-
-		void configure_as_target(const Analyser::Static::Target *target) override final {
-			commodore_target_ = *dynamic_cast<const Analyser::Static::Commodore::Target *>(target);
-
-			if(target->loading_command.length()) {
-				type_string(target->loading_command);
-			}
-
-			if(commodore_target_.has_c1540) {
+			if(target.has_c1540) {
 				// construct the 1540
-				c1540_.reset(new ::Commodore::C1540::Machine(Commodore::C1540::Machine::C1540));
+				c1540_.reset(new ::Commodore::C1540::Machine(Commodore::C1540::Personality::C1540, rom_fetcher));
 
 				// attach it to the serial bus
 				c1540_->set_serial_bus(serial_bus_);
-
-				// give it a means to obtain its ROM
-				c1540_->set_rom_fetcher(rom_fetcher_);
 
 				// give it a little warm up
 				c1540_->run_for(Cycles(2000000));
 			}
 
-			insert_media(target->media);
-		}
-
-		bool insert_media(const Analyser::Static::Media &media) override final {
-			if(!media.tapes.empty()) {
-				tape_->set_tape(media.tapes.front());
-			}
-
-			if(!media.disks.empty() && c1540_) {
-				c1540_->set_disk(media.disks.front());
-			}
-
-			if(!media.cartridges.empty()) {
-				rom_address_ = 0xa000;
-				std::vector<uint8_t> rom_image = media.cartridges.front()->get_segments().front().data;
-				rom_length_ = static_cast<uint16_t>(rom_image.size());
-
-				rom_ = rom_image;
-				rom_.resize(0x2000);
-			}
-
-			set_use_fast_tape();
-
-			return !media.tapes.empty() || (!media.disks.empty() && c1540_ != nullptr) || !media.cartridges.empty();
-		}
-
-		void set_key_state(uint16_t key, bool is_pressed) override final {
-			if(key != KeyRestore)
-				keyboard_via_port_handler_->set_key_state(key, is_pressed);
-			else
-				user_port_via_.set_control_line_input(MOS::MOS6522::Port::A, MOS::MOS6522::Line::One, !is_pressed);
-		}
-
-		void clear_all_keys() override final {
-			keyboard_via_port_handler_->clear_all_keys();
-		}
-
-		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() override {
-			return joysticks_;
-		}
-
-		void set_ntsc_6560() {
-			set_clock_rate(1022727);
-			if(mos6560_) {
-				mos6560_->set_output_mode(MOS::MOS6560::OutputMode::NTSC);
-				mos6560_->set_clock_rate(1022727);
-			}
-		}
-
-		void set_pal_6560() {
-			set_clock_rate(1108404);
-			if(mos6560_) {
-				mos6560_->set_output_mode(MOS::MOS6560::OutputMode::PAL);
-				mos6560_->set_clock_rate(1108404);
-			}
-		}
-
-		void set_memory_map(Analyser::Static::Commodore::Target::MemoryModel memory_model, Analyser::Static::Commodore::Target::Region region) {
 			// Determine PAL/NTSC
-			if(region == Analyser::Static::Commodore::Target::Region::American || region == Analyser::Static::Commodore::Target::Region::Japanese) {
+			if(target.region == Analyser::Static::Commodore::Target::Region::American || target.region == Analyser::Static::Commodore::Target::Region::Japanese) {
 				// NTSC
-				set_ntsc_6560();
+				set_clock_rate(1022727);
+				output_mode_ = MOS::MOS6560::OutputMode::NTSC;
 			} else {
 				// PAL
-				set_pal_6560();
+				set_clock_rate(1108404);
+				output_mode_ = MOS::MOS6560::OutputMode::PAL;
 			}
 
 			// Initialise the memory maps as all pointing to nothing
@@ -466,7 +394,7 @@ class ConcreteMachine:
 	write_to_map(processor_write_memory_map_, &ram_[baseaddr], baseaddr, length);
 
 			// Add 6502-visible RAM as requested
-			switch(memory_model) {
+			switch(target.memory_model) {
 				case Analyser::Static::Commodore::Target::MemoryModel::Unexpanded:
 					// The default Vic-20 memory map has 1kb at address 0 and another 4kb at address 0x1000.
 					set_ram(0x0000, 0x0400);
@@ -499,7 +427,7 @@ class ConcreteMachine:
 				Range(0x0000, 0x0400),
 				Range(0x1000, 0x2000),
 			}};
-			for(auto &video_range : video_ranges) {
+			for(const auto &video_range : video_ranges) {
 				for(auto addr = video_range.start; addr < video_range.end; addr += 0x400) {
 					auto destination_address = (addr & 0x1fff) | (((addr & 0x8000) >> 2) ^ 0x2000);
 					if(processor_read_memory_map_[addr >> 10]) {
@@ -513,39 +441,53 @@ class ConcreteMachine:
 			write_to_map(processor_read_memory_map_, basic_rom_.data(), 0xc000, static_cast<uint16_t>(basic_rom_.size()));
 
 			// install the system ROM
-			ROM character_rom;
-			ROM kernel_rom;
-			switch(region) {
-				default:
-					character_rom = CharactersEnglish;
-					kernel_rom = KernelPAL;
-				break;
-				case Analyser::Static::Commodore::Target::Region::American:
-					character_rom = CharactersEnglish;
-					kernel_rom = KernelNTSC;
-				break;
-				case Analyser::Static::Commodore::Target::Region::Danish:
-					character_rom = CharactersDanish;
-					kernel_rom = KernelDanish;
-				break;
-				case Analyser::Static::Commodore::Target::Region::Japanese:
-					character_rom = CharactersJapanese;
-					kernel_rom = KernelJapanese;
-				break;
-				case Analyser::Static::Commodore::Target::Region::Swedish:
-					character_rom = CharactersSwedish;
-					kernel_rom = KernelSwedish;
-				break;
+			write_to_map(processor_read_memory_map_, character_rom_.data(), 0x8000, static_cast<uint16_t>(character_rom_.size()));
+			write_to_map(mos6560_bus_handler_.video_memory_map, character_rom_.data(), 0x0000, static_cast<uint16_t>(character_rom_.size()));
+			write_to_map(processor_read_memory_map_, kernel_rom_.data(), 0xe000, static_cast<uint16_t>(kernel_rom_.size()));
+
+			insert_media(target.media);
+			if(!target.loading_command.empty()) {
+				type_string(target.loading_command);
+			}
+		}
+
+		bool insert_media(const Analyser::Static::Media &media) override final {
+			if(!media.tapes.empty()) {
+				tape_->set_tape(media.tapes.front());
 			}
 
-			write_to_map(processor_read_memory_map_, roms_[character_rom].data(), 0x8000, static_cast<uint16_t>(roms_[character_rom].size()));
-			write_to_map(mos6560_bus_handler_.video_memory_map, roms_[character_rom].data(), 0x0000, static_cast<uint16_t>(roms_[character_rom].size()));
-			write_to_map(processor_read_memory_map_, roms_[kernel_rom].data(), 0xe000, static_cast<uint16_t>(roms_[kernel_rom].size()));
+			if(!media.disks.empty() && c1540_) {
+				c1540_->set_disk(media.disks.front());
+			}
 
-			// install the inserted ROM if there is one
-			if(!rom_.empty()) {
+			if(!media.cartridges.empty()) {
+				rom_address_ = 0xa000;
+				std::vector<uint8_t> rom_image = media.cartridges.front()->get_segments().front().data;
+				rom_length_ = static_cast<uint16_t>(rom_image.size());
+
+				rom_ = rom_image;
+				rom_.resize(0x2000);
 				write_to_map(processor_read_memory_map_, rom_.data(), rom_address_, rom_length_);
 			}
+
+			set_use_fast_tape();
+
+			return !media.tapes.empty() || (!media.disks.empty() && c1540_ != nullptr) || !media.cartridges.empty();
+		}
+
+		void set_key_state(uint16_t key, bool is_pressed) override final {
+			if(key != KeyRestore)
+				keyboard_via_port_handler_->set_key_state(key, is_pressed);
+			else
+				user_port_via_.set_control_line_input(MOS::MOS6522::Port::A, MOS::MOS6522::Line::One, !is_pressed);
+		}
+
+		void clear_all_keys() override final {
+			keyboard_via_port_handler_->clear_all_keys();
+		}
+
+		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() override {
+			return joysticks_;
 		}
 
 		// to satisfy CPU::MOS6502::Processor
@@ -657,7 +599,7 @@ class ConcreteMachine:
 
 			user_port_via_.run_for(Cycles(1));
 			keyboard_via_.run_for(Cycles(1));
-			if(typer_ && operation == CPU::MOS6502::BusOperation::ReadOpcode && address == 0xEB1E) {
+			if(typer_ && address == 0xeb1e && operation == CPU::MOS6502::BusOperation::ReadOpcode) {
 				if(!typer_->type_next_character()) {
 					clear_all_keys();
 					typer_.reset();
@@ -681,8 +623,8 @@ class ConcreteMachine:
 		void setup_output(float aspect_ratio) override final {
 			mos6560_.reset(new MOS::MOS6560::MOS6560<Vic6560BusHandler>(mos6560_bus_handler_));
 			mos6560_->set_high_frequency_cutoff(1600);	// There is a 1.6Khz low-pass filter in the Vic-20.
-			// Make a guess: PAL. Without setting a clock rate the 6560 isn't fully set up so contractually something must be set.
-			set_memory_map(commodore_target_.memory_model, commodore_target_.region);
+			mos6560_->set_output_mode(output_mode_);
+			mos6560_->set_clock_rate(get_clock_rate());
 		}
 
 		void close_output() override final {
@@ -747,20 +689,21 @@ class ConcreteMachine:
 			return selection_set;
 		}
 
-		void set_component_is_sleeping(void *component, bool is_sleeping) override {
-			tape_is_sleeping_ = is_sleeping;
+		void set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference clocking) override {
+			tape_is_sleeping_ = clocking == ClockingHint::Preference::None;
 			set_use_fast_tape();
+		}
+
+		// MARK: - Activity Source
+		void set_activity_observer(Activity::Observer *observer) override {
+			if(c1540_) c1540_->set_activity_observer(observer);
 		}
 
 	private:
 		void update_video() {
 			mos6560_->run_for(cycles_since_mos6560_update_.flush());
 		}
-		Analyser::Static::Commodore::Target commodore_target_;
-
-		CPU::MOS6502::Processor<ConcreteMachine, false> m6502_;
-
-		std::vector<uint8_t>  roms_[9];
+		CPU::MOS6502::Processor<CPU::MOS6502::Personality::P6502, ConcreteMachine, false> m6502_;
 
 		std::vector<uint8_t>  character_rom_;
 		std::vector<uint8_t>  basic_rom_;
@@ -770,8 +713,6 @@ class ConcreteMachine:
 		uint16_t rom_address_, rom_length_;
 		uint8_t ram_[0x8000];
 		uint8_t colour_ram_[0x0400];
-
-		std::function<std::vector<std::unique_ptr<std::vector<uint8_t>>>(const std::string &machine, const std::vector<std::string> &names)> rom_fetcher_;
 
 		uint8_t *processor_read_memory_map_[64];
 		uint8_t *processor_write_memory_map_[64];
@@ -790,6 +731,7 @@ class ConcreteMachine:
 
 		Cycles cycles_since_mos6560_update_;
 		Vic6560BusHandler mos6560_bus_handler_;
+		MOS::MOS6560::OutputMode output_mode_;
 		std::unique_ptr<MOS::MOS6560::MOS6560<Vic6560BusHandler>> mos6560_;
 		std::shared_ptr<UserPortVIA> user_port_via_port_handler_;
 		std::shared_ptr<KeyboardVIA> keyboard_via_port_handler_;
@@ -818,8 +760,10 @@ class ConcreteMachine:
 
 using namespace Commodore::Vic20;
 
-Machine *Machine::Vic20() {
-	return new Vic20::ConcreteMachine;
+Machine *Machine::Vic20(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
+	using Target = Analyser::Static::Commodore::Target;
+	const Target *const commodore_target = dynamic_cast<const Target *>(target);
+	return new Vic20::ConcreteMachine(*commodore_target, rom_fetcher);
 }
 
 Machine::~Machine() {}

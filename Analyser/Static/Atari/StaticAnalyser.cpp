@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 15/09/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "StaticAnalyser.hpp"
@@ -180,7 +180,7 @@ static void DeterminePagingForCartridge(Analyser::Static::Atari::Target &target,
 	}
 }
 
-void Analyser::Static::Atari::AddTargets(const Media &media, std::vector<std::unique_ptr<Analyser::Static::Target>> &destination) {
+Analyser::Static::TargetList Analyser::Static::Atari::GetTargets(const Media &media, const std::string &file_name, TargetPlatform::IntType potential_platforms) {
 	// TODO: sanity checking; is this image really for an Atari 2600?
 	std::unique_ptr<Analyser::Static::Atari::Target> target(new Analyser::Static::Atari::Target);
 	target->machine = Machine::Atari2600;
@@ -198,6 +198,7 @@ void Analyser::Static::Atari::AddTargets(const Media &media, std::vector<std::un
 			DeterminePagingForCartridge(*target, segment);
 		}
 	}
-
-	destination.push_back(std::move(target));
+	TargetList destinations;
+	destinations.push_back(std::move(target));
+	return destinations;
 }

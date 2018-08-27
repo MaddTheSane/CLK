@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 10/9/17.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef Keyboard_hpp
@@ -40,7 +40,7 @@ class Keyboard {
 		};
 
 		// Host interface.
-		virtual void set_key_pressed(Key key, bool is_pressed);
+		virtual void set_key_pressed(Key key, char value, bool is_pressed);
 		virtual void reset_all_keys();
 
 		// Delegate interface.

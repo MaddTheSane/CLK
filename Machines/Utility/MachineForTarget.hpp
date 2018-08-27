@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 04/11/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef MachineForTarget_hpp
@@ -21,6 +21,7 @@ namespace Machine {
 
 enum class Error {
 	None,
+	UnknownError,
 	UnknownMachine,
 	MissingROM,
 	NoTargets
@@ -31,7 +32,7 @@ enum class Error {
 	receive the supplied static analyser result. The machine has been allocated
 	on the heap. It is the caller's responsibility to delete the class when finished.
 */
-DynamicMachine *MachineForTargets(const std::vector<std::unique_ptr<Analyser::Static::Target>> &targets, const ::ROMMachine::ROMFetcher &rom_fetcher, Error &error);
+DynamicMachine *MachineForTargets(const Analyser::Static::TargetList &targets, const ::ROMMachine::ROMFetcher &rom_fetcher, Error &error);
 
 /*!
 	Returns a short string name for the machine identified by the target,

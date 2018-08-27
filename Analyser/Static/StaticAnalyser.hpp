@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 23/08/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef StaticAnalyser_hpp
@@ -15,6 +15,7 @@
 #include "../../Storage/Disk/Disk.hpp"
 #include "../../Storage/Cartridge/Cartridge.hpp"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -43,17 +44,16 @@ struct Target {
 
 	Machine machine;
 	Media media;
-
 	float confidence;
-	std::string loading_command;
 };
+typedef std::vector<std::unique_ptr<Target>> TargetList;
 
 /*!
 	Attempts, through any available means, to return a list of potential targets for the file with the given name.
 
 	@returns The list of potential targets, sorted from most to least probable.
 */
-std::vector<std::unique_ptr<Target>> GetTargets(const std::string &file_name);
+TargetList GetTargets(const std::string &file_name);
 
 /*!
 	Inspects the supplied file and determines the media included.

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 14/01/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #import "CSAudioQueue.h"
@@ -27,9 +27,9 @@ static NSLock *CSAudioQueueDeallocLock;
 
 @implementation CSAudioQueue {
 	AudioQueueRef _audioQueue;
-	AudioQueueBufferRef _storedBuffers[NumberOfStoredAudioQueueBuffer];
 	NSLock *_storedBuffersLock;
 	CSWeakAudioQueuePointer *_weakPointer;
+	int _enqueuedBuffers;
 }
 
 #pragma mark - AudioQueue callbacks
@@ -39,16 +39,19 @@ static NSLock *CSAudioQueueDeallocLock;
 */
 - (BOOL)audioQueue:(AudioQueueRef)theAudioQueue didCallbackWithBuffer:(AudioQueueBufferRef)buffer {
 	[_storedBuffersLock lock];
-	for(int c = 0; c < NumberOfStoredAudioQueueBuffer; c++) {
-		if(!_storedBuffers[c] || buffer->mAudioDataBytesCapacity > _storedBuffers[c]->mAudioDataBytesCapacity) {
-			if(_storedBuffers[c]) AudioQueueFreeBuffer(_audioQueue, _storedBuffers[c]);
-			_storedBuffers[c] = buffer;
-			[_storedBuffersLock unlock];
-			return YES;
-		}
+	--_enqueuedBuffers;
+
+	// If that leaves nothing in the queue, re-enqueue whatever just came back in order to keep the
+	// queue going. AudioQueues seem to stop playing and never restart no matter how much encouragement
+	// if exhausted.
+	if(!_enqueuedBuffers) {
+		AudioQueueEnqueueBuffer(theAudioQueue, buffer, 0, NULL);
+		++_enqueuedBuffers;
+	} else {
+		AudioQueueFreeBuffer(_audioQueue, buffer);
 	}
+
 	[_storedBuffersLock unlock];
-	AudioQueueFreeBuffer(_audioQueue, buffer);
 	return YES;
 }
 
@@ -141,7 +144,7 @@ static void audioOutputCallback(
 	// Since the audio callback receives a void * pointer that identifies the class it should branch into,
 	// it's therefore unsafe to pass 'self'. Instead I pass a CSWeakAudioQueuePointer which points to the actual
 	// queue. The lifetime of that class is the lifetime of this instance plus 1 second, as effected by the
-	// artificial dispatch_after below — it serves only to keep pointerSaviour alive for an extra second.
+	// artificial dispatch_after below; it serves only to keep pointerSaviour alive for an extra second.
 	//
 	// Why a second? That's definitely quite a lot longer than any amount of audio that may be queued. So
 	// probably safe. As and where Apple's audio queue works properly, CSAudioQueueDeallocLock should provide
@@ -158,18 +161,12 @@ static void audioOutputCallback(
 	size_t bufferBytes = lengthInSamples * sizeof(int16_t);
 
 	[_storedBuffersLock lock];
-	for(int c = 0; c < NumberOfStoredAudioQueueBuffer; c++) {
-		if(_storedBuffers[c] && _storedBuffers[c]->mAudioDataBytesCapacity >= bufferBytes) {
-			memcpy(_storedBuffers[c]->mAudioData, buffer, bufferBytes);
-			_storedBuffers[c]->mAudioDataByteSize = (UInt32)bufferBytes;
-
-			AudioQueueEnqueueBuffer(_audioQueue, _storedBuffers[c], 0, NULL);
-			_storedBuffers[c] = NULL;
-			[_storedBuffersLock unlock];
-			return;
-		}
+	// Don't enqueue more than 4 buffers ahead of now, to ensure not too much latency accrues.
+	if(_enqueuedBuffers > 4) {
+		[_storedBuffersLock unlock];
+		return;
 	}
-	[_storedBuffersLock unlock];
+	++_enqueuedBuffers;
 
 	AudioQueueBufferRef newBuffer;
 	AudioQueueAllocateBuffer(_audioQueue, (UInt32)bufferBytes * 2, &newBuffer);
@@ -177,6 +174,7 @@ static void audioOutputCallback(
 	newBuffer->mAudioDataByteSize = (UInt32)bufferBytes;
 
 	AudioQueueEnqueueBuffer(_audioQueue, newBuffer, 0, NULL);
+	[_storedBuffersLock unlock];
 }
 
 #pragma mark - Sampling Rate getters

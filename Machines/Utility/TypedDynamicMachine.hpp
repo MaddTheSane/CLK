@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 24/11/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef TypedDynamicMachine_h
@@ -25,8 +25,12 @@ template<typename T> class TypedDynamicMachine: public ::Machine::DynamicMachine
 			return *this;
 		}
 
-		ConfigurationTarget::Machine *configuration_target() override {
-			return get<ConfigurationTarget::Machine>();
+		Activity::Source *activity_source() override {
+			return get<Activity::Source>();
+		}
+
+		MediaTarget::Machine *media_target() override {
+			return get<MediaTarget::Machine>();
 		}
 
 		CRTMachine::Machine *crt_machine() override {

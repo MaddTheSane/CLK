@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 29/09/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "ImplicitSectors.hpp"
@@ -18,12 +18,12 @@
 
 using namespace Storage::Disk;
 
-std::shared_ptr<Track> Storage::Disk::track_for_sectors(uint8_t *const source, uint8_t track, uint8_t side, uint8_t first_sector, uint8_t size, bool is_double_density) {
+std::shared_ptr<Track> Storage::Disk::track_for_sectors(uint8_t *const source, int number_of_sectors, uint8_t track, uint8_t side, uint8_t first_sector, uint8_t size, bool is_double_density) {
 	std::vector<Storage::Encodings::MFM::Sector> sectors;
 
 	off_t byte_size = static_cast<off_t>(128 << size);
 	off_t source_pointer = 0;
-	for(int sector = 0; sector < 10; sector++) {
+	for(int sector = 0; sector < number_of_sectors; sector++) {
 		sectors.emplace_back();
 
 		Storage::Encodings::MFM::Sector &new_sector = sectors.back();
@@ -38,7 +38,7 @@ std::shared_ptr<Track> Storage::Disk::track_for_sectors(uint8_t *const source, u
 		source_pointer += byte_size;
 	}
 
-	if(sectors.size()) {
+	if(!sectors.empty()) {
 		return is_double_density ? Storage::Encodings::MFM::GetMFMTrackWithSectors(sectors) : Storage::Encodings::MFM::GetFMTrackWithSectors(sectors);
 	}
 
@@ -52,7 +52,7 @@ void Storage::Disk::decode_sectors(Track &track, uint8_t *const destination, uin
 			is_double_density);
 
 	std::size_t byte_size = static_cast<std::size_t>(128 << sector_size);
-	for(auto &pair : sectors) {
+	for(const auto &pair : sectors) {
 		if(pair.second.address.sector > last_sector) continue;
 		if(pair.second.address.sector < first_sector) continue;
 		if(pair.second.size != sector_size) continue;

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 27/04/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef OutputShader_hpp
@@ -83,10 +83,18 @@ public:
 	void set_gamma_ratio(float ratio);
 
 	/*!
-		Sets the proportion of the input area that should be considered the whole width — 1.0 means use all available
+		Sets the proportion of the input area that should be considered the whole width: 1.0 means use all available
 		space, 0.5 means use half, etc.
 	*/
 	void set_input_width_scaler(float input_scaler);
+
+	/*!
+		@returns The location, in eye coordinates, of the right edge of the output area.
+	*/
+	float get_right_extent();
+
+private:
+	float right_extent_ = 0.0f;
 };
 
 }

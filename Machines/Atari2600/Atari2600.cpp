@@ -3,7 +3,7 @@
 //  CLK
 //
 //  Created by Thomas Harte on 14/07/2015.
-//  Copyright © 2015 Thomas Harte. All rights reserved.
+//  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
 #include "Atari2600.hpp"
@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <cstdio>
 
-#include "../ConfigurationTarget.hpp"
 #include "../CRTMachine.hpp"
 #include "../JoystickMachine.hpp"
 
@@ -37,30 +36,27 @@ namespace {
 
 namespace Atari2600 {
 
-class Joystick: public Inputs::Joystick {
+class Joystick: public Inputs::ConcreteJoystick {
 	public:
 		Joystick(Bus *bus, std::size_t shift, std::size_t fire_tia_input) :
+			ConcreteJoystick({
+				Input(Input::Up),
+				Input(Input::Down),
+				Input(Input::Left),
+				Input(Input::Right),
+				Input(Input::Fire)
+			}),
 			bus_(bus), shift_(shift), fire_tia_input_(fire_tia_input) {}
 
-		std::vector<DigitalInput> get_inputs() override {
-			return {
-				DigitalInput(DigitalInput::Up),
-				DigitalInput(DigitalInput::Down),
-				DigitalInput(DigitalInput::Left),
-				DigitalInput(DigitalInput::Right),
-				DigitalInput(DigitalInput::Fire)
-			};
-		}
-
-		void set_digital_input(const DigitalInput &digital_input, bool is_active) override {
+		void did_set_input(const Input &digital_input, bool is_active) override {
 			switch(digital_input.type) {
-				case DigitalInput::Up:		bus_->mos6532_.update_port_input(0, 0x10 >> shift_, is_active);		break;
-				case DigitalInput::Down:	bus_->mos6532_.update_port_input(0, 0x20 >> shift_, is_active);		break;
-				case DigitalInput::Left:	bus_->mos6532_.update_port_input(0, 0x40 >> shift_, is_active);		break;
-				case DigitalInput::Right:	bus_->mos6532_.update_port_input(0, 0x80 >> shift_, is_active);		break;
+				case Input::Up:		bus_->mos6532_.update_port_input(0, 0x10 >> shift_, is_active);		break;
+				case Input::Down:	bus_->mos6532_.update_port_input(0, 0x20 >> shift_, is_active);		break;
+				case Input::Left:	bus_->mos6532_.update_port_input(0, 0x40 >> shift_, is_active);		break;
+				case Input::Right:	bus_->mos6532_.update_port_input(0, 0x80 >> shift_, is_active);		break;
 
 				// TODO: latching
-				case DigitalInput::Fire:
+				case Input::Fire:
 					if(is_active)
 						bus_->tia_input_value_[fire_tia_input_] &= ~0x80;
 					else
@@ -79,24 +75,16 @@ class Joystick: public Inputs::Joystick {
 class ConcreteMachine:
 	public Machine,
 	public CRTMachine::Machine,
-	public ConfigurationTarget::Machine,
 	public JoystickMachine::Machine,
 	public Outputs::CRT::Delegate {
 	public:
-		ConcreteMachine() {
+		ConcreteMachine(const Analyser::Static::Atari::Target &target) {
 			set_clock_rate(NTSC_clock_rate);
-		}
 
-		~ConcreteMachine() {
-			close_output();
-		}
-
-		void configure_as_target(const Analyser::Static::Target *target) override {
-			auto *const atari_target = dynamic_cast<const Analyser::Static::Atari::Target *>(target);
-			const std::vector<uint8_t> &rom = target->media.cartridges.front()->get_segments().front().data;
+			const std::vector<uint8_t> &rom = target.media.cartridges.front()->get_segments().front().data;
 
 			using PagingModel = Analyser::Static::Atari::Target::PagingModel;
-			switch(atari_target->paging_model) {
+			switch(target.paging_model) {
 				case PagingModel::ActivisionStack:	bus_.reset(new Cartridge::Cartridge<Cartridge::ActivisionStack>(rom));	break;
 				case PagingModel::CBSRamPlus:		bus_.reset(new Cartridge::Cartridge<Cartridge::CBSRAMPlus>(rom));		break;
 				case PagingModel::CommaVid:			bus_.reset(new Cartridge::Cartridge<Cartridge::CommaVid>(rom));			break;
@@ -108,21 +96,21 @@ class ConcreteMachine:
 				case PagingModel::Tigervision:		bus_.reset(new Cartridge::Cartridge<Cartridge::Tigervision>(rom));		break;
 
 				case PagingModel::Atari8k:
-					if(atari_target->uses_superchip) {
+					if(target.uses_superchip) {
 						bus_.reset(new Cartridge::Cartridge<Cartridge::Atari8kSuperChip>(rom));
 					} else {
 						bus_.reset(new Cartridge::Cartridge<Cartridge::Atari8k>(rom));
 					}
 				break;
 				case PagingModel::Atari16k:
-					if(atari_target->uses_superchip) {
+					if(target.uses_superchip) {
 						bus_.reset(new Cartridge::Cartridge<Cartridge::Atari16kSuperChip>(rom));
 					} else {
 						bus_.reset(new Cartridge::Cartridge<Cartridge::Atari16k>(rom));
 					}
 				break;
 				case PagingModel::Atari32k:
-					if(atari_target->uses_superchip) {
+					if(target.uses_superchip) {
 						bus_.reset(new Cartridge::Cartridge<Cartridge::Atari32kSuperChip>(rom));
 					} else {
 						bus_.reset(new Cartridge::Cartridge<Cartridge::Atari32k>(rom));
@@ -134,8 +122,8 @@ class ConcreteMachine:
 			joysticks_.emplace_back(new Joystick(bus_.get(), 4, 1));
 		}
 
-		bool insert_media(const Analyser::Static::Media &media) override {
-			return false;
+		~ConcreteMachine() {
+			close_output();
 		}
 
 		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() override {
@@ -257,8 +245,10 @@ class ConcreteMachine:
 
 using namespace Atari2600;
 
-Machine *Machine::Atari2600() {
-	return new Atari2600::ConcreteMachine;
+Machine *Machine::Atari2600(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
+	using Target = Analyser::Static::Atari::Target;
+	const Target *const atari_target = dynamic_cast<const Target *>(target);
+	return new Atari2600::ConcreteMachine(*atari_target);
 }
 
 Machine::~Machine() {}

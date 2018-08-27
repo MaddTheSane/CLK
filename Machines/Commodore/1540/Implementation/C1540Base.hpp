@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 04/09/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #ifndef C1540Base_hpp
@@ -14,15 +14,18 @@
 
 #include "../../SerialBus.hpp"
 
+#include "../../../../Activity/Source.hpp"
 #include "../../../../Storage/Disk/Disk.hpp"
 
 #include "../../../../Storage/Disk/Controller/DiskController.hpp"
+
+#include "../C1540.hpp"
 
 namespace Commodore {
 namespace C1540 {
 
 /*!
-	An implementation of the serial-port VIA in a Commodore 1540 — the VIA that facilitates all
+	An implementation of the serial-port VIA in a Commodore 1540: the VIA that facilitates all
 	IEC bus communications.
 
 	It is wired up such that Port B contains:
@@ -34,7 +37,7 @@ namespace C1540 {
 		Bits 5/6:	device select input; the 1540 will act as device 8 + [value of bits]
 		Bit 7:		attention input; 1 if the line is low, 0 if it is high
 
-	The attention input is also connected to CA1, similarly inverted — the CA1 wire will be high when the bus is low and vice versa.
+	The attention input is also connected to CA1, similarly invertedl; the CA1 wire will be high when the bus is low and vice versa.
 */
 class SerialPortVIA: public MOS::MOS6522::IRQDelegatePortHandler {
 	public:
@@ -59,7 +62,7 @@ class SerialPortVIA: public MOS::MOS6522::IRQDelegatePortHandler {
 };
 
 /*!
-	An implementation of the drive VIA in a Commodore 1540 — the VIA that is used to interface with the disk.
+	An implementation of the drive VIA in a Commodore 1540: the VIA that is used to interface with the disk.
 
 	It is wired up such that Port B contains:
 		Bits 0/1:	head step direction
@@ -83,8 +86,6 @@ class DriveVIA: public MOS::MOS6522::IRQDelegatePortHandler {
 		};
 		void set_delegate(Delegate *);
 
-		DriveVIA();
-
 		uint8_t get_port_input(MOS::MOS6522::Port port);
 
 		void set_sync_detected(bool);
@@ -96,12 +97,15 @@ class DriveVIA: public MOS::MOS6522::IRQDelegatePortHandler {
 
 		void set_port_output(MOS::MOS6522::Port, uint8_t value, uint8_t direction_mask);
 
+		void set_activity_observer(Activity::Observer *observer);
+
 	private:
-		uint8_t port_b_, port_a_;
-		bool should_set_overflow_;
-		bool drive_motor_;
-		uint8_t previous_port_b_output_;
-		Delegate *delegate_;
+		uint8_t port_b_ = 0xff, port_a_ = 0xff;
+		bool should_set_overflow_ = false;
+		bool drive_motor_ = false;
+		uint8_t previous_port_b_output_ = 0;
+		Delegate *delegate_ = nullptr;
+		Activity::Observer *observer_ = nullptr;
 };
 
 /*!
@@ -123,7 +127,7 @@ class MachineBase:
 	public Storage::Disk::Controller {
 
 	public:
-		MachineBase();
+		MachineBase(Personality personality, const ROMMachine::ROMFetcher &rom_fetcher);
 
 		// to satisfy CPU::MOS6502::Processor
 		Cycles perform_bus_operation(CPU::MOS6502::BusOperation operation, uint16_t address, uint8_t *value);
@@ -135,8 +139,11 @@ class MachineBase:
 		void drive_via_did_step_head(void *driveVIA, int direction);
 		void drive_via_did_set_data_density(void *driveVIA, int density);
 
+		/// Attaches the activity observer to this C1540.
+		void set_activity_observer(Activity::Observer *observer);
+
 	protected:
-		CPU::MOS6502::Processor<MachineBase, false> m6502_;
+		CPU::MOS6502::Processor<CPU::MOS6502::Personality::P6502, MachineBase, false> m6502_;
 		std::shared_ptr<Storage::Disk::Drive> drive_;
 
 		uint8_t ram_[0x800];

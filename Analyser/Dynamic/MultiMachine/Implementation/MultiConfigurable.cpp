@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 09/02/2018.
-//  Copyright © 2018 Thomas Harte. All rights reserved.
+//  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
 #include "MultiConfigurable.hpp"
@@ -16,7 +16,7 @@ MultiConfigurable::MultiConfigurable(const std::vector<std::unique_ptr<::Machine
 	for(const auto &machine: machines) {
 		Configurable::Device *device = machine->configurable_device();
 		if(device) devices_.push_back(device);
-    }
+	}
 }
 
 std::vector<std::unique_ptr<Configurable::Option>> MultiConfigurable::get_options() {

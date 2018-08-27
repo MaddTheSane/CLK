@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 04/09/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "../Z80.hpp"
@@ -47,16 +47,22 @@ ProcessorStorage::ProcessorStorage() {
 #define BusOp(op)					{MicroOp::BusOperation, nullptr, nullptr, op}
 
 // Compound bus operations, as micro-ops
-#define Read3(addr, val)			BusOp(ReadStart(addr, val)), BusOp(ReadWait(2, addr, val, true)), BusOp(ReadEnd(addr, val))
-#define Read4(addr, val)			BusOp(ReadStart(addr, val)), BusOp(ReadWait(2, addr, val, false)), BusOp(ReadWait(2, addr, val, true)), BusOp(ReadEnd(addr, val))
-#define Read5(addr, val)			BusOp(ReadStart(addr, val)), BusOp(ReadWait(4, addr, val, false)), BusOp(ReadWait(2, addr, val, true)), BusOp(ReadEnd(addr, val))
 
-#define Write3(addr, val)			BusOp(WriteStart(addr, val)), BusOp(WriteWait(2, addr, val, true)), BusOp(WriteEnd(addr, val))
-#define Write5(addr, val)			BusOp(WriteStart(addr, val)), BusOp(WriteWait(4, addr, val, false)), BusOp(WriteWait(2, addr, val, true)), BusOp(WriteEnd(addr, val))
+// Read3 is a standard read cycle: 1.5 cycles, then check the wait line, then 1.5 cycles;
+// Read4 is a four-cycle read that has to do something to calculate the address: 1.5 cycles, then an extra wait cycle, then check the wait line, then 1.5 cycles;
+// Read4Pre is a four-cycle read that has to do something after reading: 1.5 cycles, then check the wait line, then an extra wait cycle, then 1.5 cycles;
+// Read5 is a five-cycle read: 1.5 cycles, two wait cycles, check the wait line, 1.5 cycles.
+#define Read3(addr, val)				BusOp(ReadStart(addr, val)), BusOp(ReadWait(2, addr, val, true)), BusOp(ReadEnd(addr, val))
+#define Read4(addr, val)				BusOp(ReadStart(addr, val)), BusOp(ReadWait(2, addr, val, false)), BusOp(ReadWait(2, addr, val, true)), BusOp(ReadEnd(addr, val))
+#define Read4Pre(addr, val)				BusOp(ReadStart(addr, val)), BusOp(ReadWait(2, addr, val, true)), BusOp(ReadWait(2, addr, val, false)), BusOp(ReadEnd(addr, val))
+#define Read5(addr, val)				BusOp(ReadStart(addr, val)), BusOp(ReadWait(4, addr, val, false)), BusOp(ReadWait(2, addr, val, true)), BusOp(ReadEnd(addr, val))
 
-#define Input(addr, val)			BusOp(InputStart(addr, val)), BusOp(InputWait(addr, val, false)), BusOp(InputWait(addr, val, true)), BusOp(InputEnd(addr, val))
-#define Output(addr, val)			BusOp(OutputStart(addr, val)), BusOp(OutputWait(addr, val, false)), BusOp(OutputWait(addr, val, true)), BusOp(OutputEnd(addr, val))
-#define InternalOperation(len)		{MicroOp::BusOperation, nullptr, nullptr, {PartialMachineCycle::Internal, HalfCycles(len), nullptr, nullptr, false}}
+#define Write3(addr, val)				BusOp(WriteStart(addr, val)), BusOp(WriteWait(2, addr, val, true)), BusOp(WriteEnd(addr, val))
+#define Write5(addr, val)				BusOp(WriteStart(addr, val)), BusOp(WriteWait(4, addr, val, false)), BusOp(WriteWait(2, addr, val, true)), BusOp(WriteEnd(addr, val))
+
+#define Input(addr, val)				BusOp(InputStart(addr, val)), BusOp(InputWait(addr, val, false)), BusOp(InputWait(addr, val, true)), BusOp(InputEnd(addr, val))
+#define Output(addr, val)				BusOp(OutputStart(addr, val)), BusOp(OutputWait(addr, val, false)), BusOp(OutputWait(addr, val, true)), BusOp(OutputEnd(addr, val))
+#define InternalOperation(len)			{MicroOp::BusOperation, nullptr, nullptr, {PartialMachineCycle::Internal, HalfCycles(len), nullptr, nullptr, false}}
 
 /// A sequence is a series of micro-ops that ends in a move-to-next-program operation.
 #define Sequence(...)				{ __VA_ARGS__, {MicroOp::MoveToNextProgram} }
@@ -122,10 +128,10 @@ ProcessorStorage::ProcessorStorage() {
 				StdInstr({MicroOp::op, &bc_.bytes.high}),	StdInstr({MicroOp::op, &bc_.bytes.low}),	\
 				StdInstr({MicroOp::op, &de_.bytes.high}),	StdInstr({MicroOp::op, &de_.bytes.low}),	\
 				StdInstr({MicroOp::op, &index.bytes.high}),	StdInstr({MicroOp::op, &index.bytes.low}),	\
-				StdInstr(INDEX(), Read4(INDEX_ADDR(), temp8_), {MicroOp::op, &temp8_}),	\
+				StdInstr(INDEX(), Read4Pre(INDEX_ADDR(), temp8_), {MicroOp::op, &temp8_}),	\
 				StdInstr({MicroOp::op, &a_})
 
-#define RMW(x, op, ...) StdInstr(INDEX(), Read4(INDEX_ADDR(), x), {MicroOp::op, &x}, Write3(INDEX_ADDR(), x))
+#define RMW(x, op, ...) StdInstr(INDEX(), Read4Pre(INDEX_ADDR(), x), {MicroOp::op, &x}, Write3(INDEX_ADDR(), x))
 #define RMWI(x, op, ...) StdInstr(Read4(INDEX_ADDR(), x), {MicroOp::op, &x}, Write3(INDEX_ADDR(), x))
 
 #define MODIFY_OP_GROUP(op)	\
@@ -251,23 +257,23 @@ void ProcessorStorage::assemble_ed_page(InstructionPage &target) {
 		/* 0x42 SBC HL, BC */	SBC16(hl_, bc_),				/* 0x43 LD (nn), BC */	StdInstr(Read16Inc(pc_, memptr_), Write16(memptr_, bc_)),
 		/* 0x44 NEG */			StdInstr({MicroOp::NEG}),		/* 0x45 RETN */			StdInstr(Pop(pc_), {MicroOp::RETN}),
 		/* 0x46 IM 0 */			StdInstr({MicroOp::IM}),		/* 0x47 LD I, A */		Instr(6, {MicroOp::Move8, &a_, &ir_.bytes.high}),
-		/* 0x40 IN B, (C);	0x41 OUT (C), B */	IN_OUT(bc_.bytes.low),
+		/* 0x48 IN C, (C);	0x49 OUT (C), C */	IN_OUT(bc_.bytes.low),
 		/* 0x4a ADC HL, BC */	ADC16(hl_, bc_),				/* 0x4b LD BC, (nn) */	StdInstr(Read16Inc(pc_, temp16_), Read16(temp16_, bc_)),
 		/* 0x4c NEG */			StdInstr({MicroOp::NEG}),		/* 0x4d RETI */			StdInstr(Pop(pc_), {MicroOp::RETN}),
 		/* 0x4e IM 0/1 */		StdInstr({MicroOp::IM}),		/* 0x4f LD R, A */		Instr(6, {MicroOp::Move8, &a_, &ir_.bytes.low}),
-		/* 0x40 IN B, (C);	0x41 OUT (C), B */	IN_OUT(de_.bytes.high),
+		/* 0x50 IN D, (C);	0x51 OUT (C), D */	IN_OUT(de_.bytes.high),
 		/* 0x52 SBC HL, DE */	SBC16(hl_, de_),				/* 0x53 LD (nn), DE */	StdInstr(Read16Inc(pc_, memptr_), Write16(memptr_, de_)),
 		/* 0x54 NEG */			StdInstr({MicroOp::NEG}),		/* 0x55 RETN */			StdInstr(Pop(pc_), {MicroOp::RETN}),
 		/* 0x56 IM 1 */			StdInstr({MicroOp::IM}),		/* 0x57 LD A, I */		Instr(6, {MicroOp::Move8, &ir_.bytes.high, &a_}, {MicroOp::SetAFlags}),
-		/* 0x40 IN B, (C);	0x41 OUT (C), B */	IN_OUT(de_.bytes.low),
+		/* 0x58 IN E, (C);	0x59 OUT (C), E */	IN_OUT(de_.bytes.low),
 		/* 0x5a ADC HL, DE */	ADC16(hl_, de_),				/* 0x5b LD DE, (nn) */	StdInstr(Read16Inc(pc_, temp16_), Read16(temp16_, de_)),
 		/* 0x5c NEG */			StdInstr({MicroOp::NEG}),		/* 0x5d RETN */			StdInstr(Pop(pc_), {MicroOp::RETN}),
 		/* 0x5e IM 2 */			StdInstr({MicroOp::IM}),		/* 0x5f LD A, R */		Instr(6, {MicroOp::Move8, &ir_.bytes.low, &a_}, {MicroOp::SetAFlags}),
-		/* 0x40 IN B, (C);	0x41 OUT (C), B */	IN_OUT(hl_.bytes.high),
+		/* 0x60 IN H, (C);	0x61 OUT (C), H */	IN_OUT(hl_.bytes.high),
 		/* 0x62 SBC HL, HL */	SBC16(hl_, hl_),				/* 0x63 LD (nn), HL */	StdInstr(Read16Inc(pc_, memptr_), Write16(memptr_, hl_)),
 		/* 0x64 NEG */			StdInstr({MicroOp::NEG}),		/* 0x65 RETN */			StdInstr(Pop(pc_), {MicroOp::RETN}),
 		/* 0x66 IM 0 */			StdInstr({MicroOp::IM}),		/* 0x67 RRD */			StdInstr(Read3(hl_, temp8_), InternalOperation(8), {MicroOp::RRD}, Write3(hl_, temp8_)),
-		/* 0x40 IN B, (C);	0x41 OUT (C), B */	IN_OUT(hl_.bytes.low),
+		/* 0x68 IN L, (C);	0x69 OUT (C), L */	IN_OUT(hl_.bytes.low),
 		/* 0x6a ADC HL, HL */	ADC16(hl_, hl_),				/* 0x6b LD HL, (nn) */	StdInstr(Read16Inc(pc_, temp16_), Read16(temp16_, hl_)),
 		/* 0x6c NEG */			StdInstr({MicroOp::NEG}),		/* 0x6d RETN */			StdInstr(Pop(pc_), {MicroOp::RETN}),
 		/* 0x6e IM 0/1 */		StdInstr({MicroOp::IM}),		/* 0x6f RLD */			StdInstr(Read3(hl_, temp8_), InternalOperation(8), {MicroOp::RLD}, Write3(hl_, temp8_)),
@@ -275,12 +281,12 @@ void ProcessorStorage::assemble_ed_page(InstructionPage &target) {
 		/* 0x72 SBC HL, SP */	SBC16(hl_, sp_),				/* 0x73 LD (nn), SP */	StdInstr(Read16Inc(pc_, memptr_), Write16(memptr_, sp_)),
 		/* 0x74 NEG */			StdInstr({MicroOp::NEG}),		/* 0x75 RETN */			StdInstr(Pop(pc_), {MicroOp::RETN}),
 		/* 0x76 IM 1 */			StdInstr({MicroOp::IM}),		/* 0x77 XX */			NOP,
-		/* 0x40 IN B, (C);	0x41 OUT (C), B */	IN_OUT(a_),
+		/* 0x78 IN A, (C);	0x79 OUT (C), A */	IN_OUT(a_),
 		/* 0x7a ADC HL, SP */	ADC16(hl_, sp_),				/* 0x7b LD SP, (nn) */	StdInstr(Read16Inc(pc_, temp16_), Read16(temp16_, sp_)),
 		/* 0x7c NEG */			StdInstr({MicroOp::NEG}),		/* 0x7d RETN */			StdInstr(Pop(pc_), {MicroOp::RETN}),
 		/* 0x7e IM 2 */			StdInstr({MicroOp::IM}),		/* 0x7f XX */			NOP,
-		NOP_ROW(),	/* 0x80 */
-		NOP_ROW(),	/* 0x90 */
+		NOP_ROW(),	/* 0x80 ... 0x8f */
+		NOP_ROW(),	/* 0x90 ... 0x9f */
 		/* 0xa0 LDI */		StdInstr(Read3(hl_, temp8_), Write5(de_, temp8_), {MicroOp::LDI}),
 		/* 0xa1 CPI */		StdInstr(Read3(hl_, temp8_), InternalOperation(10), {MicroOp::CPI}),
 		/* 0xa2 INI */		Instr(6, Input(bc_, temp8_), Write3(hl_, temp8_), {MicroOp::INI}),
@@ -323,9 +329,9 @@ void ProcessorStorage::assemble_cb_page(InstructionPage &target, RegisterPair &i
 		/* 0x28 SRA B;	0x29 SRA C;	0x2a SRA D;	0x2b SRA E;	0x2c SRA H;	0x2d SRA L;	0x2e SRA (HL);	0x2f SRA A */
 		/* 0x30 SLL B;	0x31 SLL C;	0x32 SLL D;	0x33 SLL E;	0x34 SLL H;	0x35 SLL L;	0x36 SLL (HL);	0x37 SLL A */
 		/* 0x38 SRL B;	0x39 SRL C;	0x3a SRL D;	0x3b SRL E;	0x3c SRL H;	0x3d SRL L;	0x3e SRL (HL);	0x3f SRL A */
-		/* 0x40 – 0x7f: BIT */
-		/* 0x80 – 0xcf: RES */
-		/* 0xd0 – 0xdf: SET */
+		/* 0x40 - 0x7f: BIT */
+		/* 0x80 - 0xcf: RES */
+		/* 0xd0 - 0xdf: SET */
 		CB_PAGE(MODIFY_OP_GROUP, READ_OP_GROUP_D)
 	};
 	InstructionTable offsets_cb_program_table = {
@@ -397,8 +403,8 @@ void ProcessorStorage::assemble_base_page(InstructionPage &target, RegisterPair 
 		/* 0x30 JR NC */		JR(TestNC),							/* 0x31 LD SP, nn */	StdInstr(Read16Inc(pc_, sp_)),
 		/* 0x32 LD (nn), A */	StdInstr(Read16Inc(pc_, temp16_), {MicroOp::SetAddrAMemptr, &temp16_.full}, Write3(temp16_, a_)),
 		/* 0x33 INC SP */		Instr(8, {MicroOp::Increment16, &sp_.full}),
-		/* 0x34 INC (HL) */		StdInstr(INDEX(), Read4(INDEX_ADDR(), temp8_), {MicroOp::Increment8, &temp8_}, Write3(INDEX_ADDR(), temp8_)),
-		/* 0x35 DEC (HL) */		StdInstr(INDEX(), Read4(INDEX_ADDR(), temp8_), {MicroOp::Decrement8, &temp8_}, Write3(INDEX_ADDR(), temp8_)),
+		/* 0x34 INC (HL) */		StdInstr(INDEX(), Read4Pre(INDEX_ADDR(), temp8_), {MicroOp::Increment8, &temp8_}, Write3(INDEX_ADDR(), temp8_)),
+		/* 0x35 DEC (HL) */		StdInstr(INDEX(), Read4Pre(INDEX_ADDR(), temp8_), {MicroOp::Decrement8, &temp8_}, Write3(INDEX_ADDR(), temp8_)),
 		/* 0x36 LD (HL), n */	StdInstr(ReadInc(pc_, temp8_), Write3(INDEX_ADDR(), temp8_)),
 		/* 0x37 SCF */			StdInstr({MicroOp::SCF}),
 		/* 0x38 JR C */			JR(TestC),

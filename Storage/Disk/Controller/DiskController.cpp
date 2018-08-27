@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 14/07/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "DiskController.hpp"
@@ -22,12 +22,12 @@ Controller::Controller(Cycles clock_rate) :
 	set_drive(empty_drive_);
 }
 
-void Controller::set_component_is_sleeping(void *component, bool is_sleeping) {
-	update_sleep_observer();
+void Controller::set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference clocking) {
+	update_clocking_observer();
 }
 
-bool Controller::is_sleeping() {
-	return !drive_ || drive_->is_sleeping();
+ClockingHint::Preference Controller::preferred_clocking() {
+	return (!drive_ || (drive_->preferred_clocking() == ClockingHint::Preference::None)) ? ClockingHint::Preference::None : ClockingHint::Preference::RealTime;
 }
 
 void Controller::run_for(const Cycles cycles) {
@@ -66,7 +66,7 @@ void Controller::set_expected_bit_length(Time bit_length) {
 
 	// this conversion doesn't need to be exact because there's a lot of variation to be taken
 	// account of in rotation speed, air turbulence, etc, so a direct conversion will do
-	int clocks_per_bit = static_cast<int>(cycles_per_bit.get_unsigned_int());
+	int clocks_per_bit = cycles_per_bit.get<int>();
 	pll_.reset(new DigitalPhaseLockedLoop(clocks_per_bit, 3));
 	pll_->set_delegate(this);
 }
@@ -77,23 +77,23 @@ void Controller::digital_phase_locked_loop_output_bit(int value) {
 
 void Controller::set_drive(std::shared_ptr<Drive> drive) {
 	if(drive_ != drive) {
-		bool was_sleeping = is_sleeping();
+		ClockingHint::Preference former_prefernece = preferred_clocking();
 //		invalidate_track();
 
 		if(drive_) {
 			drive_->set_event_delegate(nullptr);
-			drive_->set_sleep_observer(nullptr);
+			drive_->set_clocking_hint_observer(nullptr);
 		}
 		drive_ = drive;
 		if(drive_) {
 			drive_->set_event_delegate(this);
-			drive_->set_sleep_observer(this);
+			drive_->set_clocking_hint_observer(this);
 		} else {
 			drive_ = empty_drive_;
 		}
 
-		if(is_sleeping() != was_sleeping) {
-			update_sleep_observer();
+		if(preferred_clocking() != former_prefernece) {
+			update_clocking_observer();
 		}
 	}
 }

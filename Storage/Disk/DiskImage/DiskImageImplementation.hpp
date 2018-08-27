@@ -3,11 +3,11 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 22/09/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
-template <typename T> int DiskImageHolder<T>::get_head_position_count() {
-	return disk_image_.get_head_position_count();
+template <typename T> HeadPosition DiskImageHolder<T>::get_maximum_head_position() {
+	return disk_image_.get_maximum_head_position();
 }
 
 template <typename T> int DiskImageHolder<T>::get_head_count() {
@@ -24,7 +24,7 @@ template <typename T> void DiskImageHolder<T>::flush_tracks() {
 
 		using TrackMap = std::map<Track::Address, std::shared_ptr<Track>>;
 		std::shared_ptr<TrackMap> track_copies(new TrackMap);
-		for(auto &address : unwritten_tracks_) {
+		for(const auto &address : unwritten_tracks_) {
 			track_copies->insert(std::make_pair(address, std::shared_ptr<Track>(cached_tracks_[address]->clone())));
 		}
 		unwritten_tracks_.clear();
@@ -44,7 +44,7 @@ template <typename T> void DiskImageHolder<T>::set_track_at_position(Track::Addr
 
 template <typename T> std::shared_ptr<Track> DiskImageHolder<T>::get_track_at_position(Track::Address address) {
 	if(address.head >= get_head_count()) return nullptr;
-	if(address.position >= get_head_position_count()) return nullptr;
+	if(address.position >= get_maximum_head_position()) return nullptr;
 
 	auto cached_track = cached_tracks_.find(address);
 	if(cached_track != cached_tracks_.end()) return cached_track->second;

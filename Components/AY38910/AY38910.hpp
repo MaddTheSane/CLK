@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 14/10/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef AY_3_8910_hpp
@@ -92,9 +92,8 @@ class AY38910: public ::Outputs::Speaker::SampleSource {
 		Concurrency::DeferringAsyncTaskQueue &task_queue_;
 
 		int selected_register_ = 0;
-		uint8_t registers_[16];
+		uint8_t registers_[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		uint8_t output_registers_[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-		uint8_t port_inputs_[2];
 
 		int master_divider_ = 0;
 

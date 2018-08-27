@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 10/07/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef G64_hpp
@@ -18,27 +18,21 @@ namespace Storage {
 namespace Disk {
 
 /*!
-	Provides a @c Disk containing a G64 disk image — a raw but perfectly-clocked GCR stream.
+	Provides a @c Disk containing a G64 disk image: a raw but perfectly-clocked GCR stream.
 */
 class G64: public DiskImage {
 	public:
 		/*!
 			Construct a @c G64 containing content from the file with name @c file_name.
 
-			@throws ErrorCantOpen if this file can't be opened.
-			@throws ErrorNotG64 if the file doesn't appear to contain a .G64 format image.
-			@throws ErrorUnknownVersion if this file appears to be a .G64 but has an unrecognised version number.
+			@throws Storage::FileHolder::Error::CantOpen if this file can't be opened.
+			@throws Error::InvalidFormat if the file doesn't appear to contain a .G64 format image.
+			@throws Error::UnknownVersion if this file appears to be a .G64 but has an unrecognised version number.
 		*/
 		G64(const std::string &file_name);
 
-		enum {
-			ErrorCantOpen,
-			ErrorNotG64,
-			ErrorUnknownVersion
-		};
-
 		// implemented to satisfy @c Disk
-		int get_head_position_count() override;
+		HeadPosition get_maximum_head_position() override;
 		std::shared_ptr<Track> get_track_at_position(Track::Address address) override;
 		using DiskImage::get_is_read_only;
 

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 12/10/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "Video.hpp"
@@ -42,7 +42,7 @@ VideoOutput::VideoOutput(uint8_t *memory) :
 	crt_->set_composite_function_type(Outputs::CRT::CRT::CompositeSourceType::DiscreteFourSamplesPerCycle, 0.0f);
 
 	set_video_signal(Outputs::CRT::VideoSignal::Composite);
-	crt_->set_visible_area(crt_->get_rect_for_area(53, 224, 16 * 6, 40 * 6, 4.0f / 3.0f));
+	crt_->set_visible_area(crt_->get_rect_for_area(54, 224, 16 * 6, 40 * 6, 4.0f / 3.0f));
 }
 
 void VideoOutput::set_video_signal(Outputs::CRT::VideoSignal video_signal) {
@@ -72,8 +72,8 @@ Outputs::CRT::CRT *VideoOutput::get_crt() {
 }
 
 void VideoOutput::run_for(const Cycles cycles) {
-	// Vertical: 0–39: pixels; otherwise blank; 48–53 sync, 54–56 colour burst
-	// Horizontal: 0–223: pixels; otherwise blank; 256–259 sync
+	// Vertical: 0-39: pixels; otherwise blank; 48-53 sync, 54-56 colour burst
+	// Horizontal: 0-223: pixels; otherwise blank; 256-259 sync
 
 #define clamp(action)	\
 	if(cycles_run_for <= number_of_cycles) { action; } else cycles_run_for = number_of_cycles;
@@ -191,7 +191,7 @@ void VideoOutput::run_for(const Cycles cycles) {
 			}
 
 			if(h_counter == 40) {
-				crt_->output_data(40 * 6, 1);
+				crt_->output_data(40 * 6);
 			}
 		} else {
 			// this is a blank line (or the equivalent part of a pixel line)

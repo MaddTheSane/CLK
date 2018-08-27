@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 09/07/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #import "C1540Bridge.h"
@@ -32,8 +32,8 @@ class VanillaSerialPort: public Commodore::Serial::Port {
 		_serialBus.reset(new ::Commodore::Serial::Bus);
 		_serialPort.reset(new VanillaSerialPort);
 
-		_c1540.reset(new Commodore::C1540::Machine(Commodore::C1540::Machine::C1540));
-		_c1540->set_rom_fetcher(CSROMFetcher());
+		auto rom_fetcher = CSROMFetcher();
+		_c1540.reset(new Commodore::C1540::Machine(Commodore::C1540::Personality::C1540, rom_fetcher));
 		_c1540->set_serial_bus(_serialBus);
 		Commodore::Serial::AttachPortAndBus(_serialPort, _serialBus);
 	}

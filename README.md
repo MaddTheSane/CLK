@@ -1,6 +1,8 @@
 # Clock Signal
 Clock Signal ('CLK') is an emulator for tourists that seeks to be invisible. Users directly launch classic software with no emulator or per-emulated-machine learning curve.
 
+[Releases](https://github.com/TomHarte/CLK/releases) are hosted on GitHub.
+
 On the Mac it is a native Cocoa application. Under Linux, BSD and other UNIXes and UNIX-alikes it relies upon SDL 2.
 
 So its aims are:
@@ -12,6 +14,7 @@ So its aims are:
 It currently contains emulations of the:
 * Acorn Electron;
 * Amstrad CPC;
+* Apple II/II+ and IIe;
 * Atari 2600;
 * ColecoVision;
 * Commodore Vic-20 (and Commodore 1540/1);
@@ -51,7 +54,7 @@ If your machine has a 4k monitor and a 96Khz audio output? Then you'll get a 4k 
 |![Amstrad text, with a classic 1:1 pixel emulation](READMEImages/NaiveCPC.png)|![Amstrad text, with correct aspect ratio and subject to a lowpass filter](READMEImages/FilteredCPC.png)|
 |![The Amstrad CPC version of Stormlord, with a classic 1:1 pixel emulation](READMEImages/NaiveCPCStormlord.png)|![The Amstrad CPC version of Stormlord, with correct aspect ratio and subject to a lowpass filter](READMEImages/CPCStormlord.png)|
 
-<img src="READMEImages/ReptonInterlaced.gif" height=600 alt="Repton title screen, interlaced">
+<img src="READMEImages/ReptonInterlaced.gif" height=400 alt="Repton title screen, interlaced"> <img src="READMEImages/AppleIIPrinceOfPersia.png" height=400 alt="Apple IIe Prince of Persia">
 
 ## Low Latency
 
@@ -68,6 +71,7 @@ Cycle-accurate emulation for the supported target machines is fairly trite; this
 Self-ratings:
 * the Electron, Oric and Vic-20 are pretty much perfect;
 * the ZX80, ZX81, ColecoVision and MSX 1 are very strong;
+* the Apple II/II+ and IIe should be strong by design, but are relatively new;
 * the Amstrad CPC has known accuracy deficiencies in its 8272 and 6845;
 * the Atari 2600 has some known accuracy deficiencies in its TIA;
 * the C-1540(/1) is locked in reading mode and doesn't yet support writing.

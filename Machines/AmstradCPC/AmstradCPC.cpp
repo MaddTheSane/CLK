@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 30/07/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "AmstradCPC.hpp"
@@ -20,8 +20,10 @@
 #include "../Utility/MemoryFuzzer.hpp"
 #include "../Utility/Typer.hpp"
 
-#include "../ConfigurationTarget.hpp"
+#include "../../Activity/Source.hpp"
+#include "../MediaTarget.hpp"
 #include "../CRTMachine.hpp"
+#include "../JoystickMachine.hpp"
 #include "../KeyboardMachine.hpp"
 
 #include "../../Storage/Tape/Tape.hpp"
@@ -36,12 +38,11 @@
 
 namespace AmstradCPC {
 
-enum ROMType: int {
-	OS464 = 0,	BASIC464,
-	OS664,		BASIC664,
-	OS6128,		BASIC6128,
-	AMSDOS
-};
+std::vector<std::unique_ptr<Configurable::Option>> get_options() {
+	return Configurable::standard_options(
+		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplayComposite)
+	);
+}
 
 /*!
 	Models the CPC's interrupt timer. Inputs are vsync, hsync, interrupt acknowledge and reset, and its output
@@ -181,8 +182,8 @@ class CRTCBusHandler {
 			bus state and determines what output to produce based on the current palette and mode.
 		*/
 		forceinline void perform_bus_cycle_phase1(const Motorola::CRTC::BusState &state) {
-			// The gate array waits 2µs to react to the CRTC's vsync signal, and then
-			// caps output at 4µs. Since the clock rate is 1Mhz, that's 2 and 4 cycles,
+			// The gate array waits 2us to react to the CRTC's vsync signal, and then
+			// caps output at 4us. Since the clock rate is 1Mhz, that's 2 and 4 cycles,
 			// respectively.
 			if(state.hsync) {
 				cycles_into_hsync_++;
@@ -191,36 +192,51 @@ class CRTCBusHandler {
 			}
 
 			bool is_hsync = (cycles_into_hsync_ >= 2 && cycles_into_hsync_ < 6);
+			bool is_colour_burst = (cycles_into_hsync_ >= 7 && cycles_into_hsync_ < 11);
 
 			// Sync is taken to override pixels, and is combined as a simple OR.
 			bool is_sync = is_hsync || state.vsync;
+			bool is_blank = !is_sync && state.hsync;
+
+			OutputMode output_mode;
+			if(is_sync) {
+				output_mode = OutputMode::Sync;
+			} else if(is_colour_burst) {
+				output_mode = OutputMode::ColourBurst;
+			} else if(is_blank) {
+				output_mode = OutputMode::Blank;
+			} else if(state.display_enable) {
+				output_mode = OutputMode::Pixels;
+			} else {
+				output_mode = OutputMode::Border;
+			}
 
 			// If a transition between sync/border/pixels just occurred, flush whatever was
 			// in progress to the CRT and reset counting.
-			if(state.display_enable != was_enabled_ || is_sync != was_sync_) {
-				if(was_sync_) {
-					crt_->output_sync(cycles_ * 16);
-				} else {
-					if(was_enabled_) {
-						if(cycles_) {
-							crt_->output_data(cycles_ * 16, pixel_divider_);
+			if(output_mode != previous_output_mode_) {
+				if(cycles_) {
+					switch(previous_output_mode_) {
+						default:
+						case OutputMode::Blank:			crt_->output_blank(cycles_ * 16);					break;
+						case OutputMode::Sync:			crt_->output_sync(cycles_ * 16);					break;
+						case OutputMode::Border:		output_border(cycles_);								break;
+						case OutputMode::ColourBurst:	crt_->output_default_colour_burst(cycles_ * 16);	break;
+						case OutputMode::Pixels:
+							crt_->output_data(cycles_ * 16, cycles_ * 16 / pixel_divider_);
 							pixel_pointer_ = pixel_data_ = nullptr;
-						}
-					} else {
-						output_border(cycles_);
+						break;
 					}
 				}
 
 				cycles_ = 0;
-				was_sync_ = is_sync;
-				was_enabled_ = state.display_enable;
+				previous_output_mode_ = output_mode;
 			}
 
 			// increment cycles since state changed
 			cycles_++;
 
 			// collect some more pixels if output is ongoing
-			if(!is_sync && state.display_enable) {
+			if(previous_output_mode_ == OutputMode::Pixels) {
 				if(!pixel_data_) {
 					pixel_pointer_ = pixel_data_ = crt_->allocate_write_area(320, 8);
 				}
@@ -267,7 +283,7 @@ class CRTCBusHandler {
 					// widths so it's not necessarily possible to predict the correct number in advance
 					// and using the upper bound could lead to inefficient behaviour
 					if(pixel_pointer_ == pixel_data_ + 320) {
-						crt_->output_data(cycles_ * 16, pixel_divider_);
+						crt_->output_data(cycles_ * 16, cycles_ * 16 / pixel_divider_);
 						pixel_pointer_ = pixel_data_ = nullptr;
 						cycles_ = 0;
 					}
@@ -276,7 +292,7 @@ class CRTCBusHandler {
 		}
 
 		/*!
-			The CRTC entry function for phase 2 of each bus cycle — in which the next sync line state becomes
+			The CRTC entry function for phase 2 of each bus cycle, in which the next sync line state becomes
 			visible early. The CPC uses changes in sync to clock the interrupt timer.
 		*/
 		void perform_bus_cycle_phase2(const Motorola::CRTC::BusState &state) {
@@ -316,7 +332,7 @@ class CRTCBusHandler {
 					"uint sample = texture(texID, coordinate).r;"
 					"return vec3(float((sample >> 4) & 3u), float((sample >> 2) & 3u), float(sample & 3u)) / 2.0;"
 				"}");
-			crt_->set_visible_area(Outputs::CRT::Rect(0.075f, 0.05f, 0.9f, 0.9f));
+			crt_->set_visible_area(Outputs::CRT::Rect(0.1072f, 0.1f, 0.842105263157895f, 0.842105263157895f));
 			crt_->set_video_signal(Outputs::CRT::VideoSignal::RGB);
 		}
 
@@ -348,7 +364,7 @@ class CRTCBusHandler {
 			if(pen_ & 16) {
 				// If border is[/was] currently being output, flush what should have been
 				// drawn in the old colour.
-				if(!was_sync_ && !was_enabled_) {
+				if(previous_output_mode_ == OutputMode::Border) {
 					output_border(cycles_);
 					cycles_ = 0;
 				}
@@ -505,9 +521,16 @@ class CRTCBusHandler {
 			return mapping[colour];
 		}
 
+		enum class OutputMode {
+			Sync,
+			Blank,
+			ColourBurst,
+			Border,
+			Pixels
+		} previous_output_mode_ = OutputMode::Sync;
 		unsigned int cycles_ = 0;
 
-		bool was_enabled_ = false, was_sync_ = false, was_hsync_ = false, was_vsync_ = false;
+		bool was_hsync_ = false, was_vsync_ = false;
 		int cycles_into_hsync_ = 0;
 
 		std::unique_ptr<Outputs::CRT::CRT> crt_;
@@ -536,24 +559,28 @@ class CRTCBusHandler {
 
 /*!
 	Holds and vends the current keyboard state, acting as the AY's port handler.
+	Also owns the joysticks.
 */
 class KeyboardState: public GI::AY38910::PortHandler {
 	public:
-		KeyboardState() : rows_{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff} {}
+		KeyboardState() {
+			joysticks_.emplace_back(new Joystick(rows_[9]));
+			joysticks_.emplace_back(new Joystick(joy2_state_));
+		}
 
 		/*!
 			Sets the row currently being reported to the AY.
 		*/
 		void set_row(int row) {
-			row_ = row;
+			row_ = static_cast<size_t>(row);
 		}
 
 		/*!
 			Reports the state of the currently-selected row as Port A to the AY.
 		*/
 		uint8_t get_port_input(bool port_b) {
-			if(!port_b && row_ < 10) {
-				return rows_[row_];
+			if(!port_b && row_ < sizeof(rows_)) {
+				return (row_ == 6) ? rows_[row_] & joy2_state_ : rows_[row_];
 			}
 
 			return 0xff;
@@ -564,7 +591,7 @@ class KeyboardState: public GI::AY38910::PortHandler {
 		*/
 		void set_is_pressed(bool is_pressed, int line, int key) {
 			int mask = 1 << key;
-			assert(line < 10);
+			assert(static_cast<size_t>(line) < sizeof(rows_));
 			if(is_pressed) rows_[line] &= ~mask; else rows_[line] |= mask;
 		}
 
@@ -572,12 +599,52 @@ class KeyboardState: public GI::AY38910::PortHandler {
 			Sets all keys as currently unpressed.
 		*/
 		void clear_all_keys() {
-			memset(rows_, 0xff, 10);
+			memset(rows_, 0xff, sizeof(rows_));
+		}
+
+		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() {
+			return joysticks_;
 		}
 
 	private:
-		uint8_t rows_[10];
-		int row_;
+		uint8_t joy2_state_ = 0xff;
+		uint8_t rows_[10] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+		size_t row_ = 0;
+		std::vector<std::unique_ptr<Inputs::Joystick>> joysticks_;
+
+		class Joystick: public Inputs::ConcreteJoystick {
+			public:
+				Joystick(uint8_t &state) :
+					ConcreteJoystick({
+						Input(Input::Up),
+						Input(Input::Down),
+						Input(Input::Left),
+						Input(Input::Right),
+						Input(Input::Fire, 0),
+						Input(Input::Fire, 1),
+					}),
+					state_(state) {}
+
+				void did_set_input(const Input &input, bool is_active) override {
+					uint8_t mask = 0;
+					switch(input.type) {
+						default: return;
+						case Input::Up:		mask = 0x01;	break;
+						case Input::Down:	mask = 0x02;	break;
+						case Input::Left:	mask = 0x04;	break;
+						case Input::Right:	mask = 0x08;	break;
+						case Input::Fire:
+							if(input.info.control.index >= 2) return;
+							mask = input.info.control.index ? 0x20 : 0x10;
+						break;
+					}
+
+					if(is_active) state_ &= ~mask; else state_ |= mask;
+				}
+
+			private:
+				uint8_t &state_;
+		};
 };
 
 /*!
@@ -606,6 +673,10 @@ class FDC: public Intel::i8272::i8272 {
 
 		void set_disk(std::shared_ptr<Storage::Disk::Disk> disk, int drive) {
 			drive_->set_disk(disk);
+		}
+
+		void set_activity_observer(Activity::Observer *observer) {
+			drive_->set_activity_observer(observer, "Drive 1", true);
 		}
 };
 
@@ -668,7 +739,7 @@ class i8255PortHandler : public Intel::i8255::PortHandler {
 							//	Bit 6: printer ready (1 = not)
 							//	Bit 5: the expansion port /EXP pin, so depends on connected hardware
 							//	Bit 4: 50/60Hz switch (1 = 50Hz)
-							//	Bits 1–3: distributor ID (111 = Amstrad)
+							//	Bits 1-3: distributor ID (111 = Amstrad)
 				default: return 0xff;
 			}
 		}
@@ -683,16 +754,19 @@ class i8255PortHandler : public Intel::i8255::PortHandler {
 /*!
 	The actual Amstrad CPC implementation; tying the 8255, 6845 and AY to the Z80.
 */
-class ConcreteMachine:
+template <bool has_fdc> class ConcreteMachine:
 	public CRTMachine::Machine,
-	public ConfigurationTarget::Machine,
+	public MediaTarget::Machine,
 	public KeyboardMachine::Machine,
 	public Utility::TypeRecipient,
 	public CPU::Z80::BusHandler,
-	public Sleeper::SleepObserver,
-	public Machine {
+	public ClockingHint::Observer,
+	public Configurable::Device,
+	public JoystickMachine::Machine,
+	public Machine,
+	public Activity::Source {
 	public:
-		ConcreteMachine() :
+		ConcreteMachine(const Analyser::Static::AmstradCPC::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
 			z80_(*this),
 			crtc_bus_handler_(ram_, interrupt_timer_),
 			crtc_(Motorola::CRTC::HD6845S, crtc_bus_handler_),
@@ -708,13 +782,62 @@ class ConcreteMachine:
 			Memory::Fuzz(ram_, sizeof(ram_));
 
 			// register this class as the sleep observer for the FDC and tape
-			fdc_.set_sleep_observer(this);
-			fdc_is_sleeping_ = fdc_.is_sleeping();
+			fdc_.set_clocking_hint_observer(this);
+			tape_player_.set_clocking_hint_observer(this);
 
-			tape_player_.set_sleep_observer(this);
-			tape_player_is_sleeping_ = tape_player_.is_sleeping();
-
+			// install the keyboard state class as the AY port handler
 			ay_.ay().set_port_handler(&key_state_);
+
+			// construct the list of necessary ROMs
+			std::vector<std::string> required_roms = {"amsdos.rom"};
+			std::string model_number;
+			switch(target.model) {
+				default:
+					model_number = "6128";
+					has_128k_ = true;
+				break;
+				case Analyser::Static::AmstradCPC::Target::Model::CPC464:
+					model_number = "464";
+					has_128k_ = false;
+				break;
+				case Analyser::Static::AmstradCPC::Target::Model::CPC664:
+					model_number = "664";
+					has_128k_ = false;
+				break;
+			}
+			required_roms.push_back("os" + model_number + ".rom");
+			required_roms.push_back("basic" + model_number + ".rom");
+
+			// fetch and verify the ROMs
+			const auto roms = rom_fetcher("AmstradCPC", required_roms);
+
+			for(std::size_t index = 0; index < roms.size(); ++index) {
+				auto &data = roms[index];
+				if(!data) throw ROMMachine::Error::MissingROMs;
+				roms_[static_cast<int>(index)] = std::move(*data);
+				roms_[static_cast<int>(index)].resize(16384);
+			}
+
+			// Establish default memory map
+			upper_rom_is_paged_ = true;
+			upper_rom_ = ROMType::BASIC;
+
+			write_pointers_[0] = &ram_[0];
+			write_pointers_[1] = &ram_[16384];
+			write_pointers_[2] = &ram_[32768];
+			write_pointers_[3] = &ram_[49152];
+
+			read_pointers_[0] = roms_[ROMType::OS].data();
+			read_pointers_[1] = write_pointers_[1];
+			read_pointers_[2] = write_pointers_[2];
+			read_pointers_[3] = roms_[upper_rom_].data();
+
+			// Type whatever is required.
+			if(!target.loading_command.empty()) {
+				type_string(target.loading_command);
+			}
+
+			insert_media(target.media);
 		}
 
 		/// The entry point for performing a partial Z80 machine cycle.
@@ -743,7 +866,7 @@ class ConcreteMachine:
 			ay_.run_for(cycle.length);
 
 			// Clock the FDC, if connected, using a lazy scale by two
-			if(has_fdc_ && !fdc_is_sleeping_) fdc_.run_for(Cycles(cycle.length.as_int()));
+			time_since_fdc_update_ += cycle.length;
 
 			// Update typing activity
 			if(typer_) typer_->run_for(cycle.length);
@@ -769,8 +892,8 @@ class ConcreteMachine:
 					}
 
 					// Check for an upper ROM selection
-					if(has_fdc_ && !(address&0x2000)) {
-						upper_rom_ = (*cycle.value == 7) ? ROMType::AMSDOS : rom_model_ + 1;
+					if(has_fdc && !(address&0x2000)) {
+						upper_rom_ = (*cycle.value == 7) ? ROMType::AMSDOS : ROMType::BASIC;
 						if(upper_rom_is_paged_) read_pointers_[3] = roms_[upper_rom_].data();
 					}
 
@@ -789,12 +912,14 @@ class ConcreteMachine:
 					}
 
 					// Check for an FDC access
-					if(has_fdc_ && (address & 0x580) == 0x100) {
+					if(has_fdc && (address & 0x580) == 0x100) {
+						flush_fdc();
 						fdc_.set_register(address & 1, *cycle.value);
 					}
 
 					// Check for a disk motor access
-					if(has_fdc_ && !(address & 0x580)) {
+					if(has_fdc && !(address & 0x580)) {
+						flush_fdc();
 						fdc_.set_motor_on(!!(*cycle.value));
 					}
 				break;
@@ -808,11 +933,12 @@ class ConcreteMachine:
 					}
 
 					// Check for an FDC access
-					if(has_fdc_ && (address & 0x580) == 0x100) {
+					if(has_fdc && (address & 0x580) == 0x100) {
+						flush_fdc();
 						*cycle.value &= fdc_.get_register(address & 1);
 					}
 
-					// Check for a CRTC access; the below is not a typo — the CRTC can be selected
+					// Check for a CRTC access; the below is not a typo, the CRTC can be selected
 					// for writing via an input, and will sample whatever happens to be available
 					if(!(address & 0x4000)) {
 						switch((address >> 8) & 3) {
@@ -852,6 +978,7 @@ class ConcreteMachine:
 			// Just flush the AY.
 			ay_.update();
 			ay_.flush();
+			flush_fdc();
 		}
 
 		/// A CRTMachine function; indicates that outputs should be created now.
@@ -879,50 +1006,6 @@ class ConcreteMachine:
 			z80_.run_for(cycles);
 		}
 
-		/// The ConfigurationTarget entry point; should configure this meachine as described by @c target.
-		void configure_as_target(const Analyser::Static::Target *target) override final  {
-			auto *const cpc_target = dynamic_cast<const Analyser::Static::AmstradCPC::Target *>(target);
-
-			switch(cpc_target->model) {
-				case Analyser::Static::AmstradCPC::Target::Model::CPC464:
-					rom_model_ = ROMType::OS464;
-					has_128k_ = false;
-					has_fdc_ = false;
-				break;
-				case Analyser::Static::AmstradCPC::Target::Model::CPC664:
-					rom_model_ = ROMType::OS664;
-					has_128k_ = false;
-					has_fdc_ = true;
-				break;
-				case Analyser::Static::AmstradCPC::Target::Model::CPC6128:
-					rom_model_ = ROMType::OS6128;
-					has_128k_ = true;
-					has_fdc_ = true;
-				break;
-			}
-
-			// Establish default memory map
-			upper_rom_is_paged_ = true;
-			upper_rom_ = rom_model_ + 1;
-
-			write_pointers_[0] = &ram_[0];
-			write_pointers_[1] = &ram_[16384];
-			write_pointers_[2] = &ram_[32768];
-			write_pointers_[3] = &ram_[49152];
-
-			read_pointers_[0] = roms_[rom_model_].data();
-			read_pointers_[1] = write_pointers_[1];
-			read_pointers_[2] = write_pointers_[2];
-			read_pointers_[3] = roms_[upper_rom_].data();
-
-			// Type whatever is required.
-			if(target->loading_command.length()) {
-				type_string(target->loading_command);
-			}
-
-			insert_media(target->media);
-		}
-
 		bool insert_media(const Analyser::Static::Media &media) override final {
 			// If there are any tapes supplied, use the first of them.
 			if(!media.tapes.empty()) {
@@ -937,37 +1020,15 @@ class ConcreteMachine:
 				if(c == 4) break;
 			}
 
-			return !media.tapes.empty() || (!media.disks.empty() && has_fdc_);
+			return !media.tapes.empty() || (!media.disks.empty() && has_fdc);
 		}
 
-		// Obtains the system ROMs.
-		bool set_rom_fetcher(const std::function<std::vector<std::unique_ptr<std::vector<uint8_t>>>(const std::string &machine, const std::vector<std::string> &names)> &roms_with_names) override {
-			auto roms = roms_with_names(
-				"AmstradCPC",
-				{
-					"os464.rom",	"basic464.rom",
-					"os664.rom",	"basic664.rom",
-					"os6128.rom",	"basic6128.rom",
-					"amsdos.rom"
-				});
-
-			for(std::size_t index = 0; index < roms.size(); ++index) {
-				auto &data = roms[index];
-				if(!data) return false;
-				roms_[static_cast<int>(index)] = std::move(*data);
-				roms_[static_cast<int>(index)].resize(16384);
-			}
-
-			return true;
+		void set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference clocking) override final {
+			fdc_is_sleeping_ = fdc_.preferred_clocking() == ClockingHint::Preference::None;
+			tape_player_is_sleeping_ = tape_player_.preferred_clocking() == ClockingHint::Preference::None;
 		}
 
-		void set_component_is_sleeping(void *component, bool is_sleeping) override final {
-			fdc_is_sleeping_ = fdc_.is_sleeping();
-			tape_player_is_sleeping_ = tape_player_.is_sleeping();
-		}
-
-// MARK: - Keyboard
-
+		// MARK: - Keyboard
 		void type_string(const std::string &string) override final {
 			std::unique_ptr<CharacterMapper> mapper(new CharacterMapper());
 			Utility::TypeRecipient::add_typer(string, std::move(mapper));
@@ -995,6 +1056,40 @@ class ConcreteMachine:
 			return &keyboard_mapper_;
 		}
 
+		// MARK: - Activity Source
+		void set_activity_observer(Activity::Observer *observer) override {
+			if(has_fdc) fdc_.set_activity_observer(observer);
+		}
+
+		// MARK: - Configuration options.
+		std::vector<std::unique_ptr<Configurable::Option>> get_options() override {
+			return AmstradCPC::get_options();
+		}
+
+		void set_selections(const Configurable::SelectionSet &selections_by_option) override {
+			Configurable::Display display;
+			if(Configurable::get_display(selections_by_option, display)) {
+				set_video_signal_configurable(display);
+			}
+		}
+
+		Configurable::SelectionSet get_accurate_selections() override {
+			Configurable::SelectionSet selection_set;
+			Configurable::append_display_selection(selection_set, Configurable::Display::RGB);
+			return selection_set;
+		}
+
+		Configurable::SelectionSet get_user_friendly_selections() override {
+			Configurable::SelectionSet selection_set;
+			Configurable::append_display_selection(selection_set, Configurable::Display::RGB);
+			return selection_set;
+		}
+
+		// MARK: - Joysticks
+		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() override {
+			return key_state_.get_joysticks();
+		}
+
 	private:
 		inline void write_to_gate_array(uint8_t value) {
 			switch(value >> 6) {
@@ -1002,7 +1097,7 @@ class ConcreteMachine:
 				case 1: crtc_bus_handler_.set_colour(value & 0x1f);		break;
 				case 2:
 					// Perform ROM paging.
-					read_pointers_[0] = (value & 4) ? write_pointers_[0] : roms_[rom_model_].data();
+					read_pointers_[0] = (value & 4) ? write_pointers_[0] : roms_[ROMType::OS].data();
 
 					upper_rom_is_paged_ = !(value & 8);
 					read_pointers_[3] = upper_rom_is_paged_ ? roms_[upper_rom_].data() : write_pointers_[3];
@@ -1051,6 +1146,14 @@ class ConcreteMachine:
 		Intel::i8255::i8255<i8255PortHandler> i8255_;
 
 		FDC fdc_;
+		HalfCycles time_since_fdc_update_;
+		void flush_fdc() {
+			// Clock the FDC, if connected, using a lazy scale by two
+			if(has_fdc && !fdc_is_sleeping_) {
+				fdc_.run_for(Cycles(time_since_fdc_update_.as_int()));
+			}
+			time_since_fdc_update_ = HalfCycles(0);
+		}
 
 		InterruptTimer interrupt_timer_;
 		Storage::Tape::BinaryTapePlayer tape_player_;
@@ -1061,13 +1164,16 @@ class ConcreteMachine:
 
 		uint8_t ram_[128 * 1024];
 
-		std::vector<uint8_t> roms_[7];
-		int rom_model_;
-		bool has_fdc_, fdc_is_sleeping_;
+		bool fdc_is_sleeping_;
 		bool tape_player_is_sleeping_;
 		bool has_128k_;
+
+		enum ROMType: int {
+			AMSDOS = 0, OS = 1, BASIC = 2
+		};
+		std::vector<uint8_t> roms_[3];
 		bool upper_rom_is_paged_;
-		int upper_rom_;
+		ROMType upper_rom_;
 
 		uint8_t *ram_pages_[4];
 		uint8_t *read_pointers_[4];
@@ -1082,8 +1188,13 @@ class ConcreteMachine:
 using namespace AmstradCPC;
 
 // See header; constructs and returns an instance of the Amstrad CPC.
-Machine *Machine::AmstradCPC() {
-	return new AmstradCPC::ConcreteMachine;
+Machine *Machine::AmstradCPC(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
+	using Target = Analyser::Static::AmstradCPC::Target;
+	const Target *const cpc_target = dynamic_cast<const Target *>(target);
+	switch(cpc_target->model) {
+		default: 					return new AmstradCPC::ConcreteMachine<true>(*cpc_target, rom_fetcher);
+		case Target::Model::CPC464:	return new AmstradCPC::ConcreteMachine<false>(*cpc_target, rom_fetcher);
+	}
 }
 
 Machine::~Machine() {}

@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 13/08/2015.
-//  Copyright © 2015 Thomas Harte. All rights reserved.
+//  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
 import Foundation
@@ -12,7 +12,7 @@ import XCTest
 class MOS6502TimingTests: XCTestCase, CSTestMachineTrapHandler {
 
 	private var endTime: UInt32 = 0
-	private let machine = CSTestMachine6502()
+	private let machine = CSTestMachine6502(is65C02: false)
 
 	func testImplied() {
 		let code: [UInt8] = [

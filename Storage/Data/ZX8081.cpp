@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 08/06/2017.
-//  Copyright © 2017 Thomas Harte. All rights reserved.
+//  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
 #include "ZX8081.hpp"
@@ -64,7 +64,7 @@ static std::shared_ptr<File> ZX81FileFromData(const std::vector<uint8_t> &data) 
 
 //	if(data[data_pointer]) return nullptr;
 
-	uint16_t vars = short_at(data_pointer + 0x4010 - 0x4009, data);
+//	uint16_t vars = short_at(data_pointer + 0x4010 - 0x4009, data);
 	uint16_t end_of_file = short_at(data_pointer + 0x4014 - 0x4009, data);
 //	uint16_t display_address = short_at(0x400c - 0x4009, data);
 
@@ -72,7 +72,7 @@ static std::shared_ptr<File> ZX81FileFromData(const std::vector<uint8_t> &data) 
 	if(data_pointer + end_of_file - 0x4009 > data.size()) return nullptr;
 
 	// check for the proper ordering of buffers
-	if(vars > end_of_file) return nullptr;
+//	if(vars > end_of_file) return nullptr;
 //	if(end_of_file > display_address) return nullptr;
 
 	// TODO: does it make sense to inspect the tokenised BASIC?
@@ -100,17 +100,17 @@ std::wstring Storage::Data::ZX8081::StringFromData(const std::vector<uint8_t> &d
 	std::wstring string;
 
 	wchar_t zx80_map[64] = {
-		' ',	u'\u2598',	u'\u259d',	u'\u2580',	u'\u2596',	u'\u258c',	u'\u259e',	u'\u259b',	u'\u2588',	u'\u2584',	u'\u2580',	'"',	u'£',	'$',	':',	'?',
-		'(',	')',		'>',		'<',		'=',		'+',		'-',		'*',		'/',		';',		',',		'.',	'0',	'1',	'2',	'3',
-		'4',	'5',		'6',		'7',		'8',		'9',		'A',		'B',		'C',		'D',		'E',		'F',	'G',	'H',	'I',	'J',
-		'K',	'L',		'M',		'N',		'O',		'P',		'Q',		'R',		'S',		'T',		'U',		'V',	'W',	'X',	'Y',	'Z'
+		' ',	u'\u2598',	u'\u259d',	u'\u2580',	u'\u2596',	u'\u258c',	u'\u259e',	u'\u259b',	u'\u2588',	u'\u2584',	u'\u2580',	'"',	u'\u00a3',	'$',	':',	'?',
+		'(',	')',		'>',		'<',		'=',		'+',		'-',		'*',		'/',		';',		',',		'.',	'0',		'1',	'2',	'3',
+		'4',	'5',		'6',		'7',		'8',		'9',		'A',		'B',		'C',		'D',		'E',		'F',	'G',		'H',	'I',	'J',
+		'K',	'L',		'M',		'N',		'O',		'P',		'Q',		'R',		'S',		'T',		'U',		'V',	'W',		'X',	'Y',	'Z'
 	};
 	// TODO: the block character conversions shown here are in the wrong order
 	wchar_t zx81_map[64] = {
-		' ',	u'\u2598',	u'\u259d',	u'\u2580',	u'\u2596',	u'\u258c',	u'\u259e',	u'\u259b',	u'\u2588',	u'\u2584',	u'\u2580',	'"',	u'£',	'$',	':',	'?',
-		'(',	')',		'-',		'+',		'*',		'/',		'=',		'>',		'<',		';',		',',		'.',	'0',	'1',	'2',	'3',
-		'4',	'5',		'6',		'7',		'8',		'9',		'A',		'B',		'C',		'D',		'E',		'F',	'G',	'H',	'I',	'J',
-		'K',	'L',		'M',		'N',		'O',		'P',		'Q',		'R',		'S',		'T',		'U',		'V',	'W',	'X',	'Y',	'Z'
+		' ',	u'\u2598',	u'\u259d',	u'\u2580',	u'\u2596',	u'\u258c',	u'\u259e',	u'\u259b',	u'\u2588',	u'\u2584',	u'\u2580',	'"',	u'\u00a3',	'$',	':',	'?',
+		'(',	')',		'-',		'+',		'*',		'/',		'=',		'>',		'<',		';',		',',		'.',	'0',		'1',	'2',	'3',
+		'4',	'5',		'6',		'7',		'8',		'9',		'A',		'B',		'C',		'D',		'E',		'F',	'G',		'H',	'I',	'J',
+		'K',	'L',		'M',		'N',		'O',		'P',		'Q',		'R',		'S',		'T',		'U',		'V',	'W',		'X',	'Y',	'Z'
 	};
 	wchar_t *map = is_zx81 ? zx81_map : zx80_map;
 

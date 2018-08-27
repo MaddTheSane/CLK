@@ -3,12 +3,13 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 03/01/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #include "Electron.hpp"
 
-#include "../ConfigurationTarget.hpp"
+#include "../../Activity/Source.hpp"
+#include "../MediaTarget.hpp"
 #include "../CRTMachine.hpp"
 #include "../KeyboardMachine.hpp"
 
@@ -40,17 +41,18 @@ std::vector<std::unique_ptr<Configurable::Option>> get_options() {
 class ConcreteMachine:
 	public Machine,
 	public CRTMachine::Machine,
-	public ConfigurationTarget::Machine,
+	public MediaTarget::Machine,
 	public KeyboardMachine::Machine,
 	public Configurable::Device,
 	public CPU::MOS6502::BusHandler,
 	public Tape::Delegate,
-	public Utility::TypeRecipient {
+	public Utility::TypeRecipient,
+	public Activity::Source {
 	public:
-		ConcreteMachine() :
-			m6502_(*this),
-			sound_generator_(audio_queue_),
-			speaker_(sound_generator_) {
+		ConcreteMachine(const Analyser::Static::Acorn::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
+				m6502_(*this),
+				sound_generator_(audio_queue_),
+				speaker_(sound_generator_) {
 			memset(key_states_, 0, sizeof(key_states_));
 			for(int c = 0; c < 16; c++)
 				memset(roms_[c], 0xff, 16384);
@@ -59,57 +61,51 @@ class ConcreteMachine:
 			set_clock_rate(2000000);
 
 			speaker_.set_input_rate(2000000 / SoundGenerator::clock_rate_divider);
+
+			std::vector<std::string> rom_names = {"basic.rom", "os.rom"};
+			if(target.has_adfs) {
+				rom_names.push_back("ADFS-E00_1.rom");
+				rom_names.push_back("ADFS-E00_2.rom");
+			}
+			const size_t dfs_rom_position = rom_names.size();
+			if(target.has_dfs) {
+				rom_names.push_back("DFS-1770-2.20.rom");
+			}
+			const auto roms = rom_fetcher("Electron", rom_names);
+
+			for(const auto &rom: roms) {
+				if(!rom) {
+					throw ROMMachine::Error::MissingROMs;
+				}
+			}
+			set_rom(ROM::BASIC, *roms[0], false);
+			set_rom(ROM::OS, *roms[1], false);
+
+			if(target.has_dfs || target.has_adfs) {
+				plus3_.reset(new Plus3);
+
+				if(target.has_dfs) {
+					set_rom(ROM::Slot0, *roms[dfs_rom_position], true);
+				}
+				if(target.has_adfs) {
+					set_rom(ROM::Slot4, *roms[2], true);
+					set_rom(ROM::Slot5, *roms[3], true);
+				}
+			}
+
+			insert_media(target.media);
+
+			if(!target.loading_command.empty()) {
+				type_string(target.loading_command);
+			}
+
+			if(target.should_shift_restart) {
+				shift_restart_counter_ = 1000000;
+			}
 		}
 
 		~ConcreteMachine() {
 			audio_queue_.flush();
-		}
-
-		void set_rom(ROMSlot slot, const std::vector<uint8_t> &data, bool is_writeable) override final {
-			uint8_t *target = nullptr;
-			switch(slot) {
-				case ROMSlotDFS:	dfs_ = data;			return;
-				case ROMSlotADFS1:	adfs1_ = data;			return;
-				case ROMSlotADFS2:	adfs2_ = data;			return;
-
-				case ROMSlotOS:		target = os_;			break;
-				default:
-					target = roms_[slot];
-					rom_write_masks_[slot] = is_writeable;
-				break;
-			}
-
-			// Copy in, with mirroring.
-			std::size_t rom_ptr = 0;
-			while(rom_ptr < 16384) {
-				std::size_t size_to_copy = std::min(16384 - rom_ptr, data.size());
-				std::memcpy(&target[rom_ptr], data.data(), size_to_copy);
-				rom_ptr += size_to_copy;
-			}
-		}
-
-		// Obtains the system ROMs.
-		bool set_rom_fetcher(const std::function<std::vector<std::unique_ptr<std::vector<uint8_t>>>(const std::string &machine, const std::vector<std::string> &names)> &roms_with_names) override {
-			auto roms = roms_with_names(
-				"Electron",
-				{
-					"DFS-1770-2.20.rom",
-					"ADFS-E00_1.rom",	"ADFS-E00_2.rom",
-					"basic.rom",		"os.rom"
-				});
-			ROMSlot slots[] = {
-				ROMSlotDFS,
-				ROMSlotADFS1, ROMSlotADFS2,
-				ROMSlotBASIC, ROMSlotOS
-			};
-
-			for(std::size_t index = 0; index < roms.size(); ++index) {
-				auto &data = roms[index];
-				if(!data) return false;
-				set_rom(slots[index], *data, false);
-			}
-
-			return true;
 		}
 
 		void set_key_state(uint16_t key, bool isPressed) override final {
@@ -128,48 +124,26 @@ class ConcreteMachine:
 			if(is_holding_shift_) set_key_state(KeyShift, true);
 		}
 
-		void configure_as_target(const Analyser::Static::Target *target) override final {
-			auto *const acorn_target = dynamic_cast<const Analyser::Static::Acorn::Target *>(target);
-
-			if(target->loading_command.length()) {
-				type_string(target->loading_command);
-			}
-
-			if(acorn_target->should_shift_restart) {
-				shift_restart_counter_ = 1000000;
-			}
-
-			if(acorn_target->has_dfs || acorn_target->has_adfs) {
-				plus3_.reset(new Plus3);
-
-				if(acorn_target->has_dfs) {
-					set_rom(ROMSlot0, dfs_, true);
-				}
-				if(acorn_target->has_adfs) {
-					set_rom(ROMSlot4, adfs1_, true);
-					set_rom(ROMSlot5, adfs2_, true);
-				}
-			}
-
-			insert_media(target->media);
-		}
-
 		bool insert_media(const Analyser::Static::Media &media) override final {
 			if(!media.tapes.empty()) {
 				tape_.set_tape(media.tapes.front());
 			}
+			set_use_fast_tape_hack();
 
 			if(!media.disks.empty() && plus3_) {
 				plus3_->set_disk(media.disks.front(), 0);
 			}
 
-			ROMSlot slot = ROMSlot12;
+			ROM slot = ROM::Slot12;
 			for(std::shared_ptr<Storage::Cartridge::Cartridge> cartridge : media.cartridges) {
+				const ROM first_slot_tried = slot;
+				while(rom_inserted_[static_cast<int>(slot)]) {
+					slot = static_cast<ROM>((static_cast<int>(slot) + 1) & 15);
+					if(slot == first_slot_tried) return false;
+				}
 				set_rom(slot, cartridge->get_segments().front().data, false);
-				slot = static_cast<ROMSlot>((static_cast<int>(slot) + 1)&15);
 			}
 
-			set_use_fast_tape_hack();
 			return !media.tapes.empty() || !media.disks.empty() || !media.cartridges.empty();
 		}
 
@@ -210,12 +184,15 @@ class ConcreteMachine:
 
 							tape_.set_is_enabled((*value & 6) != 6);
 							tape_.set_is_in_input_mode((*value & 6) == 0);
-							tape_.set_is_running(((*value)&0x40) ? true : false);
+							tape_.set_is_running((*value & 0x40) ? true : false);
 
-							// TODO: caps lock LED
+							caps_led_state_ = !!(*value & 0x80);
+							if(activity_observer_)
+								activity_observer_->set_led_status(caps_led, caps_led_state_);
 						}
 
-					// deliberate fallthrough
+					// deliberate fallthrough; fe07 contains the display mode.
+
 					case 0xfe02: case 0xfe03:
 					case 0xfe08: case 0xfe09: case 0xfe0a: case 0xfe0b:
 					case 0xfe0c: case 0xfe0d: case 0xfe0e: case 0xfe0f:
@@ -248,7 +225,7 @@ class ConcreteMachine:
 							}
 
 							// latch the paged ROM in case external hardware is being emulated
-							active_rom_ = (Electron::ROMSlot)(*value & 0xf);
+							active_rom_ = *value & 0xf;
 
 							// apply the ULA's test
 							if(*value & 0x08) {
@@ -317,8 +294,6 @@ class ConcreteMachine:
 										if(!ram_[0x247] && service_call == 14) {
 											tape_.set_delegate(nullptr);
 
-											// TODO: handle tape wrap around.
-
 											int cycles_left_while_plausibly_in_data = 50;
 											tape_.clear_interrupts(Interrupt::ReceiveDataFull);
 											while(!tape_.get_tape()->is_at_end()) {
@@ -355,7 +330,7 @@ class ConcreteMachine:
 									}
 								}
 								if(basic_is_active_) {
-									*value &= roms_[ROMSlotBASIC][address & 16383];
+									*value &= roms_[static_cast<int>(ROM::BASIC)][address & 16383];
 								}
 							} else if(rom_write_masks_[active_rom_]) {
 								roms_[active_rom_][address & 16383] = *value;
@@ -472,7 +447,64 @@ class ConcreteMachine:
 			return selection_set;
 		}
 
+		// MARK: - Activity Source
+		void set_activity_observer(Activity::Observer *observer) override {
+			activity_observer_ = observer;
+			if(activity_observer_) {
+				activity_observer_->register_led(caps_led);
+				activity_observer_->set_led_status(caps_led, caps_led_state_);
+
+				if(plus3_) {
+					plus3_->set_activity_observer(observer);
+				}
+			}
+		}
+
 	private:
+		enum class ROM {
+			Slot0 = 0,
+			Slot1,	Slot2,	Slot3,
+			Slot4,	Slot5,	Slot6,	Slot7,
+
+			Keyboard = 8,	Slot9,
+			BASIC = 10,		Slot11,
+
+			Slot12,	Slot13,	Slot14,	Slot15,
+
+			OS,		DFS,
+			ADFS1,	ADFS2
+		};
+
+		/*!
+			Sets the contents of @c slot to @c data. If @c is_writeable is @c true then writing to the slot
+			is enabled: it acts as if it were sideways RAM. Otherwise the slot is modelled as containing ROM.
+		*/
+		void set_rom(ROM slot, const std::vector<uint8_t> &data, bool is_writeable) {
+			uint8_t *target = nullptr;
+			switch(slot) {
+				case ROM::DFS:		dfs_ = data;			return;
+				case ROM::ADFS1:	adfs1_ = data;			return;
+				case ROM::ADFS2:	adfs2_ = data;			return;
+
+				case ROM::OS:		target = os_;			break;
+				default:
+					target = roms_[static_cast<int>(slot)];
+					rom_write_masks_[static_cast<int>(slot)] = is_writeable;
+				break;
+			}
+
+			// Copy in, with mirroring.
+			std::size_t rom_ptr = 0;
+			while(rom_ptr < 16384) {
+				std::size_t size_to_copy = std::min(16384 - rom_ptr, data.size());
+				std::memcpy(&target[rom_ptr], data.data(), size_to_copy);
+				rom_ptr += size_to_copy;
+			}
+
+			if(static_cast<int>(slot) < 16)
+				rom_inserted_[static_cast<int>(slot)] = true;
+		}
+
 		// MARK: - Work deferral updates.
 		inline void update_display() {
 			if(cycles_since_display_update_ > 0) {
@@ -509,16 +541,17 @@ class ConcreteMachine:
 			m6502_.set_irq_line(interrupt_status_ & 1);
 		}
 
-		CPU::MOS6502::Processor<ConcreteMachine, false> m6502_;
+		CPU::MOS6502::Processor<CPU::MOS6502::Personality::P6502, ConcreteMachine, false> m6502_;
 
 		// Things that directly constitute the memory map.
 		uint8_t roms_[16][16384];
+		bool rom_inserted_[16] = {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false};
 		bool rom_write_masks_[16] = {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false};
 		uint8_t os_[16384], ram_[32768];
 		std::vector<uint8_t> dfs_, adfs1_, adfs2_;
 
 		// Paging
-		ROMSlot active_rom_ = ROMSlot::ROMSlot0;
+		int active_rom_ = static_cast<int>(ROM::Slot0);
 		bool keyboard_is_active_ = false;
 		bool basic_is_active_ = false;
 
@@ -557,14 +590,21 @@ class ConcreteMachine:
 		Outputs::Speaker::LowpassSpeaker<SoundGenerator> speaker_;
 
 		bool speaker_is_enabled_ = false;
+
+		// MARK: - Caps Lock status and the activity observer.
+		const std::string caps_led = "CAPS";
+		bool caps_led_state_ = false;
+		Activity::Observer *activity_observer_ = nullptr;
 };
 
 }
 
 using namespace Electron;
 
-Machine *Machine::Electron() {
-	return new Electron::ConcreteMachine;
+Machine *Machine::Electron(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
+	using Target = Analyser::Static::Acorn::Target;
+	const Target *const acorn_target = dynamic_cast<const Target *>(target);
+	return new Electron::ConcreteMachine(*acorn_target, rom_fetcher);
 }
 
 Machine::~Machine() {}

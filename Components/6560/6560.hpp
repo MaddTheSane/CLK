@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 05/06/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #ifndef _560_hpp
@@ -69,7 +69,7 @@ template <class BusHandler> class MOS6560 {
 				speaker_(audio_generator_)
 		{
 			crt_->set_svideo_sampling_function(
-				"vec2 svideo_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase)"
+				"vec2 svideo_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase, float amplitude)"
 				"{"
 					"vec2 yc = texture(texID, coordinate).rg / vec2(255.0);"
 
@@ -107,7 +107,7 @@ template <class BusHandler> class MOS6560 {
 		void set_output_mode(OutputMode output_mode) {
 			output_mode_ = output_mode;
 
-			// Luminances are encoded trivially: on a 0–255 scale.
+			// Luminances are encoded trivially: on a 0-255 scale.
 			const uint8_t luminances[16] = {
 				0,		255,	64,		192,
 				128,	128,	64,		192,
@@ -115,7 +115,7 @@ template <class BusHandler> class MOS6560 {
 				192,	192,	128,	255
 			};
 
-			// Chrominances are encoded such that 0–128 is a complete revolution of phase;
+			// Chrominances are encoded such that 0-128 is a complete revolution of phase;
 			// anything above 191 disables the colour subcarrier. Phase is relative to the
 			// colour burst, so 0 is green.
 			const uint8_t pal_chrominances[16] = {
@@ -125,10 +125,10 @@ template <class BusHandler> class MOS6560 {
 				19,		86,		123,	59,
 			};
 			const uint8_t ntsc_chrominances[16] = {
-				255,	255,	7,		71,
-				25,		86,		48,		112,
-				0,		119,	7,		71,
-				25,		86,		48,		112,
+				255,	255,	121,	57,
+				103,	42,		80,		16,
+				0,		9,		121,	57,
+				103,	42,		80,		16,
 			};
 			const uint8_t *chrominances;
 			Outputs::CRT::DisplayType display_type;
@@ -287,7 +287,7 @@ template <class BusHandler> class MOS6560 {
 						case State::Sync:			crt_->output_sync(cycles_in_state_ * 4);														break;
 						case State::ColourBurst:	crt_->output_colour_burst(cycles_in_state_ * 4, (is_odd_frame_ || is_odd_line_) ? 128 : 0);		break;
 						case State::Border:			output_border(cycles_in_state_ * 4);															break;
-						case State::Pixels:			crt_->output_data(cycles_in_state_ * 4, 1);														break;
+						case State::Pixels:			crt_->output_data(cycles_in_state_ * 4);														break;
 					}
 					output_state_ = this_state_;
 					cycles_in_state_ = 0;

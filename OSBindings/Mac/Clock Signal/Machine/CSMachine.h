@@ -3,7 +3,7 @@
 //  Clock Signal
 //
 //  Created by Thomas Harte on 04/01/2016.
-//  Copyright © 2016 Thomas Harte. All rights reserved.
+//  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>
@@ -12,16 +12,24 @@
 #import "CSFastLoading.h"
 #import "CSOpenGLView.h"
 #import "CSStaticAnalyser.h"
+#import "CSJoystickManager.h"
 
 @class CSMachine;
 @protocol CSMachineDelegate <NSObject>
 - (void)machineSpeakerDidChangeInputClock:(nonnull CSMachine *)machine;
+- (void)machine:(nonnull CSMachine *)machine led:(nonnull NSString *)led didChangeToLit:(BOOL)isLit;
+- (void)machine:(nonnull CSMachine *)machine ledShouldBlink:(nonnull NSString *)led;
 @end
 
 typedef NS_ENUM(NSInteger, CSMachineVideoSignal) {
 	CSMachineVideoSignalComposite,
 	CSMachineVideoSignalSVideo,
 	CSMachineVideoSignalRGB
+};
+
+typedef NS_ENUM(NSInteger, CSMachineKeyboardInputMode) {
+	CSMachineKeyboardInputModeKeyboard,
+	CSMachineKeyboardInputModeJoystick
 };
 
 // Deliberately low; to ensure CSMachine has been declared as an @class already.
@@ -32,38 +40,51 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface CSMachine : NSObject
 
-- (instancetype)init NS_UNAVAILABLE;
+- (nonnull instancetype)init NS_UNAVAILABLE;
+
 /*!
 	Initialises an instance of CSMachine.
 
 	@param result The CSStaticAnalyser result that describes the machine needed.
 */
-- (nullable instancetype)initWithAnalyser:(CSStaticAnalyser *)result NS_DESIGNATED_INITIALIZER;
+- (nullable instancetype)initWithAnalyser:(nonnull CSStaticAnalyser *)result NS_DESIGNATED_INITIALIZER;
 
 - (void)runForInterval:(NSTimeInterval)interval;
 
 - (float)idealSamplingRateFromRange:(NSRange)range;
 - (void)setAudioSamplingRate:(float)samplingRate bufferSize:(NSUInteger)bufferSize;
 
-- (void)setView:(CSOpenGLView *)view aspectRatio:(float)aspectRatio;
+- (void)setView:(nullable CSOpenGLView *)view aspectRatio:(float)aspectRatio;
 - (void)drawViewForPixelSize:(CGSize)pixelSize onlyIfDirty:(BOOL)onlyIfDirty;
 
 - (void)setKey:(uint16_t)key characters:(nullable NSString *)characters isPressed:(BOOL)isPressed;
 - (void)clearAllKeys;
 
-@property (nonatomic, strong) CSAudioQueue *audioQueue;
-@property (nonatomic, readonly) CSOpenGLView *view;
-@property (nonatomic, weak) id<CSMachineDelegate> delegate;
+@property (nonatomic, strong, nullable) CSAudioQueue *audioQueue;
+@property (nonatomic, readonly, nonnull) CSOpenGLView *view;
+@property (nonatomic, weak, nullable) id<CSMachineDelegate> delegate;
 
-@property (nonatomic, readonly) NSString *userDefaultsPrefix;
+@property (nonatomic, readonly, nonnull) NSString *userDefaultsPrefix;
 
-- (void)paste:(NSString *)string;
+- (void)paste:(nonnull NSString *)string;
+@property (nonatomic, readonly, nonnull) NSBitmapImageRep *imageRepresentation;
 
 @property (nonatomic, assign) BOOL useFastLoadingHack;
 @property (nonatomic, assign) CSMachineVideoSignal videoSignal;
 @property (nonatomic, assign) BOOL useAutomaticTapeMotorControl;
 
+@property (nonatomic, readonly) BOOL canInsertMedia;
+
 - (bool)supportsVideoSignal:(CSMachineVideoSignal)videoSignal;
+
+// Input control.
+@property (nonatomic, readonly) BOOL hasKeyboard;
+@property (nonatomic, readonly) BOOL hasJoystick;
+@property (nonatomic, assign) CSMachineKeyboardInputMode inputMode;
+@property (nonatomic, nullable) CSJoystickManager *joystickManager;
+
+// LED list.
+@property (nonatomic, readonly, nonnull) NSArray<NSString *> *leds;
 
 // Special-case accessors; undefined behaviour if accessed for a machine not of the corresponding type.
 @property (nonatomic, readonly, nullable) CSAtari2600 *atari2600;
