@@ -1498,6 +1498,7 @@
 		4B055A761FAE78210060FFFF /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				4BC76E6A1C98F43700E6EF73 /* Accelerate.framework */,
 				4B055AF01FAE9C080060FFFF /* OpenGL.framework */,
 				4B055A771FAE78210060FFFF /* SDL2.framework */,
 			);
@@ -2728,7 +2729,6 @@
 		4BB73E951B587A5100552FC2 = {
 			isa = PBXGroup;
 			children = (
-				4BC76E6A1C98F43700E6EF73 /* Accelerate.framework */,
 				4B51F70820A521D700AFA2C1 /* Activity */,
 				4B8944E2201967B4007DE474 /* Analyser */,
 				4BB73EA01B587A5100552FC2 /* Clock Signal */,
@@ -2738,16 +2738,16 @@
 				4BC9DF4A1D04691600F44158 /* Components */,
 				4B3940E81DA83C8700427841 /* Concurrency */,
 				4B31B88E1FBFBCD800C140D5 /* Configurable */,
-				4B055A761FAE78210060FFFF /* Frameworks */,
 				4B86E2581F8C628F006FAA45 /* Inputs */,
 				4BB73EDC1B587CA500552FC2 /* Machines */,
 				4BB697C81D4B559300248BDF /* NumberTheory */,
 				4B366DFD1B5C165F0026627B /* Outputs */,
 				4BB73EDD1B587CA500552FC2 /* Processors */,
-				4BB73E9F1B587A5100552FC2 /* Products */,
 				4B055A7B1FAE84A50060FFFF /* SDL */,
 				4B2409591C45DF85004DA684 /* SignalProcessing */,
 				4B69FB391C4D908A00B5F0AA /* Storage */,
+				4B055A761FAE78210060FFFF /* Frameworks */,
+				4BB73E9F1B587A5100552FC2 /* Products */,
 			);
 			indentWidth = 4;
 			sourceTree = "<group>";
