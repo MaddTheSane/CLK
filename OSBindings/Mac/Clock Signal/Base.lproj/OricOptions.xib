@@ -17,13 +17,13 @@
             <windowStyleMask key="styleMask" titled="YES" closable="YES" utility="YES" nonactivatingPanel="YES" HUD="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="80" y="150" width="200" height="83"/>
-            <rect key="screenRect" x="0.0" y="0.0" width="1440" height="900"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="1440" height="877"/>
             <view key="contentView" id="tpZ-0B-QQu">
                 <rect key="frame" x="0.0" y="0.0" width="200" height="83"/>
                 <autoresizingMask key="autoresizingMask"/>
                 <subviews>
                     <button translatesAutoresizingMaskIntoConstraints="NO" id="zPG-yW-4Gy">
-                        <rect key="frame" x="18" y="47" width="164" height="18"/>
+                        <rect key="frame" x="18" y="47" width="101" height="18"/>
                         <buttonCell key="cell" type="check" title="Load Quickly" bezelStyle="regularSquare" imagePosition="left" state="on" inset="2" id="alI-Mw-35c">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
@@ -50,13 +50,13 @@
                     </popUpButton>
                 </subviews>
                 <constraints>
-                    <constraint firstAttribute="trailing" secondItem="zPG-yW-4Gy" secondAttribute="trailing" constant="20" id="Mtb-hf-4ap"/>
+                    <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="zPG-yW-4Gy" secondAttribute="trailing" constant="20" symbolic="YES" id="Mtb-hf-4ap"/>
                     <constraint firstItem="rh8-km-57n" firstAttribute="top" secondItem="zPG-yW-4Gy" secondAttribute="bottom" constant="8" id="ScX-pe-t0x"/>
-                    <constraint firstItem="rh8-km-57n" firstAttribute="leading" secondItem="tpZ-0B-QQu" secondAttribute="leading" constant="20" id="VRo-6R-IKd"/>
-                    <constraint firstAttribute="bottom" secondItem="rh8-km-57n" secondAttribute="bottom" constant="20" id="g0Y-mW-nla"/>
-                    <constraint firstItem="zPG-yW-4Gy" firstAttribute="leading" secondItem="tpZ-0B-QQu" secondAttribute="leading" constant="20" id="imk-5k-8nm"/>
-                    <constraint firstItem="zPG-yW-4Gy" firstAttribute="top" secondItem="tpZ-0B-QQu" secondAttribute="top" constant="20" id="jAt-iF-uaT"/>
-                    <constraint firstAttribute="trailing" secondItem="rh8-km-57n" secondAttribute="trailing" constant="20" id="urO-Ac-aqK"/>
+                    <constraint firstItem="rh8-km-57n" firstAttribute="leading" secondItem="tpZ-0B-QQu" secondAttribute="leading" constant="20" symbolic="YES" id="VRo-6R-IKd"/>
+                    <constraint firstAttribute="bottom" secondItem="rh8-km-57n" secondAttribute="bottom" constant="20" symbolic="YES" id="g0Y-mW-nla"/>
+                    <constraint firstItem="zPG-yW-4Gy" firstAttribute="leading" secondItem="tpZ-0B-QQu" secondAttribute="leading" constant="20" symbolic="YES" id="imk-5k-8nm"/>
+                    <constraint firstItem="zPG-yW-4Gy" firstAttribute="top" secondItem="tpZ-0B-QQu" secondAttribute="top" constant="20" symbolic="YES" id="jAt-iF-uaT"/>
+                    <constraint firstAttribute="trailing" secondItem="rh8-km-57n" secondAttribute="trailing" constant="20" symbolic="YES" id="urO-Ac-aqK"/>
                 </constraints>
             </view>
             <connections>

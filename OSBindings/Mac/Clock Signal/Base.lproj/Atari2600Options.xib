@@ -17,7 +17,7 @@
             <windowStyleMask key="styleMask" titled="YES" closable="YES" utility="YES" nonactivatingPanel="YES" HUD="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="80" y="150" width="200" height="121"/>
-            <rect key="screenRect" x="0.0" y="0.0" width="1440" height="900"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="1440" height="877"/>
             <view key="contentView" id="aQh-Pm-DEo">
                 <rect key="frame" x="0.0" y="0.0" width="200" height="121"/>
                 <autoresizingMask key="autoresizingMask"/>
@@ -33,7 +33,7 @@
                         </connections>
                     </button>
                     <button translatesAutoresizingMaskIntoConstraints="NO" id="3qw-C1-NYW">
-                        <rect key="frame" x="18" y="58" width="164" height="18"/>
+                        <rect key="frame" x="18" y="58" width="120" height="18"/>
                         <buttonCell key="cell" type="check" title="Black and White" bezelStyle="regularSquare" imagePosition="left" inset="2" id="UP7-mf-IKo">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
@@ -43,7 +43,7 @@
                         </connections>
                     </button>
                     <button translatesAutoresizingMaskIntoConstraints="NO" id="Xbc-cw-Sc2">
-                        <rect key="frame" x="18" y="38" width="164" height="18"/>
+                        <rect key="frame" x="18" y="38" width="145" height="18"/>
                         <buttonCell key="cell" type="check" title="Left Player Difficulty" bezelStyle="regularSquare" imagePosition="left" inset="2" id="wlJ-8s-PEh">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
@@ -53,7 +53,7 @@
                         </connections>
                     </button>
                     <button translatesAutoresizingMaskIntoConstraints="NO" id="kPV-Tm-TTc">
-                        <rect key="frame" x="18" y="18" width="164" height="18"/>
+                        <rect key="frame" x="18" y="18" width="153" height="18"/>
                         <buttonCell key="cell" type="check" title="Right Player Difficulty" bezelStyle="regularSquare" imagePosition="left" inset="2" id="F05-cA-66S">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
@@ -74,21 +74,21 @@
                     </button>
                 </subviews>
                 <constraints>
-                    <constraint firstItem="3qw-C1-NYW" firstAttribute="leading" secondItem="aQh-Pm-DEo" secondAttribute="leading" constant="20" id="1Ri-ZO-GJy"/>
-                    <constraint firstItem="nt7-8K-xY9" firstAttribute="leading" secondItem="rQO-uD-fwn" secondAttribute="trailing" constant="12" id="46p-Z3-kgW"/>
-                    <constraint firstItem="nt7-8K-xY9" firstAttribute="top" secondItem="aQh-Pm-DEo" secondAttribute="top" constant="20" id="6Uc-12-11y"/>
-                    <constraint firstItem="Xbc-cw-Sc2" firstAttribute="leading" secondItem="aQh-Pm-DEo" secondAttribute="leading" constant="20" id="7es-iv-JOh"/>
-                    <constraint firstItem="kPV-Tm-TTc" firstAttribute="top" secondItem="Xbc-cw-Sc2" secondAttribute="bottom" constant="6" id="Env-nl-M2e"/>
-                    <constraint firstAttribute="trailing" secondItem="kPV-Tm-TTc" secondAttribute="trailing" constant="20" id="Fim-Ej-8Ux"/>
-                    <constraint firstAttribute="trailing" secondItem="Xbc-cw-Sc2" secondAttribute="trailing" constant="20" id="HkS-6c-WZm"/>
+                    <constraint firstItem="3qw-C1-NYW" firstAttribute="leading" secondItem="aQh-Pm-DEo" secondAttribute="leading" constant="20" symbolic="YES" id="1Ri-ZO-GJy"/>
+                    <constraint firstItem="nt7-8K-xY9" firstAttribute="leading" secondItem="rQO-uD-fwn" secondAttribute="trailing" constant="12" symbolic="YES" id="46p-Z3-kgW"/>
+                    <constraint firstItem="nt7-8K-xY9" firstAttribute="top" secondItem="aQh-Pm-DEo" secondAttribute="top" constant="20" symbolic="YES" id="6Uc-12-11y"/>
+                    <constraint firstItem="Xbc-cw-Sc2" firstAttribute="leading" secondItem="aQh-Pm-DEo" secondAttribute="leading" constant="20" symbolic="YES" id="7es-iv-JOh"/>
+                    <constraint firstItem="kPV-Tm-TTc" firstAttribute="top" secondItem="Xbc-cw-Sc2" secondAttribute="bottom" constant="6" symbolic="YES" id="Env-nl-M2e"/>
+                    <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="kPV-Tm-TTc" secondAttribute="trailing" constant="20" symbolic="YES" id="Fim-Ej-8Ux"/>
+                    <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="Xbc-cw-Sc2" secondAttribute="trailing" constant="20" symbolic="YES" id="HkS-6c-WZm"/>
                     <constraint firstItem="3qw-C1-NYW" firstAttribute="top" secondItem="nt7-8K-xY9" secondAttribute="bottom" constant="6" id="Hxq-Pm-o4G"/>
-                    <constraint firstAttribute="trailing" secondItem="nt7-8K-xY9" secondAttribute="trailing" constant="20" id="JRO-de-WQp"/>
-                    <constraint firstItem="rQO-uD-fwn" firstAttribute="top" secondItem="aQh-Pm-DEo" secondAttribute="top" constant="20" id="N3p-aY-2Nx"/>
+                    <constraint firstAttribute="trailing" secondItem="nt7-8K-xY9" secondAttribute="trailing" constant="20" symbolic="YES" id="JRO-de-WQp"/>
+                    <constraint firstItem="rQO-uD-fwn" firstAttribute="top" secondItem="aQh-Pm-DEo" secondAttribute="top" constant="20" symbolic="YES" id="N3p-aY-2Nx"/>
                     <constraint firstItem="nt7-8K-xY9" firstAttribute="width" secondItem="rQO-uD-fwn" secondAttribute="width" id="NOc-hJ-8Mm"/>
-                    <constraint firstItem="Xbc-cw-Sc2" firstAttribute="top" secondItem="3qw-C1-NYW" secondAttribute="bottom" constant="6" id="ORX-bF-2WS"/>
-                    <constraint firstItem="kPV-Tm-TTc" firstAttribute="leading" secondItem="aQh-Pm-DEo" secondAttribute="leading" constant="20" id="x8p-Hm-xeu"/>
-                    <constraint firstItem="rQO-uD-fwn" firstAttribute="leading" secondItem="aQh-Pm-DEo" secondAttribute="leading" constant="20" id="xhD-iY-vt2"/>
-                    <constraint firstAttribute="trailing" secondItem="3qw-C1-NYW" secondAttribute="trailing" constant="20" id="yff-e9-OBY"/>
+                    <constraint firstItem="Xbc-cw-Sc2" firstAttribute="top" secondItem="3qw-C1-NYW" secondAttribute="bottom" constant="6" symbolic="YES" id="ORX-bF-2WS"/>
+                    <constraint firstItem="kPV-Tm-TTc" firstAttribute="leading" secondItem="aQh-Pm-DEo" secondAttribute="leading" constant="20" symbolic="YES" id="x8p-Hm-xeu"/>
+                    <constraint firstItem="rQO-uD-fwn" firstAttribute="leading" secondItem="aQh-Pm-DEo" secondAttribute="leading" constant="20" symbolic="YES" id="xhD-iY-vt2"/>
+                    <constraint firstAttribute="trailing" relation="greaterThanOrEqual" secondItem="3qw-C1-NYW" secondAttribute="trailing" constant="20" symbolic="YES" id="yff-e9-OBY"/>
                 </constraints>
             </view>
             <connections>

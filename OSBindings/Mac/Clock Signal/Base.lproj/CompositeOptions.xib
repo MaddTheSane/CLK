@@ -17,7 +17,7 @@
             <windowStyleMask key="styleMask" titled="YES" closable="YES" utility="YES" nonactivatingPanel="YES" HUD="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="80" y="150" width="200" height="61"/>
-            <rect key="screenRect" x="0.0" y="0.0" width="1440" height="900"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="1440" height="877"/>
             <view key="contentView" id="tpZ-0B-QQu">
                 <rect key="frame" x="0.0" y="0.0" width="200" height="61"/>
                 <autoresizingMask key="autoresizingMask"/>
@@ -41,10 +41,10 @@
                     </popUpButton>
                 </subviews>
                 <constraints>
-                    <constraint firstItem="rh8-km-57n" firstAttribute="top" secondItem="tpZ-0B-QQu" secondAttribute="top" constant="20" id="B6L-VS-2cN"/>
-                    <constraint firstItem="rh8-km-57n" firstAttribute="leading" secondItem="tpZ-0B-QQu" secondAttribute="leading" constant="20" id="VRo-6R-IKd"/>
-                    <constraint firstAttribute="bottom" secondItem="rh8-km-57n" secondAttribute="bottom" constant="20" id="jHA-lf-e7V"/>
-                    <constraint firstAttribute="trailing" secondItem="rh8-km-57n" secondAttribute="trailing" constant="20" id="urO-Ac-aqK"/>
+                    <constraint firstItem="rh8-km-57n" firstAttribute="top" secondItem="tpZ-0B-QQu" secondAttribute="top" constant="20" symbolic="YES" id="B6L-VS-2cN"/>
+                    <constraint firstItem="rh8-km-57n" firstAttribute="leading" secondItem="tpZ-0B-QQu" secondAttribute="leading" constant="20" symbolic="YES" id="VRo-6R-IKd"/>
+                    <constraint firstAttribute="bottom" secondItem="rh8-km-57n" secondAttribute="bottom" constant="20" symbolic="YES" id="jHA-lf-e7V"/>
+                    <constraint firstAttribute="trailing" secondItem="rh8-km-57n" secondAttribute="trailing" constant="20" symbolic="YES" id="urO-Ac-aqK"/>
                 </constraints>
             </view>
             <connections>
