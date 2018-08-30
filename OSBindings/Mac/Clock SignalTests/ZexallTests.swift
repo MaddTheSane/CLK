@@ -48,7 +48,7 @@ class ZexallTests: XCTestCase, CSTestMachineTrapHandler {
 				let startDate = Date()
 				var printDate = Date()
 				while !done {
-					machine.runForNumber(ofCycles: cyclesPerIteration)
+					machine.runForNumberOfCycles(cyclesPerIteration)
 					cyclesToDate += TimeInterval(cyclesPerIteration)
 					if printDate.timeIntervalSinceNow < -5.0 {
 						print("\(cyclesToDate / -startDate.timeIntervalSinceNow) Mhz")

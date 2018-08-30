@@ -20,7 +20,7 @@ class AllSuiteATests: XCTestCase {
 
 				machine.setValue(0x4000, for: CSTestMachine6502Register.programCounter)
 				while !machine.isJammed {
-					machine.runForNumber(ofCycles: 1000)
+					machine.runForNumberOfCycles(1000)
 				}
 
 				XCTAssert(machine.value(forAddress: 0x0210) == 0xff, "Failed test \(machine.value(forAddress: 0x0210))")

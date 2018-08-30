@@ -10,7 +10,7 @@
 
 @class CSTestMachine;
 
-@protocol CSTestMachineTrapHandler
+@protocol CSTestMachineTrapHandler <NSObject>
 - (void)testMachine:(nonnull CSTestMachine *)testMachine didTrapAtAddress:(uint16_t)address;
 @end
 

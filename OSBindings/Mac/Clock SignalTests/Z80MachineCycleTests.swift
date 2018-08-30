@@ -45,7 +45,7 @@ class Z80MachineCycleTests: XCTestCase {
 
 		// Run the machine, capturing bus activity
 		machine.captureBusActivity = true
-		machine.runForNumber(ofCycles: totalCycles)
+		machine.runForNumberOfCycles(totalCycles)
 
 		// Check the results
 		totalCycles = 0

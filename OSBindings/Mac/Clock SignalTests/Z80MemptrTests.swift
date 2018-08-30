@@ -19,7 +19,7 @@ class Z80MemptrTests: XCTestCase {
 		// Set the initial value of memptr, run for the requested number of cycles,
 		// return the new value
 		machine.setValue(initialValue, for: .memPtr)
-		machine.runForNumber(ofCycles: length)
+		machine.runForNumberOfCycles(length)
 		return machine.value(for: .memPtr)
 	}
 
@@ -321,7 +321,7 @@ class Z80MemptrTests: XCTestCase {
 
 		for c in 1 ..< 65536 {
 			machine.setValue(0x0000, for: .programCounter)
-			machine.runForNumber(ofCycles: 16)
+			machine.runForNumberOfCycles(16)
 			XCTAssertEqual(UInt16(c), machine.value(for: .memPtr))
 		}
 	}
@@ -337,7 +337,7 @@ class Z80MemptrTests: XCTestCase {
 
 		for c in 1 ..< 65536 {
 			machine.setValue(0x0000, for: .programCounter)
-			machine.runForNumber(ofCycles: 16)
+			machine.runForNumberOfCycles(16)
 			XCTAssertEqual(UInt16(65536 - c), machine.value(for: .memPtr))
 		}
 	}

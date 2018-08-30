@@ -215,7 +215,7 @@ class MOS6502TimingTests: XCTestCase, CSTestMachineTrapHandler {
 
 		self.endTime = 0
 		while self.endTime == 0 {
-			machine.runForNumber(ofCycles: 10)
+			machine.runForNumberOfCycles(10)
 		}
 
 		XCTAssert(self.endTime == expectedRunLength, "Took \(self.endTime) cycles to perform rather than \(expectedRunLength)")

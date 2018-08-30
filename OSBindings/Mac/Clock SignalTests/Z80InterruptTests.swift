@@ -38,15 +38,15 @@ class Z80InterruptTests: XCTestCase {
 		machine.setValue(0, for: .stackPointer)
 
 		// run for four cycles, and signal an NMI
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		machine.nmiLine = true
 
 		// run for four more cycles to get to where the NMI should be recognised
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		XCTAssertEqual(machine.value(for: .programCounter), 0x0102)
 
 		// run for eleven more cycles to allow the NMI to begin
-		machine.runForNumber(ofCycles: 11)
+		machine.runForNumberOfCycles(11)
 
 		assertNMI(machine: machine)
 	}
@@ -65,27 +65,27 @@ class Z80InterruptTests: XCTestCase {
 		machine.setValue(0, for: .stackPointer)
 
 		// run for ten cycles, check that the processor is halted and assert an NMI
-		machine.runForNumber(ofCycles: 10)
+		machine.runForNumberOfCycles(10)
 		XCTAssert(machine.isHalted, "Machine should be halted")
 		machine.nmiLine = true
 
 		// check that the machine ceases believing itsef to be halted after two cycles
-		machine.runForNumber(ofCycles: 1)
+		machine.runForNumberOfCycles(1)
 		XCTAssert(machine.isHalted, "Machine should still be halted")
-		machine.runForNumber(ofCycles: 1)
+		machine.runForNumberOfCycles(1)
 		XCTAssert(!machine.isHalted, "Machine should no longer be halted")
 
 		// assert wait
 		machine.waitLine = true
 
 		// run for twenty cycles, an arbitrary big number
-		machine.runForNumber(ofCycles: 20)
+		machine.runForNumberOfCycles(20)
 
 		// release wait
 		machine.waitLine = false
 
 		// NMI should have run for two cycles, then waited, so now there should be nine cycles left
-		machine.runForNumber(ofCycles: 9)
+		machine.runForNumberOfCycles(9)
 		assertNMI(machine: machine)
 	}
 
@@ -106,15 +106,15 @@ class Z80InterruptTests: XCTestCase {
 		machine.setValue(0xfb, atAddress: 0x0103)
 
 		// run for four cycles, signal IRQ and run for 8 more
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		machine.irqLine = true
-		machine.runForNumber(ofCycles: 8)
+		machine.runForNumberOfCycles(8)
 
 		// confirm that the request was ignored
 		XCTAssertEqual(machine.value(for: .programCounter), 0x0103)
 
 		// run for 12 more cycles, hitting the EI and, if no interrupt occured, the two NOPs after it
-		machine.runForNumber(ofCycles: 12)
+		machine.runForNumberOfCycles(12)
 
 		// confirm that an interruption occurred, causing the PC not yet to have proceeded beyond 0x0105
 		XCTAssertEqual(machine.value(for: .programCounter), 0x0105)
@@ -139,16 +139,16 @@ class Z80InterruptTests: XCTestCase {
 		machine.setValue(0x9b, atAddress: 0x0103)
 
 		// run for four cycles, and signal an IRQ
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		machine.irqLine = true
 
 		// run for four more cycles to get to where the IRQ should be recognised
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		XCTAssertEqual(machine.value(for: .programCounter), 0x0102)
 
 		// run for twelve more cycles, to complete a LD HL, nnnn with the additional two cycles
 		// of cost for it being an IRQ program
-		machine.runForNumber(ofCycles: 12)
+		machine.runForNumberOfCycles(12)
 
 		// confirm that the PC is still where it was, but HL is now 0x8383, and interrupts are disabled
 		XCTAssertEqual(machine.value(for: .programCounter), 0x0102)
@@ -176,20 +176,20 @@ class Z80InterruptTests: XCTestCase {
 		machine.setValue(0, for: .stackPointer)
 
 		// run for four cycles, and signal an IRQ
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		machine.irqLine = true
 
 		// run for four more cycles to get to where the IRQ should be recognised
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		XCTAssertEqual(machine.value(for: .programCounter), 0x0102)
 
 		// run for twelve cycles and confirm that the IRQ has yet to begin
-		machine.runForNumber(ofCycles: 12)
+		machine.runForNumberOfCycles(12)
 
 		XCTAssertNotEqual(machine.value(for: .programCounter), 0x38)
 
 		// run for one more cycles to allow the IRQ to begin
-		machine.runForNumber(ofCycles: 1)
+		machine.runForNumberOfCycles(1)
 
 		// confirm that the PC is now at 0x38, that the old is on the stack and
 		// that interrupts are now disabled
@@ -224,15 +224,15 @@ class Z80InterruptTests: XCTestCase {
 		machine.setValue(0, for: .stackPointer)
 
 		// run for four cycles, and signal an IRQ
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		machine.irqLine = true
 
 		// run for four more cycles to get to where the IRQ should be recognised
-		machine.runForNumber(ofCycles: 4)
+		machine.runForNumberOfCycles(4)
 		XCTAssertEqual(machine.value(for: .programCounter), 0x0102)
 
 		// run for nineteen more cycles, to complete the interrupt beginning
-		machine.runForNumber(ofCycles: 19)
+		machine.runForNumberOfCycles(19)
 
 		// confirm that the PC is now at 0x8049, the old is on the stack, and interrupts
 		// are disabled

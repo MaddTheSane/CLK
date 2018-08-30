@@ -195,7 +195,7 @@ class FUSETests: XCTestCase {
 				}
 			}
 
-			machine.runForNumber(ofCycles: Int32(targetState.tStates))
+			machine.runForNumberOfCycles(Int32(targetState.tStates))
 
 			// Verify that exactly the right number of cycles was hit; this is a primitive cycle length tester.
 			let halfCyclesRun = machine.completedHalfCycles

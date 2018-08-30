@@ -249,7 +249,7 @@ class WolfgangLorenzTests: XCTestCase, CSTestMachineTrapHandler {
 		}
 
 		while !machine.isJammed {
-			machine.runForNumber(ofCycles: 1000)
+			machine.runForNumberOfCycles(1000)
 		}
 
 		let jammedPC = machine.value(for: CSTestMachine6502Register.lastOperationAddress)

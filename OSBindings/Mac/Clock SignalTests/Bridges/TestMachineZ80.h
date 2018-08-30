@@ -52,7 +52,7 @@ typedef NS_ENUM(NSInteger, CSTestMachineZ80Register) {
 - (void)setValue:(uint8_t)value atAddress:(uint16_t)address;
 - (uint8_t)valueAtAddress:(uint16_t)address;
 
-- (void)runForNumberOfCycles:(int)cycles;
+- (void)runForNumberOfCycles:(int)cycles NS_SWIFT_NAME(runForNumberOfCycles(_:));
 
 - (void)setValue:(uint16_t)value forRegister:(CSTestMachineZ80Register)reg;
 - (uint16_t)valueForRegister:(CSTestMachineZ80Register)reg;
@@ -60,7 +60,7 @@ typedef NS_ENUM(NSInteger, CSTestMachineZ80Register) {
 @property(nonatomic, assign) BOOL captureBusActivity;
 @property(nonatomic, readonly, nonnull) NSArray<CSTestMachineZ80BusOperationCapture *> *busOperationCaptures;
 
-@property(nonatomic, readonly) BOOL isHalted;
+@property(nonatomic, readonly, getter=isHalted) BOOL halted;
 @property(nonatomic, readonly) int completedHalfCycles;
 
 @property(nonatomic) BOOL nmiLine;

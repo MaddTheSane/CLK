@@ -33,7 +33,7 @@ class BCDTest: XCTestCase, CSTestMachineTrapHandler {
 				machine.addTrapAddress(0xffee) // OSWRCH, an RTS
 
 				while(machine.value(for: .programCounter) != 0x203) {
-					machine.runForNumber(ofCycles: 1000)
+					machine.runForNumberOfCycles(1000)
 				}
 				XCTAssert(machine.value(forAddress:0x84) == 0, output)
 			}

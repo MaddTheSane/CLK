@@ -28,14 +28,14 @@ extern const uint8_t CSTestMachine6502JamOpcode;
 - (nonnull instancetype)initIs65C02:(BOOL)is65C02;
 
 - (void)setData:(nonnull NSData *)data atAddress:(uint16_t)startAddress;
-- (void)runForNumberOfCycles:(int)cycles;
+- (void)runForNumberOfCycles:(int)cycles NS_SWIFT_NAME(runForNumberOfCycles(_:));
 
 - (void)setValue:(uint8_t)value forAddress:(uint16_t)address;
 - (uint8_t)valueForAddress:(uint16_t)address;
 - (void)setValue:(uint16_t)value forRegister:(CSTestMachine6502Register)reg;
 - (uint16_t)valueForRegister:(CSTestMachine6502Register)reg;
 
-@property (nonatomic, readonly) BOOL isJammed;
+@property (nonatomic, readonly, getter=isJammed) BOOL jammed;
 @property (nonatomic, readonly) uint32_t timestamp;
 @property (nonatomic, assign) BOOL irqLine;
 @property (nonatomic, assign) BOOL nmiLine;

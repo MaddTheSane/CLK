@@ -21,11 +21,11 @@ class KlausDormannTests: XCTestCase {
 
 				while true {
 					let oldPC = machine.value(for: .lastOperationAddress)
-					machine.runForNumber(ofCycles: 1000)
+					machine.runForNumberOfCycles(1000)
 					let newPC = machine.value(for: .lastOperationAddress)
 
 					if newPC == oldPC {
-						machine.runForNumber(ofCycles: 7)
+						machine.runForNumberOfCycles(7)
 
 						let retestPC = machine.value(for: .lastOperationAddress)
 						if retestPC == oldPC {
