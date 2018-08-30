@@ -200,10 +200,8 @@ class FUSETests: XCTestCase {
 			XCTAssertEqual(finalState, targetState, "Failed processor state \(name)")
 
 			// Compare memory state.
-			let outputMemoryGroups = outputDictionary["memory"] as? [Any]
-			if let outputMemoryGroups = outputMemoryGroups {
-				for group in outputMemoryGroups {
-					let groupDictionary = group as! [String: Any]
+			if let outputMemoryGroups = outputDictionary["memory"] as? [[String: Any]] {
+				for groupDictionary in outputMemoryGroups {
 					var address = UInt16(truncating: groupDictionary["address"] as! NSNumber)
 					let data = groupDictionary["data"] as! [NSNumber]
 					for value in data {
