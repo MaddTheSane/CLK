@@ -13,7 +13,7 @@
 				<string>bin</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cartridge.png</string>
+			<string>cartridge</string>
 			<key>CFBundleTypeName</key>
 			<string>Atari 2600 Cartridge</string>
 			<key>CFBundleTypeRole</key>
@@ -21,7 +21,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -31,7 +31,7 @@
 				<string>rom</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>chip.png</string>
+			<string>chip</string>
 			<key>CFBundleTypeName</key>
 			<string>ROM Image</string>
 			<key>CFBundleTypeRole</key>
@@ -39,7 +39,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -50,7 +50,7 @@
 				<string>uef.gz</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Electron/BBC UEF Image</string>
 			<key>CFBundleTypeRole</key>
@@ -58,7 +58,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -68,7 +68,7 @@
 				<string>prg</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy525.png</string>
+			<string>floppy525</string>
 			<key>CFBundleTypeName</key>
 			<string>Commodore Program</string>
 			<key>CFBundleTypeRole</key>
@@ -76,7 +76,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -87,7 +87,7 @@
 				<string>tape</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Tape Image</string>
 			<key>CFBundleTypeRole</key>
@@ -95,7 +95,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -105,7 +105,7 @@
 				<string>g64</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy525.png</string>
+			<string>floppy525</string>
 			<key>CFBundleTypeName</key>
 			<string>Commodore Disk</string>
 			<key>CFBundleTypeRole</key>
@@ -113,7 +113,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -123,7 +123,7 @@
 				<string>d64</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy525.png</string>
+			<string>floppy525</string>
 			<key>CFBundleTypeName</key>
 			<string>Commodore 1540/1 Disk</string>
 			<key>CFBundleTypeRole</key>
@@ -131,7 +131,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -145,7 +145,7 @@
 				<string>adm</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>Electron/BBC Disk Image</string>
 			<key>CFBundleTypeRole</key>
@@ -153,7 +153,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -163,7 +163,7 @@
 				<string>dsk</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>Disk Image</string>
 			<key>CFBundleTypeRole</key>
@@ -171,7 +171,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -182,7 +182,7 @@
 				<string>80</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>ZX80 Tape Image</string>
 			<key>CFBundleTypeRole</key>
@@ -190,7 +190,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -202,7 +202,7 @@
 				<string>p81</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>ZX81 Tape Image</string>
 			<key>CFBundleTypeRole</key>
@@ -210,7 +210,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -220,7 +220,7 @@
 				<string>csw</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Tape Image</string>
 			<key>CFBundleTypeRole</key>
@@ -228,7 +228,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -238,7 +238,7 @@
 				<string>tzx</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Tape Image</string>
 			<key>CFBundleTypeRole</key>
@@ -246,7 +246,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -256,7 +256,7 @@
 				<string>cdt</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Amstrad CPC Tape Image</string>
 			<key>CFBundleTypeRole</key>
@@ -264,7 +264,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -274,7 +274,7 @@
 				<string>hfe</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>HxC Disk Image</string>
 			<key>CFBundleTypeRole</key>
@@ -282,7 +282,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -292,7 +292,7 @@
 				<string>cas</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>MSX Tape Image</string>
 			<key>CFBundleTypeRole</key>
@@ -300,7 +300,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -310,7 +310,7 @@
 				<string>dmk</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>Disk Image</string>
 			<key>CFBundleTypeRole</key>
@@ -318,7 +318,9 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
+			<key>NSDocumentClass</key>
+			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
 		<dict>
 			<key>CFBundleTypeExtensions</key>
@@ -326,7 +328,7 @@
 				<string>tsx</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>MSX Tape Image</string>
 			<key>CFBundleTypeRole</key>
@@ -334,7 +336,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -344,7 +346,7 @@
 				<string>col</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cartridge.png</string>
+			<string>cartridge</string>
 			<key>CFBundleTypeName</key>
 			<string>ColecoVision Cartridge</string>
 			<key>CFBundleTypeRole</key>
@@ -352,7 +354,7 @@
 			<key>LSItemContentTypes</key>
 			<array/>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
@@ -365,7 +367,7 @@
 				<string>po</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy525.png</string>
+			<string>floppy525</string>
 			<key>CFBundleTypeName</key>
 			<string>Apple II Disk Image</string>
 			<key>CFBundleTypeRole</key>
@@ -375,7 +377,7 @@
 				<string>public.item</string>
 			</array>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>
