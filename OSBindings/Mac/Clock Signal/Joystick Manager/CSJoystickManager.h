@@ -34,7 +34,7 @@ typedef NS_ENUM(NSInteger, CSJoystickAxisType) {
 @property(nonatomic, readonly) float position;
 @end
 
-typedef NS_OPTIONS(NSInteger, CSJoystickHatDirection) {
+typedef NS_OPTIONS(NSUInteger, CSJoystickHatDirection) {
 	CSJoystickHatDirectionUp = 1 << 0,
 	CSJoystickHatDirectionDown = 1 << 1,
 	CSJoystickHatDirectionLeft = 1 << 2,
