@@ -63,7 +63,7 @@ class KlausDormannTests: XCTestCase {
 
 		let destination = runTest(resource: "6502_functional_test", is65C02: false)
 		let error = errorForTrapAddress(destination)
-		XCTAssert(error == nil, "Failed with error \(error!)")
+		XCTAssertNil(error, "Failed with error \(error!)")
 	}
 
 	/// Runs Klaus Dorman's 65C02 tests.
@@ -112,6 +112,6 @@ class KlausDormannTests: XCTestCase {
 
 		let destination = runTest(resource: "65C02_extended_opcodes_test", is65C02: true)
 		let error = errorForTrapAddress(destination)
-		XCTAssert(error == nil, "Failed with error \(error!)")
+		XCTAssertNil(error, "Failed with error \(error!)")
 	}
 }

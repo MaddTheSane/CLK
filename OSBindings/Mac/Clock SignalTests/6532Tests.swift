@@ -92,19 +92,19 @@ class MOS6532Tests: XCTestCase {
 			$0.run(forCycles: 1)
 
 			// interrupt shouldn't be signalled yet, bit should not be set
-			XCTAssert(!$0.irqLine, "IRQ line should not be set")
+			XCTAssertFalse($0.irqLine, "IRQ line should not be set")
 			XCTAssert($0.value(forRegister: 5) == 0x00, "Counter interrupt should not be set")
 
 			// run for one more clock
 			$0.run(forCycles: 1)
 
 			// the interrupt line and bit should now be set
-			XCTAssert($0.irqLine, "IRQ line should be set")
+			XCTAssertTrue($0.irqLine, "IRQ line should be set")
 			XCTAssert($0.value(forRegister: 5) == 0x80, "Counter interrupt should be set")
 
 			// writing again to the timer should clear both
 			$0.setValue(1, forRegister:0x1c)
-			XCTAssert(!$0.irqLine, "IRQ line should be clear")
+			XCTAssertFalse($0.irqLine, "IRQ line should be clear")
 			XCTAssert($0.value(forRegister: 5) == 0x00, "Counter interrupt should not be set")
 		}
 	}
@@ -125,7 +125,7 @@ class MOS6532Tests: XCTestCase {
 			$0.setValue(0x80, forRegister:0)
 
 			// confirm that the interrupt flag is set but the line is not
-			XCTAssert(!$0.irqLine, "IRQ line should not be set")
+			XCTAssertFalse($0.irqLine, "IRQ line should not be set")
 			XCTAssert($0.value(forRegister: 5) == 0x40, "Timer interrupt bit should be set")
 
 			// reading the status register should have reset the interrupt flag
@@ -149,7 +149,7 @@ class MOS6532Tests: XCTestCase {
 			$0.setValue(0x80, forRegister:0)
 
 			// confirm that both the interrupt flag are the line are set
-			XCTAssert($0.irqLine, "IRQ line should be set")
+			XCTAssertTrue($0.irqLine, "IRQ line should be set")
 			XCTAssert($0.value(forRegister: 5) == 0x40, "Timer interrupt bit should be set")
 		}
 	}
@@ -170,7 +170,7 @@ class MOS6532Tests: XCTestCase {
 			$0.setValue(0x00, forRegister:0)
 
 			// confirm that both the interrupt flag are the line are set
-			XCTAssert($0.irqLine, "IRQ line should be set")
+			XCTAssertTrue($0.irqLine, "IRQ line should be set")
 			XCTAssert($0.value(forRegister: 5) == 0x40, "Timer interrupt bit should be set")
 		}
 	}

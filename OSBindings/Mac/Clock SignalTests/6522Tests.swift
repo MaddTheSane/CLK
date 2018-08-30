@@ -81,22 +81,22 @@ class MOS6522Tests: XCTestCase {
 			// check that the timer has gone down to 0 but not yet triggered an interrupt
 			XCTAssert($0.value(forRegister: 4) == 0, "Low order byte should be 0; was \($0.value(forRegister: 4))")
 			XCTAssert($0.value(forRegister: 5) == 0, "High order byte should be 0; was \($0.value(forRegister: 5))")
-			XCTAssert(!$0.irqLine, "IRQ should not yet be active")
+			XCTAssertFalse($0.irqLine, "IRQ should not yet be active")
 
 			// check that two half-cycles later the timer is $ffff but IRQ still hasn't triggered
 			$0.run(forHalfCycles: 2)
 			XCTAssert($0.value(forRegister: 4) == 0xff, "Low order byte should be 0xff; was \($0.value(forRegister: 4))")
 			XCTAssert($0.value(forRegister: 5) == 0xff, "High order byte should be 0xff; was \($0.value(forRegister: 5))")
-			XCTAssert(!$0.irqLine, "IRQ should not yet be active")
+			XCTAssertFalse($0.irqLine, "IRQ should not yet be active")
 
 			// check that one half-cycle later the timer is still $ffff and IRQ has triggered...
 			$0.run(forHalfCycles: 1)
-			XCTAssert($0.irqLine, "IRQ should be active")
+			XCTAssertTrue($0.irqLine, "IRQ should be active")
 			XCTAssert($0.value(forRegister: 4) == 0xff, "Low order byte should be 0xff; was \($0.value(forRegister: 4))")
 			XCTAssert($0.value(forRegister: 5) == 0xff, "High order byte should be 0xff; was \($0.value(forRegister: 5))")
 
 			// ... but that reading the timer cleared the interrupt
-			XCTAssert(!$0.irqLine, "IRQ should be active")
+			XCTAssertFalse($0.irqLine, "IRQ should be active")
 
 			// check that one half-cycles later the timer has reloaded
 			$0.run(forHalfCycles: 1)

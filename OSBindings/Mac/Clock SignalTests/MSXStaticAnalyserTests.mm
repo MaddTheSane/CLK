@@ -221,9 +221,9 @@ static NSDictionary<NSString *, MSXROMRecord *> *romRecordsBySHA1 = @{
 		}
 
 		// assert equality
-		XCTAssert(!targets.empty(), "%@ should be recognised as an MSX file", testFile);
+		XCTAssertFalse(targets.empty(), "'%@' should be recognised as an MSX file", testFile);
 		if(!targets.empty()) {
-			XCTAssert(!targets.front()->media.cartridges.empty(), "%@ should be interpreted as a cartridge", testFile);
+			XCTAssertFalse(targets.front()->media.cartridges.empty(), "%@ should be interpreted as a cartridge", testFile);
 
 			if(!targets.front()->media.cartridges.empty()) {
 				const Analyser::Static::MSX::Cartridge *const cartridge =

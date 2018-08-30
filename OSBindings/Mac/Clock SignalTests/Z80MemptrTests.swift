@@ -28,6 +28,11 @@ class Z80MemptrTests: XCTestCase {
 		program[offset + 1] = UInt8(address >> 8)
 	}
 
+	fileprivate func insert16(program: inout [UInt8], address: UInt16, offset: size_t) {
+		program[offset] = UInt8(address & 0x00ff)
+		program[offset + 1] = UInt8(address >> 8)
+	}
+
 	/*
 		Re: comments below:
 		All the CPU chips tested give the same results except KP1858BM1 and T34BM1 slices noted as "BM1".
@@ -39,10 +44,10 @@ class Z80MemptrTests: XCTestCase {
 		var program: [UInt8] = [
 			0x3a, 0x00, 0x00
 		]
-		for addr in 0 ..< 65536 {
+		for addr in UInt16(0) ... 65535 {
 			program[1] = UInt8(addr & 0x00ff)
 			program[2] = UInt8(addr >> 8)
-			let expectedResult = UInt16((addr + 1) & 0xffff)
+			let expectedResult = UInt16((addr &+ 1) & 0xffff)
 
 			let result = test(program: program, length: 13, initialValue: 0xffff)
 			XCTAssertEqual(result, expectedResult)
@@ -63,15 +68,15 @@ class Z80MemptrTests: XCTestCase {
 			0x32, 0x00, 0x00
 		]
 
-		for addr in 0 ..< 256 {
-			machine.setValue(UInt16(addr), for: .BC)
-			machine.setValue(UInt16(addr), for: .DE)
+		for addr in UInt16(0) ..< 256 {
+			machine.setValue(addr, for: .BC)
+			machine.setValue(addr, for: .DE)
 			insert16(program: &nnProgram, address: addr, offset: 1)
 
-			for a in 0 ..< 256 {
-				machine.setValue(UInt16(a), for: .A)
+			for a in UInt16(0) ..< 256 {
+				machine.setValue(a, for: .A)
 
-				let expectedResult = UInt16(((addr + 1) & 0xff) + (a << 8))
+				let expectedResult = ((addr + 1) & 0xff) + (a << 8)
 
 				let bcResult = test(program: bcProgram, length: 7, initialValue: 0xffff)
 				let deResult = test(program: deProgram, length: 7, initialValue: 0xffff)
@@ -93,11 +98,11 @@ class Z80MemptrTests: XCTestCase {
 		let deProgram: [UInt8] = [
 			0x1a
 		]
-		for addr in 0 ..< 65536 {
-			machine.setValue(UInt16(addr), for: .BC)
-			machine.setValue(UInt16(addr), for: .DE)
+		for addr in UInt16(0) ... 65535 {
+			machine.setValue(addr, for: .BC)
+			machine.setValue(addr, for: .DE)
 
-			let expectedResult = UInt16((addr + 1) & 0xffff)
+			let expectedResult = UInt16((addr &+ 1) & 0xffff)
 
 			let bcResult = test(program: bcProgram, length: 7, initialValue: 0xffff)
 			let deResult = test(program: deProgram, length: 7, initialValue: 0xffff)
@@ -126,14 +131,14 @@ class Z80MemptrTests: XCTestCase {
 			0xed, 0x73, 0x00, 0x00
 		]
 
-		for addr in 0 ..< 65536 {
+		for addr in UInt16(0) ... 65535 {
 			insert16(program: &ldnnhlBaseProgram, address: addr, offset: 1)
 			insert16(program: &ldnnbcEDProgram, address: addr, offset: 2)
 			insert16(program: &ldnndeEDProgram, address: addr, offset: 2)
 			insert16(program: &ldnnhlEDProgram, address: addr, offset: 2)
 			insert16(program: &ldnnspEDProgram, address: addr, offset: 2)
 
-			let expectedResult = UInt16((addr + 1) & 0xffff)
+			let expectedResult = UInt16((addr &+ 1) & 0xffff)
 
 			XCTAssertEqual(test(program: ldnnhlBaseProgram, length: 16, initialValue: expectedResult ^ 1), expectedResult)
 			XCTAssertEqual(test(program: ldnnbcEDProgram, length: 20, initialValue: expectedResult ^ 1), expectedResult)
@@ -170,7 +175,7 @@ class Z80MemptrTests: XCTestCase {
 			0xfd, 0x22, 0x00, 0x00
 		]
 
-		for addr in 0 ..< 65536 {
+		for addr in UInt16(0) ... 65535 {
 			hlBaseProgram[1] = UInt8(addr & 0x00ff)
 			hlBaseProgram[2] = UInt8(addr >> 8)
 
@@ -188,7 +193,7 @@ class Z80MemptrTests: XCTestCase {
 			iyProgram[2] = UInt8(addr & 0x00ff)
 			iyProgram[3] = UInt8(addr >> 8)
 
-			let expectedResult = UInt16((addr + 1) & 0xffff)
+			let expectedResult = UInt16((addr &+ 1) & 0xffff)
 
 			XCTAssertEqual(test(program: hlBaseProgram, length: 16, initialValue: 0xffff), expectedResult)
 
@@ -244,9 +249,9 @@ class Z80MemptrTests: XCTestCase {
 			0xed, 0x42
 		]
 
-		for addr in 0 ..< 65536 {
-			let expectedResult = UInt16((addr + 1) & 0xffff)
-			machine.setValue(UInt16(addr), for: .HL)
+		for addr in UInt16(0) ... 65535 {
+			let expectedResult = UInt16((addr &+ 1) & 0xffff)
+			machine.setValue(addr, for: .HL)
 
 			XCTAssertEqual(test(program: addProgram, length: 11, initialValue: 0xffff), expectedResult)
 			XCTAssertEqual(test(program: adcProgram, length: 15, initialValue: 0xffff), expectedResult)
@@ -264,9 +269,9 @@ class Z80MemptrTests: XCTestCase {
 			0xed, 0x67
 		]
 
-		for addr in 0 ..< 65536 {
-			let expectedResult = UInt16((addr + 1) & 0xffff)
-			machine.setValue(UInt16(addr), for: .HL)
+		for addr in UInt16(0) ... 65535 {
+			let expectedResult = UInt16((addr &+ 1) & 0xffff)
+			machine.setValue(addr, for: .HL)
 
 			XCTAssertEqual(test(program: rldProgram, length: 18, initialValue: 0xffff), expectedResult)
 			XCTAssertEqual(test(program: rrdProgram, length: 18, initialValue: 0xffff), expectedResult)
@@ -319,10 +324,10 @@ class Z80MemptrTests: XCTestCase {
 		machine.setData(Data(bytes: program), atAddress: 0x0000)
 		machine.setValue(0, for: .memPtr)
 
-		for c in 1 ..< 65536 {
+		for c in UInt16(1) ... 65535 {
 			machine.setValue(0x0000, for: .programCounter)
 			machine.runForNumberOfCycles(16)
-			XCTAssertEqual(UInt16(c), machine.value(for: .memPtr))
+			XCTAssertEqual(c, machine.value(for: .memPtr))
 		}
 	}
 
@@ -335,10 +340,10 @@ class Z80MemptrTests: XCTestCase {
 		machine.setData(Data(bytes: program), atAddress: 0x0000)
 		machine.setValue(0, for: .memPtr)
 
-		for c in 1 ..< 65536 {
+		for c in (UInt16(1) ... 65535).reversed() {
 			machine.setValue(0x0000, for: .programCounter)
 			machine.runForNumberOfCycles(16)
-			XCTAssertEqual(UInt16(65536 - c), machine.value(for: .memPtr))
+			XCTAssertEqual(c, machine.value(for: .memPtr))
 		}
 	}
 

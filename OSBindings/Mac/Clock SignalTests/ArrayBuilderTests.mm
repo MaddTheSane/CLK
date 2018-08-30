@@ -31,8 +31,8 @@ static void setData(bool is_input, uint8_t *data, size_t size)
 
 - (void)assertMonotonicForInputSize:(size_t)inputSize outputSize:(size_t)outputSize
 {
-	XCTAssert(inputData != nil, @"Should have received some input data");
-	XCTAssert(outputData != nil, @"Should have received some output data");
+	XCTAssertNotNil(inputData, @"Should have received some input data");
+	XCTAssertNotNil(outputData, @"Should have received some output data");
 
 	XCTAssert(inputData.length == inputSize, @"Input data should be %lu bytes long, was %lu", inputSize, (unsigned long)inputData.length);
 	XCTAssert(outputData.length == outputSize, @"Output data should be %lu bytes long, was %lu", outputSize, (unsigned long)outputData.length);

@@ -66,14 +66,14 @@ class Z80InterruptTests: XCTestCase {
 
 		// run for ten cycles, check that the processor is halted and assert an NMI
 		machine.runForNumberOfCycles(10)
-		XCTAssert(machine.isHalted, "Machine should be halted")
+		XCTAssertTrue(machine.isHalted, "Machine should be halted")
 		machine.nmiLine = true
 
 		// check that the machine ceases believing itsef to be halted after two cycles
 		machine.runForNumberOfCycles(1)
-		XCTAssert(machine.isHalted, "Machine should still be halted")
+		XCTAssertTrue(machine.isHalted, "Machine should still be halted")
 		machine.runForNumberOfCycles(1)
-		XCTAssert(!machine.isHalted, "Machine should no longer be halted")
+		XCTAssertFalse(machine.isHalted, "Machine should no longer be halted")
 
 		// assert wait
 		machine.waitLine = true
