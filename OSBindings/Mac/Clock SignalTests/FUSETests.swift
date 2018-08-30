@@ -156,18 +156,13 @@ class FUSETests: XCTestCase {
 				return
 		}
 
-		guard let inputArray = try! JSONSerialization.jsonObject(with: inputData, options: []) as? [Any],
-			let outputArray = try! JSONSerialization.jsonObject(with: outputData, options: []) as? [Any] else {
+		guard let inputArray = (try? JSONSerialization.jsonObject(with: inputData, options: [])) as? [[String: Any]],
+			let outputArray = (try? JSONSerialization.jsonObject(with: outputData, options: [])) as? [[String: Any]] else {
 				XCTFail("inputArray == nil || outputArray == nil")
 				return
 		}
 
-		var index = 0
-		for item in inputArray {
-			let itemDictionary = item as! [String: Any]
-			let outputDictionary = outputArray[index] as! [String: Any]
-			index = index + 1
-
+		for (itemDictionary, outputDictionary) in zip(inputArray, outputArray) {
 			let name = itemDictionary["name"] as! String
 
 //			if name != "02" {
@@ -213,7 +208,7 @@ class FUSETests: XCTestCase {
 					let data = groupDictionary["data"] as! [NSNumber]
 					for value in data {
 						XCTAssert(machine.value(atAddress: address) == UInt8(truncating: value), "Failed memory state \(name)")
-						address = address + 1
+						address += 1
 					}
 				}
 			}
