@@ -197,8 +197,8 @@ class WolfgangLorenzTests: XCTestCase, CSTestMachineTrapHandler {
 	fileprivate func runWolfgangLorenzTest(_ name: String) {
 		var machine: CSTestMachine6502!
 
-		if let filename = Bundle(for: type(of: self)).path(forResource: name, ofType: nil) {
-			if let testData = try? Data(contentsOf: URL(fileURLWithPath: filename)) {
+		if let filename = Bundle(for: type(of: self)).url(forResource: name, withExtension: nil) {
+			if let testData = try? Data(contentsOf: filename) {
 
 				machine = CSTestMachine6502(is65C02: false)
 				machine.trapHandler = self
@@ -207,7 +207,7 @@ class WolfgangLorenzTests: XCTestCase, CSTestMachineTrapHandler {
 
 				let dataPointer = (testData as NSData).bytes.bindMemory(to: UInt8.self, capacity: testData.count)
 				let loadAddress = UInt16(dataPointer[0]) | (UInt16(dataPointer[1]) << 8)
-				let contents = testData.subdata(in: 2..<(testData.count - 2))
+				let contents = testData[2...]
 
 				machine.setData(contents, atAddress: loadAddress)
 
@@ -219,10 +219,10 @@ class WolfgangLorenzTests: XCTestCase, CSTestMachineTrapHandler {
 				machine.setValue(0x48, forAddress: 0xfffe)
 				machine.setValue(0xff, forAddress: 0xffff)
 
-				let irqHandler = Data(bytes: UnsafePointer<UInt8>([
+				let irqHandler = Data([
 					0x48, 0x8a, 0x48, 0x98, 0x48, 0xba, 0xbd, 0x04, 0x01,
 					0x29, 0x10, 0xf0, 0x03, 0x6c, 0x16, 0x03, 0x6c, 0x14, 0x03
-				] as [UInt8]), count: 19)
+				] as [UInt8])
 				machine.setData( irqHandler, atAddress: 0xff48)
 
 				machine.addTrapAddress(0xffd2)	// print character
