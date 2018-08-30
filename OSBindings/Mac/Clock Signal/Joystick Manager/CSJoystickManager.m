@@ -13,6 +13,10 @@
 
 #pragma mark - CSJoystickButton
 
+@interface CSJoystickButton()
+@property(nonatomic, readwrite) BOOL isPressed;
+@end
+
 @implementation CSJoystickButton {
 	IOHIDElementRef _element;
 }
@@ -38,13 +42,13 @@
 	return _element;
 }
 
-- (void)setIsPressed:(bool)isPressed {
-	_isPressed = isPressed;
-}
-
 @end
 
 #pragma mark - CSJoystickAxis
+
+@interface CSJoystickAxis()
+@property(nonatomic, readwrite) float position;
+@end
 
 @implementation CSJoystickAxis {
 	IOHIDElementRef _element;
@@ -72,13 +76,13 @@
 	return _element;
 }
 
-- (void)setPosition:(float)position {
-	_position = position;
-}
-
 @end
 
 #pragma mark - CSJoystickHat
+
+@interface CSJoystickHat()
+@property(nonatomic, readwrite) CSJoystickHatDirection direction;
+@end
 
 @implementation CSJoystickHat {
 	IOHIDElementRef _element;
@@ -102,10 +106,6 @@
 
 - (IOHIDElementRef)element {
 	return _element;
-}
-
-- (void)setDirection:(CSJoystickHatDirection)direction {
-	_direction = direction;
 }
 
 @end
