@@ -10,6 +10,8 @@
 @import CoreVideo;
 @import GLKit;
 
+static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeStamp *now, const CVTimeStamp *outputTime, CVOptionFlags flagsIn, CVOptionFlags *flagsOut, void *displayLinkContext);
+
 @interface CSOpenGLView () <NSDraggingDestination>
 @end
 

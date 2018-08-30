@@ -118,27 +118,27 @@ fileprivate struct RegisterState {
 	}
 }
 
-extension RegisterState: Equatable {}
-
-fileprivate func ==(lhs: RegisterState, rhs: RegisterState) -> Bool {
-	return	lhs.af == rhs.af &&
-			lhs.bc == rhs.bc &&
-			lhs.de == rhs.de &&
-			lhs.hl == rhs.hl &&
-			(lhs.afDash  & ~0x0028) == (rhs.afDash & ~0x0028) &&
-			lhs.bcDash == rhs.bcDash &&
-			lhs.deDash == rhs.deDash &&
-			lhs.hlDash == rhs.hlDash &&
-			lhs.ix == rhs.ix &&
-			lhs.iy == rhs.iy &&
-			lhs.sp == rhs.sp &&
-			lhs.pc == rhs.pc &&
-			lhs.i == rhs.i &&
-			lhs.r == rhs.r &&
-			lhs.iff1 == rhs.iff1 &&
-			lhs.iff2 == rhs.iff2 &&
-			lhs.interruptMode == rhs.interruptMode &&
-			lhs.isHalted == rhs.isHalted
+extension RegisterState: Equatable {
+	fileprivate static func ==(lhs: RegisterState, rhs: RegisterState) -> Bool {
+		return	lhs.af == rhs.af &&
+				lhs.bc == rhs.bc &&
+				lhs.de == rhs.de &&
+				lhs.hl == rhs.hl &&
+				(lhs.afDash  & ~0x0028) == (rhs.afDash & ~0x0028) &&
+				lhs.bcDash == rhs.bcDash &&
+				lhs.deDash == rhs.deDash &&
+				lhs.hlDash == rhs.hlDash &&
+				lhs.ix == rhs.ix &&
+				lhs.iy == rhs.iy &&
+				lhs.sp == rhs.sp &&
+				lhs.pc == rhs.pc &&
+				lhs.i == rhs.i &&
+				lhs.r == rhs.r &&
+				lhs.iff1 == rhs.iff1 &&
+				lhs.iff2 == rhs.iff2 &&
+				lhs.interruptMode == rhs.interruptMode &&
+				lhs.isHalted == rhs.isHalted
+	}
 }
 
 class FUSETests: XCTestCase {
@@ -182,15 +182,13 @@ class FUSETests: XCTestCase {
 			machine.captureBusActivity = true
 			initialState.set(onMachine: machine)
 
-			let inputMemoryGroups = itemDictionary["memory"] as? [Any]
-			if let inputMemoryGroups = inputMemoryGroups {
-				for group in inputMemoryGroups {
-					let groupDictionary = group as! [String: Any]
+			if let inputMemoryGroups = itemDictionary["memory"] as? [[String: Any]] {
+				for groupDictionary in inputMemoryGroups {
 					var address = UInt16(truncating: groupDictionary["address"] as! NSNumber)
 					let data = groupDictionary["data"] as! [NSNumber]
 					for value in data {
 						machine.setValue(UInt8(truncating: value), atAddress: address)
-						address = address + 1
+						address += 1
 					}
 				}
 			}

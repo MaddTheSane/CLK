@@ -11,7 +11,7 @@
 
 @class CSOpenGLView;
 
-@protocol CSOpenGLViewDelegate
+@protocol CSOpenGLViewDelegate <NSObject>
 /*!
 	Requests that the delegate produce an image of its current output state. May be called on
 	any queue or thread.
@@ -78,6 +78,6 @@
 	Locks this view's OpenGL context and makes it current, performs @c action and then unlocks
 	the context. @c action is performed on the calling queue.
 */
-- (void)performWithGLContext:(nonnull dispatch_block_t)action;
+- (void)performWithGLContext:(nonnull dispatch_block_t NS_NOESCAPE)action;
 
 @end
