@@ -23,11 +23,6 @@ class Z80MemptrTests: XCTestCase {
 		return machine.value(for: .memPtr)
 	}
 
-	fileprivate func insert16(program: inout [UInt8], address: Int, offset: size_t) {
-		program[offset] = UInt8(address & 0x00ff)
-		program[offset + 1] = UInt8(address >> 8)
-	}
-
 	fileprivate func insert16(program: inout [UInt8], address: UInt16, offset: size_t) {
 		program[offset] = UInt8(address & 0x00ff)
 		program[offset + 1] = UInt8(address >> 8)
@@ -47,7 +42,7 @@ class Z80MemptrTests: XCTestCase {
 		for addr in UInt16(0) ... 65535 {
 			program[1] = UInt8(addr & 0x00ff)
 			program[2] = UInt8(addr >> 8)
-			let expectedResult = UInt16((addr &+ 1) & 0xffff)
+			let expectedResult = UInt16((Int(addr) + 1) & 0xffff)
 
 			let result = test(program: program, length: 13, initialValue: 0xffff)
 			XCTAssertEqual(result, expectedResult)
@@ -102,7 +97,7 @@ class Z80MemptrTests: XCTestCase {
 			machine.setValue(addr, for: .BC)
 			machine.setValue(addr, for: .DE)
 
-			let expectedResult = UInt16((addr &+ 1) & 0xffff)
+			let expectedResult = UInt16((Int(addr) + 1) & 0xffff)
 
 			let bcResult = test(program: bcProgram, length: 7, initialValue: 0xffff)
 			let deResult = test(program: deProgram, length: 7, initialValue: 0xffff)
@@ -138,7 +133,7 @@ class Z80MemptrTests: XCTestCase {
 			insert16(program: &ldnnhlEDProgram, address: addr, offset: 2)
 			insert16(program: &ldnnspEDProgram, address: addr, offset: 2)
 
-			let expectedResult = UInt16((addr &+ 1) & 0xffff)
+			let expectedResult = UInt16((Int(addr) + 1) & 0xffff)
 
 			XCTAssertEqual(test(program: ldnnhlBaseProgram, length: 16, initialValue: expectedResult ^ 1), expectedResult)
 			XCTAssertEqual(test(program: ldnnbcEDProgram, length: 20, initialValue: expectedResult ^ 1), expectedResult)
@@ -193,7 +188,7 @@ class Z80MemptrTests: XCTestCase {
 			iyProgram[2] = UInt8(addr & 0x00ff)
 			iyProgram[3] = UInt8(addr >> 8)
 
-			let expectedResult = UInt16((addr &+ 1) & 0xffff)
+			let expectedResult = UInt16((Int(addr) + 1) & 0xffff)
 
 			XCTAssertEqual(test(program: hlBaseProgram, length: 16, initialValue: 0xffff), expectedResult)
 
@@ -250,7 +245,7 @@ class Z80MemptrTests: XCTestCase {
 		]
 
 		for addr in UInt16(0) ... 65535 {
-			let expectedResult = UInt16((addr &+ 1) & 0xffff)
+			let expectedResult = UInt16((Int(addr) + 1) & 0xffff)
 			machine.setValue(addr, for: .HL)
 
 			XCTAssertEqual(test(program: addProgram, length: 11, initialValue: 0xffff), expectedResult)
@@ -270,7 +265,7 @@ class Z80MemptrTests: XCTestCase {
 		]
 
 		for addr in UInt16(0) ... 65535 {
-			let expectedResult = UInt16((addr &+ 1) & 0xffff)
+			let expectedResult = UInt16((Int(addr) + 1) & 0xffff)
 			machine.setValue(addr, for: .HL)
 
 			XCTAssertEqual(test(program: rldProgram, length: 18, initialValue: 0xffff), expectedResult)
