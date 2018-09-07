@@ -152,6 +152,9 @@ class VideoBase {
 
 		// State affecting logical state.
 		int row_ = 0, column_ = 0, flash_ = 0;
+		uint8_t flash_mask() {
+			return static_cast<uint8_t>((flash_ / flash_length) * 0xff);
+		}
 
 		// Enumerates all Apple II and IIe display modes.
 		enum class GraphicsMode {
@@ -195,35 +198,43 @@ class VideoBase {
 		bool is_iie_ = false;
 		static const int flash_length = 8406;
 
+		// Describes the current text mode mapping from in-memory character index
+		// to output character.
+		struct CharacterMapping {
+			uint8_t address_mask;
+			uint8_t xor_mask;
+		};
+		CharacterMapping character_zones[4];
+
 		/*!
 			Outputs 40-column text to @c target, using @c length bytes from @c source.
 		*/
-		void output_text(uint8_t *target, uint8_t *source, size_t length, size_t pixel_row) const;
+		void output_text(uint8_t *target, const uint8_t *source, size_t length, size_t pixel_row) const;
 
 		/*!
 			Outputs 80-column text to @c target, drawing @c length columns from @c source and @c auxiliary_source.
 		*/
-		void output_double_text(uint8_t *target, uint8_t *source, uint8_t *auxiliary_source, size_t length, size_t pixel_row) const;
+		void output_double_text(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length, size_t pixel_row) const;
 
 		/*!
 			Outputs 40-column low-resolution graphics to @c target, drawing @c length columns from @c source.
 		*/
-		void output_low_resolution(uint8_t *target, uint8_t *source, size_t length, int column, int row) const;
+		void output_low_resolution(uint8_t *target, const uint8_t *source, size_t length, int column, int row) const;
 
 		/*!
 			Outputs 80-column low-resolution graphics to @c target, drawing @c length columns from @c source and @c auxiliary_source.
 		*/
-		void output_double_low_resolution(uint8_t *target, uint8_t *source, uint8_t *auxiliary_source, size_t length, int column, int row) const;
+		void output_double_low_resolution(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length, int column, int row) const;
 
 		/*!
 			Outputs 40-column high-resolution graphics to @c target, drawing @c length columns from @c source.
 		*/
-		void output_high_resolution(uint8_t *target, uint8_t *source, size_t length) const;
+		void output_high_resolution(uint8_t *target, const uint8_t *source, size_t length) const;
 
 		/*!
 			Outputs 80-column double-high-resolution graphics to @c target, drawing @c length columns from @c source.
 		*/
-		void output_double_high_resolution(uint8_t *target, uint8_t *source, uint8_t *auxiliary_source, size_t length) const;
+		void output_double_high_resolution(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length) const;
 
 		// Maintain a ClockDeferrer for delayed mode switches.
 		ClockDeferrer<Cycles> deferrer_;
@@ -516,6 +527,9 @@ template <class BusHandler, bool is_iie> class Video: public VideoBase {
 				if(!column_) {
 					row_ = (row_ + 1) % 262;
 					flash_ = (flash_ + 1) % (2 * flash_length);
+					if(!alternative_character_set_) {
+						character_zones[1].xor_mask = flash_mask();
+					}
 
 					// Add an extra half a colour cycle of blank; this isn't counted in the run_for
 					// count explicitly but is promised.
