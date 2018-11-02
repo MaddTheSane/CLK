@@ -280,29 +280,13 @@ class CRT {
 		/*!	Sets a function that will map from whatever data the machine provided to a composite signal.
 
 			@param shader A GLSL fragment including a function with the signature
-			`float composite_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase, float amplitude)`
+			`float composite_sample(usampler2D texID, vec2 coordinate, float phase, float amplitude)`
 			that evaluates to the composite signal level as a function of a source buffer, sampling location, colour
 			carrier phase and amplitude.
 		*/
 		inline void set_composite_sampling_function(const std::string &shader) {
 			enqueue_openGL_function([shader, this] {
 				openGL_output_builder_.set_composite_sampling_function(shader);
-			});
-		}
-
-		/*!
-			Sets a multiplier applied to iCoordinate values prior to their passing to the various sampling functions.
-			This multiplier is applied outside of the interpolation loop, making for a more precise interpolation
-			than if it were applied within the sampling function.
-
-			Idiomatically, this is likely to be the number of output pixels packed into each input sample where
-			packing is in use.
-
-			The default value is 1.0.
-		*/
-		inline void set_integer_coordinate_multiplier(float multiplier) {
-			enqueue_openGL_function([=] {
-				openGL_output_builder_.set_integer_coordinate_multiplier(multiplier);
 			});
 		}
 
@@ -332,7 +316,7 @@ class CRT {
 			output mode will be applied.
 
 			@param shader A GLSL fragment including a function with the signature
-			`vec2 svideo_sample(usampler2D texID, vec2 coordinate, vec2 iCoordinate, float phase, float amplitude)`
+			`vec2 svideo_sample(usampler2D texID, vec2 coordinate, float phase, float amplitude)`
 			that evaluates to the s-video signal level, luminance as the first component and chrominance
 			as the second, as a function of a source buffer, sampling location and colour
 			carrier phase; amplitude is supplied for its sign.
@@ -349,21 +333,16 @@ class CRT {
 			output mode will be applied.
 
 			@param shader A GLSL fragent including a function with the signature
-			`vec3 rgb_sample(usampler2D sampler, vec2 coordinate, vec2 iCoordinate)` that evaluates to an RGB colour
+			`vec3 rgb_sample(usampler2D sampler, vec2 coordinate)` that evaluates to an RGB colour
 			as a function of:
 
-			* `usampler2D sampler` representing the source buffer;
-			* `vec2 coordinate` representing the source buffer location to sample from in the range [0, 1); and
-			* `vec2 iCoordinate` representing the source buffer location to sample from as a pixel count, for easier multiple-pixels-per-byte unpacking.
+			* `usampler2D sampler` representing the source buffer; and
+			* `vec2 coordinate` representing the source buffer location to sample from in the range [0, 1).
 		*/
 		inline void set_rgb_sampling_function(const std::string &shader) {
 			enqueue_openGL_function([shader, this] {
 				openGL_output_builder_.set_rgb_sampling_function(shader);
 			});
-		}
-
-		inline void set_bookender(std::unique_ptr<TextureBuilder::Bookender> bookender) {
-			openGL_output_builder_.texture_builder.set_bookender(std::move(bookender));
 		}
 
 		inline void set_video_signal(VideoSignal video_signal) {

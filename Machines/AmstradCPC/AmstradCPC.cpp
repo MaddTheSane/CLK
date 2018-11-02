@@ -327,7 +327,7 @@ class CRTCBusHandler {
 		void setup_output(float aspect_ratio) {
 			crt_.reset(new Outputs::CRT::CRT(1024, 16, Outputs::CRT::DisplayType::PAL50, 1));
 			crt_->set_rgb_sampling_function(
-				"vec3 rgb_sample(usampler2D sampler, vec2 coordinate, vec2 icoordinate)"
+				"vec3 rgb_sample(usampler2D sampler, vec2 coordinate)"
 				"{"
 					"uint sample = texture(texID, coordinate).r;"
 					"return vec3(float((sample >> 4) & 3u), float((sample >> 2) & 3u), float(sample & 3u)) / 2.0;"
@@ -757,7 +757,7 @@ class i8255PortHandler : public Intel::i8255::PortHandler {
 template <bool has_fdc> class ConcreteMachine:
 	public CRTMachine::Machine,
 	public MediaTarget::Machine,
-	public KeyboardMachine::Machine,
+	public KeyboardMachine::MappedMachine,
 	public Utility::TypeRecipient,
 	public CPU::Z80::BusHandler,
 	public ClockingHint::Observer,

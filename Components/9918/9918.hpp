@@ -17,6 +17,7 @@
 #include <cstdint>
 
 namespace TI {
+namespace TMS {
 
 /*!
 	Provides emulation of the TMS9918a, TMS9928 and TMS9929. Likely in the future to be the
@@ -29,24 +30,13 @@ namespace TI {
 	These chips have only one non-on-demand interaction with the outside world: an interrupt line.
 	See get_time_until_interrupt and get_interrupt_line for asynchronous operation options.
 */
-class TMS9918: public TMS9918Base {
+class TMS9918: public Base {
 	public:
-		enum Personality {
-			TMS9918A,	// includes the 9928 and 9929; set TV standard and output device as desired.
-		};
-
 		/*!
 			Constructs an instance of the drive controller that behaves according to personality @c p.
 			@param p The type of controller to emulate.
 		*/
 		TMS9918(Personality p);
-
-		enum TVStandard {
-			/*! i.e. 50Hz output at around 312.5 lines/field */
-			PAL,
-			/*! i.e. 60Hz output at around 262.5 lines/field */
-			NTSC
-		};
 
 		/*! Sets the TV standard for this TMS, if that is hard-coded in hardware. */
 		void set_tv_standard(TVStandard standard);
@@ -66,6 +56,15 @@ class TMS9918: public TMS9918Base {
 		/*! Gets a register value. */
 		uint8_t get_register(int address);
 
+		/*! Gets the current scan line; provided by the Master System only. */
+		uint8_t get_current_line();
+
+		/*! Gets the current latched horizontal counter; provided by the Master System only. */
+		uint8_t get_latched_horizontal_counter();
+
+		/*! Latches the current horizontal counter. */
+		void latch_horizontal_counter();
+
 		/*!
 			Returns the amount of time until get_interrupt_line would next return true if
 			there are no interceding calls to set_register or get_register.
@@ -76,11 +75,22 @@ class TMS9918: public TMS9918Base {
 		HalfCycles get_time_until_interrupt();
 
 		/*!
+			Returns the amount of time until the nominated line interrupt position is
+			reached on line @c line. If no line interrupt position is defined for
+			this VDP, returns the time until the 'beginning' of that line, whatever
+			that may mean.
+
+			@line is relative to the first pixel line of the display and may be negative.
+		*/
+		HalfCycles get_time_until_line(int line);
+
+		/*!
 			@returns @c true if the interrupt line is currently active; @c false otherwise.
 		*/
 		bool get_interrupt_line();
 };
 
-};
+}
+}
 
 #endif /* TMS9918_hpp */

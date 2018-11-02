@@ -19,7 +19,8 @@ It currently contains emulations of the:
 * ColecoVision;
 * Commodore Vic-20 (and Commodore 1540/1);
 * MSX 1;
-* Oric 1/Atmos; and
+* Oric 1/Atmos;
+* Sega Master System; and
 * Sinclair ZX80/81.
 
 ## Single-click Loading
@@ -48,6 +49,7 @@ If your machine has a 4k monitor and a 96Khz audio output? Then you'll get a 4k 
 |![Stormlord with a classic 1:1 pixel emulation](READMEImages/NaiveStormlord.png)|![Stormlord decoded from a composite feed](READMEImages/CompositeStormlord.png)|
 |![Road Fighter with a classic 1:1 pixel emulation](READMEImages/NaiveRoadFighter.png)|![Road Fighter decoded from a composite feed](READMEImages/CompositeRoadFighter.png)|
 |![A segment of the ColecoVision Donkey Kong title screen with a classic 1:1 pixel emulation](READMEImages/NaivePresentsDonkeyKong.png)|![A segment of the ColecoVision Donkey Kong title screen decoded from a composite feed](READMEImages/CompositePresentsDonkeyKong.png)|
+|![Sonic the Hedgehog with a classic 1:1 pixel emulation](READMEImages/NaiveSonic.jpeg)|![Sonic the Hedgehog screen PAL decoded from a composite feed](READMEImages/CompositeSonic.png)|
 
 | 1:1 Pixel Copying | Correct Aspect Ratio, Filtered |
 |---|---|
@@ -71,6 +73,7 @@ Cycle-accurate emulation for the supported target machines is fairly trite; this
 Self-ratings:
 * the Electron, Oric and Vic-20 are pretty much perfect;
 * the ZX80, ZX81, ColecoVision, MSX 1 and Apple IIs are very strong;
+* the Master System is almost perfect, access windows and CRAM dots and all the rest, but further work is required on some small aspects of behaviour;
 * the Amstrad CPC has known accuracy deficiencies in its 8272 and 6845;
 * the Atari 2600 has some known accuracy deficiencies in its TIA;
 * the C-1540(/1) is locked in reading mode and doesn't yet support writing.
