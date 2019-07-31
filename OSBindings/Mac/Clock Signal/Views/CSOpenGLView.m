@@ -128,7 +128,7 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
 	[self registerForDraggedTypes:@[(__bridge NSString *)kUTTypeFileURL]];
 }
 
-- (void)performWithGLContext:(dispatch_block_t)action {
+- (void)performWithGLContext:(dispatch_block_t NS_NOESCAPE)action {
 	CGLLockContext([[self openGLContext] CGLContextObj]);
 	[self.openGLContext makeCurrentContext];
 	action();
