@@ -54,7 +54,7 @@ class DiskII:
 		void run_for(const Cycles cycles);
 
 		/*!
-		 	Supplies the image of the state machine (i.e. P6) ROM,
+			Supplies the image of the state machine (i.e. P6) ROM,
 			which dictates how the Disk II will respond to input.
 
 			To reduce processing costs, some assumptions are made by
@@ -98,7 +98,7 @@ class DiskII:
 		void select_drive(int drive);
 
 		uint8_t trigger_address(int address, uint8_t value);
-		void process_event(const Storage::Disk::Track::Event &event) override;
+		void process_event(const Storage::Disk::Drive::Event &event) override;
 		void set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference preference) override;
 
 		const int clock_rate_ = 0;

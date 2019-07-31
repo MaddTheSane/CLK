@@ -31,7 +31,7 @@ namespace Dynamic {
 */
 class MultiCRTMachine: public CRTMachine::Machine {
 	public:
-		MultiCRTMachine(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &machines, std::mutex &machines_mutex);
+		MultiCRTMachine(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &machines, std::recursive_mutex &machines_mutex);
 
 		/*!
 			Informs the MultiCRTMachine that the order of machines has changed; the MultiCRTMachine
@@ -53,19 +53,18 @@ class MultiCRTMachine: public CRTMachine::Machine {
 		}
 
 		// Below is the standard CRTMachine::Machine interface; see there for documentation.
-		void setup_output(float aspect_ratio) override;
-		void close_output() override;
-		Outputs::CRT::CRT *get_crt() override;
+		void set_scan_target(Outputs::Display::ScanTarget *scan_target) override;
 		Outputs::Speaker::Speaker *get_speaker() override;
 		void run_for(Time::Seconds duration) override;
 
 	private:
 		void run_for(const Cycles cycles) override {}
 		const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &machines_;
-		std::mutex &machines_mutex_;
+		std::recursive_mutex &machines_mutex_;
 		std::vector<Concurrency::AsyncTaskQueue> queues_;
 		MultiSpeaker *speaker_ = nullptr;
 		Delegate *delegate_ = nullptr;
+		Outputs::Display::ScanTarget *scan_target_ = nullptr;
 
 		/*!
 			Performs a parallel for operation across all machines, performing the supplied

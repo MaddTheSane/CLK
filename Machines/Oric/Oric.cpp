@@ -46,7 +46,11 @@ enum ROM {
 
 std::vector<std::unique_ptr<Configurable::Option>> get_options() {
 	return Configurable::standard_options(
-		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplayComposite | Configurable::QuickLoadTape)
+		static_cast<Configurable::StandardOptions>(
+			Configurable::DisplayRGB |
+			Configurable::DisplayCompositeColour |
+			Configurable::DisplayCompositeMonochrome |
+			Configurable::QuickLoadTape)
 	);
 }
 
@@ -166,7 +170,7 @@ class VIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 		/*!
 			Advances time. This class manages the AY's concept of time to permit updating-on-demand.
 		*/
-		inline void run_for(const Cycles cycles) {
+		inline void run_for(const HalfCycles cycles) {
 			cycles_since_ay_update_ += cycles;
 		}
 
@@ -178,11 +182,11 @@ class VIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 
 	private:
 		void update_ay() {
-			speaker_.run_for(audio_queue_, cycles_since_ay_update_.flush());
+			speaker_.run_for(audio_queue_, cycles_since_ay_update_.flush<Cycles>());
 		}
 		bool ay_bdir_ = false;
 		bool ay_bc1_ = false;
-		Cycles cycles_since_ay_update_;
+		HalfCycles cycles_since_ay_update_;
 
 		Concurrency::DeferringAsyncTaskQueue &audio_queue_;
 		GI::AY38910::AY38910 &ay8910_;
@@ -208,12 +212,14 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 	public:
 		ConcreteMachine(const Analyser::Static::Oric::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
 				m6502_(*this),
+				video_output_(ram_),
 				ay8910_(audio_queue_),
 				speaker_(ay8910_),
 				via_port_handler_(audio_queue_, ay8910_, speaker_, tape_player_, keyboard_),
 				via_(via_port_handler_),
 				diskii_(2000000) {
 			set_clock_rate(1000000);
+			speaker_.set_input_rate(1000000.0f);
 			via_port_handler_.set_interrupt_delegate(this);
 			tape_player_.set_delegate(this);
 			Memory::Fuzz(ram_, sizeof(ram_));
@@ -222,19 +228,34 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 				diskii_.set_clocking_hint_observer(this);
 			}
 
-			std::vector<std::string> rom_names = {"colour.rom"};
+			const std::string machine_name = "Oric";
+			std::vector<ROMMachine::ROM> rom_names = { {machine_name, "the Oric colour ROM", "colour.rom", 128, 0xd50fca65} };
 			switch(target.rom) {
-				case Analyser::Static::Oric::Target::ROM::BASIC10: rom_names.push_back("basic10.rom");	break;
-				case Analyser::Static::Oric::Target::ROM::BASIC11: rom_names.push_back("basic11.rom");	break;
-				case Analyser::Static::Oric::Target::ROM::Pravetz: rom_names.push_back("pravetz.rom");	break;
+				case Analyser::Static::Oric::Target::ROM::BASIC10:
+					rom_names.emplace_back(machine_name, "Oric BASIC 1.0", "basic10.rom", 16*1024, 0xf18710b4);
+				break;
+				case Analyser::Static::Oric::Target::ROM::BASIC11:
+					rom_names.emplace_back(machine_name, "Oric BASIC 1.1", "basic11.rom", 16*1024, 0xc3a92bef);
+				break;
+				case Analyser::Static::Oric::Target::ROM::Pravetz:
+					rom_names.emplace_back(machine_name, "Pravetz BASIC", "pravetz.rom", 16*1024, 0x58079502);
+				break;
 			}
+			size_t diskii_state_machine_index = 0;
 			switch(disk_interface) {
 				default: break;
-				case Analyser::Static::Oric::Target::DiskInterface::Microdisc:	rom_names.push_back("microdisc.rom");	break;
-				case Analyser::Static::Oric::Target::DiskInterface::Pravetz:	rom_names.push_back("8dos.rom");		break;
+				case Analyser::Static::Oric::Target::DiskInterface::Microdisc:
+					rom_names.emplace_back(machine_name, "the ORIC Microdisc ROM", "microdisc.rom", 8*1024, 0xa9664a9c);
+				break;
+				case Analyser::Static::Oric::Target::DiskInterface::Pravetz:
+					rom_names.emplace_back(machine_name, "the 8DOS boot ROM", "8dos.rom", 512, 0x49a74c06);
+					// These ROM details are coupled with those in the DiskIICard.
+					diskii_state_machine_index = rom_names.size();
+					rom_names.push_back({"DiskII", "the Disk II 16-sector state machine ROM", "state-machine-16.rom", 256, { 0x9796a238, 0xb72a2c70 }});
+				break;
 			}
 
-			const auto roms = rom_fetcher("Oric", rom_names);
+			const auto roms = rom_fetcher(rom_names);
 
 			for(std::size_t index = 0; index < roms.size(); ++index) {
 				if(!roms[index]) {
@@ -242,7 +263,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 				}
 			}
 
-			colour_rom_ = std::move(*roms[0]);
+			video_output_.set_colour_rom(*roms[0]);
 			rom_ = std::move(*roms[1]);
 
 			switch(disk_interface) {
@@ -255,15 +276,10 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 					pravetz_rom_ = std::move(*roms[2]);
 					pravetz_rom_.resize(512);
 
-					auto state_machine_rom = rom_fetcher("DiskII", {"state-machine-16.rom"});
-					if(!state_machine_rom[0]) {
-						throw ROMMachine::Error::MissingROMs;
-					}
-					diskii_.set_state_machine(*state_machine_rom[0]);
+					diskii_.set_state_machine(*roms[diskii_state_machine_index]);
 				} break;
 			}
 
-			colour_rom_.resize(128);
 			rom_.resize(16384);
 			paged_rom_ = rom_.data();
 
@@ -429,7 +445,6 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 			}
 
 			via_.run_for(Cycles(1));
-			via_port_handler_.run_for(Cycles(1));
 			tape_player_.run_for(Cycles(1));
 			switch(disk_interface) {
 				default: break;
@@ -451,25 +466,17 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 
 		forceinline void flush() {
 			update_video();
-			via_port_handler_.flush();
+			via_.flush();
 			flush_diskii();
 		}
 
 		// to satisfy CRTMachine::Machine
-		void setup_output(float aspect_ratio) override final {
-			speaker_.set_input_rate(1000000.0f);
-
-			video_output_.reset(new VideoOutput(ram_));
-			if(!colour_rom_.empty()) video_output_->set_colour_rom(colour_rom_);
-			set_video_signal(Outputs::CRT::VideoSignal::RGB);
+		void set_scan_target(Outputs::Display::ScanTarget *scan_target) override final {
+			video_output_.set_scan_target(scan_target);
 		}
 
-		void close_output() override final {
-			video_output_.reset();
-		}
-
-		Outputs::CRT::CRT *get_crt() override final {
-			return video_output_->get_crt();
+		void set_display_type(Outputs::Display::DisplayType display_type) override {
+			video_output_.set_display_type(display_type);
 		}
 
 		Outputs::Speaker::Speaker *get_speaker() override final {
@@ -537,14 +544,10 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 			}
 		}
 
-		void set_video_signal(Outputs::CRT::VideoSignal video_signal) override {
-			video_output_->set_video_signal(video_signal);
-		}
-
 		Configurable::SelectionSet get_accurate_selections() override {
 			Configurable::SelectionSet selection_set;
 			Configurable::append_quick_load_tape_selection(selection_set, false);
-			Configurable::append_display_selection(selection_set, Configurable::Display::Composite);
+			Configurable::append_display_selection(selection_set, Configurable::Display::CompositeColour);
 			return selection_set;
 		}
 
@@ -578,11 +581,11 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 		CPU::MOS6502::Processor<CPU::MOS6502::Personality::P6502, ConcreteMachine, false> m6502_;
 
 		// RAM and ROM
-		std::vector<uint8_t> rom_, microdisc_rom_, colour_rom_;
+		std::vector<uint8_t> rom_, microdisc_rom_;
 		uint8_t ram_[65536];
 		Cycles cycles_since_video_update_;
 		inline void update_video() {
-			video_output_->run_for(cycles_since_video_update_.flush());
+			video_output_.run_for(cycles_since_video_update_.flush<Cycles>());
 		}
 
 		// ROM bookkeeping
@@ -590,7 +593,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 		int keyboard_read_count_ = 0;
 
 		// Outputs
-		std::unique_ptr<VideoOutput> video_output_;
+		VideoOutput video_output_;
 
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
 		GI::AY38910::AY38910 ay8910_;
@@ -614,7 +617,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface> class Co
 		Apple::DiskII diskii_;
 		Cycles cycles_since_diskii_update_;
 		void flush_diskii() {
-			diskii_.run_for(cycles_since_diskii_update_.flush());
+			diskii_.run_for(cycles_since_diskii_update_.flush<Cycles>());
 		}
 		std::vector<uint8_t> pravetz_rom_;
 		std::size_t pravetz_rom_base_pointer_ = 0;

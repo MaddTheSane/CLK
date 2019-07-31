@@ -39,13 +39,20 @@ MachineBase::MachineBase(Personality personality, const ROMMachine::ROMFetcher &
 	// attach the only drive there is
 	set_drive(drive_);
 
-	std::string rom_name;
+	std::string device_name;
+	uint32_t crc = 0;
 	switch(personality) {
-		case Personality::C1540:	rom_name = "1540.bin";	break;
-		case Personality::C1541:	rom_name = "1541.bin";	break;
+		case Personality::C1540:
+			device_name = "1540";
+			crc = 0x718d42b1;
+		break;
+		case Personality::C1541:
+			device_name = "1541";
+			crc = 0xfb760019;
+		break;
 	}
 
-	auto roms = rom_fetcher("Commodore1540", {rom_name});
+	auto roms = rom_fetcher({ {"Commodore1540", "the " + device_name + " ROM", device_name + ".bin", 16*1024, crc} });
 	if(!roms[0]) {
 		throw ROMMachine::Error::MissingROMs;
 	}
@@ -170,7 +177,6 @@ void SerialPortVIA::set_port_output(MOS::MOS6522::Port port, uint8_t value, uint
 			attention_acknowledge_level_ = !(value&0x10);
 			data_level_output_ = (value&0x02);
 
-//			printf("[C1540] %s output is %s\n", StringForLine(::Commodore::Serial::Line::Clock), value ? "high" : "low");
 			serialPort->set_output(::Commodore::Serial::Line::Clock, static_cast<::Commodore::Serial::LineLevel>(!(value&0x08)));
 			update_data_line();
 		}
@@ -178,8 +184,6 @@ void SerialPortVIA::set_port_output(MOS::MOS6522::Port port, uint8_t value, uint
 }
 
 void SerialPortVIA::set_serial_line_state(::Commodore::Serial::Line line, bool value) {
-//	printf("[C1540] %s input is %s\n", StringForLine(line), value ? "high" : "low");
-
 	switch(line) {
 		default: break;
 		case ::Commodore::Serial::Line::Data:		port_b_ = (port_b_ & ~0x01) | (value ? 0x00 : 0x01);		break;
@@ -200,7 +204,6 @@ void SerialPortVIA::set_serial_port(const std::shared_ptr<::Commodore::Serial::P
 void SerialPortVIA::update_data_line() {
 	std::shared_ptr<::Commodore::Serial::Port> serialPort = serial_port_.lock();
 	if(serialPort) {
-//		printf("[C1540] %s output is %s\n", StringForLine(::Commodore::Serial::Line::Data), (!data_level_output_ && (attention_level_input_ != attention_acknowledge_level_)) ? "high" : "low");
 		// "ATN (Attention) is an input on pin 3 of P2 and P3 that is sensed at PB7 and CA1 of UC3 after being inverted by UA1"
 		serialPort->set_output(::Commodore::Serial::Line::Data,
 			static_cast<::Commodore::Serial::LineLevel>(!data_level_output_ && (attention_level_input_ != attention_acknowledge_level_)));

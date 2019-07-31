@@ -18,6 +18,7 @@
 #include "../KeyboardMachine.hpp"
 
 #include "../../ClockReceiver/ForceInline.hpp"
+#include "../../ClockReceiver/JustInTime.hpp"
 
 #include "../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
 #include "../../Outputs/Log.hpp"
@@ -36,7 +37,7 @@ namespace MasterSystem {
 
 std::vector<std::unique_ptr<Configurable::Option>> get_options() {
 	return Configurable::standard_options(
-		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplayComposite)
+		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplayCompositeColour)
 	);
 }
 
@@ -57,7 +58,7 @@ class Joystick: public Inputs::ConcreteJoystick {
 			switch(digital_input.type) {
 				default: return;
 
-				case Input::Up: 	if(is_active) state_ &= ~0x01; else state_ |= 0x01;	break;
+				case Input::Up:		if(is_active) state_ &= ~0x01; else state_ |= 0x01;	break;
 				case Input::Down:	if(is_active) state_ &= ~0x02; else state_ |= 0x02;	break;
 				case Input::Left:	if(is_active) state_ &= ~0x04; else state_ |= 0x04;	break;
 				case Input::Right:	if(is_active) state_ &= ~0x08; else state_ |= 0x08;	break;
@@ -94,6 +95,7 @@ class ConcreteMachine:
 			region_(target.region),
 			paging_scheme_(target.paging_scheme),
 			z80_(*this),
+			vdp_(tms_personality_for_model(target.model)),
 			sn76489_(
 				(target.model == Target::Model::SG1000) ? TI::SN76489::Personality::SN76489 : TI::SN76489::Personality::SMS,
 				audio_queue_,
@@ -131,7 +133,12 @@ class ConcreteMachine:
 
 			// Load the BIOS if relevant.
 			if(has_bios()) {
-				const auto roms = rom_fetcher("MasterSystem", {"bios.sms"});
+				// TODO: there's probably a million other versions of the Master System BIOS; try to build a
+				// CRC32 catalogue of those. So far:
+				//
+				//	0072ed54 = US/European BIOS 1.3
+				//	48d44a13 = Japanese BIOS 2.1
+				const auto roms = rom_fetcher({ {"MasterSystem", "the Master System BIOS", "bios.sms", 8*1024, { 0x0072ed54, 0x48d44a13 } } });
 				if(!roms[0]) {
 					// No BIOS found; attempt to boot as though it has already disabled itself.
 					memory_control_ |= 0x08;
@@ -161,28 +168,17 @@ class ConcreteMachine:
 			audio_queue_.flush();
 		}
 
-		void setup_output(float aspect_ratio) override {
-			TI::TMS::Personality personality = TI::TMS::TMS9918A;
-			switch(model_) {
-				case Target::Model::SG1000: personality = TI::TMS::TMS9918A; 		break;
-				case Target::Model::MasterSystem: personality = TI::TMS::SMSVDP;	break;
-				case Target::Model::MasterSystem2: personality = TI::TMS::SMS2VDP;	break;
-			}
-			vdp_.reset(new TI::TMS::TMS9918(personality));
+		void set_scan_target(Outputs::Display::ScanTarget *scan_target) override {
 			vdp_->set_tv_standard(
 				(region_ == Target::Region::Europe) ?
 					TI::TMS::TVStandard::PAL : TI::TMS::TVStandard::NTSC);
-			get_crt()->set_video_signal(Outputs::CRT::VideoSignal::Composite);
-
 			time_until_debounce_ = vdp_->get_time_until_line(-1);
+
+			vdp_->set_scan_target(scan_target);
 		}
 
-		void close_output() override {
-			vdp_.reset();
-		}
-
-		Outputs::CRT::CRT *get_crt() override {
-			return vdp_->get_crt();
+		void set_display_type(Outputs::Display::DisplayType display_type) override {
+			vdp_->set_display_type(display_type);
 		}
 
 		Outputs::Speaker::Speaker *get_speaker() override {
@@ -194,7 +190,7 @@ class ConcreteMachine:
 		}
 
 		forceinline HalfCycles perform_machine_cycle(const CPU::Z80::PartialMachineCycle &cycle) {
-			time_since_vdp_update_ += cycle.length;
+			vdp_ += cycle.length;
 			time_since_sn76489_update_ += cycle.length;
 
 			if(cycle.is_terminal()) {
@@ -238,14 +234,12 @@ class ConcreteMachine:
 								*cycle.value = 0xff;
 							break;
 							case 0x40:
-								update_video();
 								*cycle.value = vdp_->get_current_line();
 							break;
 							case 0x41:
-								*cycle.value = vdp_->get_latched_horizontal_counter();
+								*cycle.value = vdp_.last_valid()->get_latched_horizontal_counter();
 							break;
 							case 0x80: case 0x81:
-								update_video();
 								*cycle.value = vdp_->get_register(address);
 								z80_.set_interrupt_line(vdp_->get_interrupt_line());
 								time_until_interrupt_ = vdp_->get_time_until_interrupt();
@@ -289,7 +283,6 @@ class ConcreteMachine:
 
 								// Latch if either TH has newly gone to 1.
 								if((new_ths^previous_ths)&new_ths) {
-									update_video();
 									vdp_->latch_horizontal_counter();
 								}
 							} break;
@@ -298,7 +291,6 @@ class ConcreteMachine:
 								sn76489_.set_register(*cycle.value);
 							break;
 							case 0x80: case 0x81:
-								update_video();
 								vdp_->set_register(address, *cycle.value);
 								z80_.set_interrupt_line(vdp_->get_interrupt_line());
 								time_until_interrupt_ = vdp_->get_time_until_interrupt();
@@ -336,7 +328,6 @@ class ConcreteMachine:
 			time_until_debounce_ -= cycle.length;
 			if(time_until_debounce_ <= HalfCycles(0)) {
 				z80_.set_non_maskable_interrupt_line(pause_is_pressed_);
-				update_video();
 				time_until_debounce_ = vdp_->get_time_until_line(-1);
 			}
 
@@ -344,7 +335,7 @@ class ConcreteMachine:
 		}
 
 		void flush() {
-			update_video();
+			vdp_.flush();
 			update_audio();
 			audio_queue_.perform();
 		}
@@ -366,7 +357,6 @@ class ConcreteMachine:
 			}
 		}
 
-
 		void reset_all_keys(Inputs::Keyboard *) override {
 		}
 
@@ -384,7 +374,7 @@ class ConcreteMachine:
 
 		Configurable::SelectionSet get_accurate_selections() override {
 			Configurable::SelectionSet selection_set;
-			Configurable::append_display_selection(selection_set, Configurable::Display::Composite);
+			Configurable::append_display_selection(selection_set, Configurable::Display::CompositeColour);
 			return selection_set;
 		}
 
@@ -395,6 +385,15 @@ class ConcreteMachine:
 		}
 
 	private:
+		static TI::TMS::Personality tms_personality_for_model(Analyser::Static::Sega::Target::Model model) {
+			switch(model) {
+				default:
+				case Target::Model::SG1000:			return TI::TMS::TMS9918A;
+				case Target::Model::MasterSystem:	return TI::TMS::SMSVDP;
+				case Target::Model::MasterSystem2:	return TI::TMS::SMS2VDP;
+			}
+		}
+
 		inline uint8_t get_th_values() {
 			// Quick not on TH inputs here: if either is setup as an output, then the
 			// currently output level is returned. Otherwise they're fixed at 1.
@@ -409,16 +408,13 @@ class ConcreteMachine:
 		inline void update_audio() {
 			speaker_.run_for(audio_queue_, time_since_sn76489_update_.divide_cycles(Cycles(sn76489_divider)));
 		}
-		inline void update_video() {
-			vdp_->run_for(time_since_vdp_update_.flush());
-		}
 
 		using Target = Analyser::Static::Sega::Target;
 		Target::Model model_;
 		Target::Region region_;
 		Target::PagingScheme paging_scheme_;
 		CPU::Z80::Processor<ConcreteMachine, false, false> z80_;
-		std::unique_ptr<TI::TMS::TMS9918> vdp_;
+		JustInTimeActor<TI::TMS::TMS9918, HalfCycles> vdp_;
 
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
 		TI::SN76489 sn76489_;
@@ -428,7 +424,6 @@ class ConcreteMachine:
 		Inputs::Keyboard keyboard_;
 		bool reset_is_pressed_ = false, pause_is_pressed_ = false;
 
-		HalfCycles time_since_vdp_update_;
 		HalfCycles time_since_sn76489_update_;
 		HalfCycles time_until_interrupt_;
 		HalfCycles time_until_debounce_;

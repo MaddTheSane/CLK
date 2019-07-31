@@ -70,6 +70,8 @@ class HeadPosition {
 */
 class Track {
 	public:
+		virtual ~Track() {}
+
 		/*!
 			Describes the location of a track, implementing < to allow for use as a set key.
 		*/
@@ -93,7 +95,7 @@ class Track {
 			1/3 away then that means 1/3 of a rotation.
 		*/
 		struct Event {
-			enum {
+			enum Type {
 				IndexHole, FluxTransition
 			} type;
 			Time length;

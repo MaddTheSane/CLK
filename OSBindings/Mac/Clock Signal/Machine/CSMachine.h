@@ -24,13 +24,22 @@
 typedef NS_ENUM(NSInteger, CSMachineVideoSignal) {
 	CSMachineVideoSignalComposite,
 	CSMachineVideoSignalSVideo,
-	CSMachineVideoSignalRGB
+	CSMachineVideoSignalRGB,
+	CSMachineVideoSignalMonochromeComposite
 };
 
 typedef NS_ENUM(NSInteger, CSMachineKeyboardInputMode) {
 	CSMachineKeyboardInputModeKeyboard,
 	CSMachineKeyboardInputModeJoystick
 };
+
+@interface CSMissingROM: NSObject
+@property (nonatomic, readonly, nonnull) NSString *machineName;
+@property (nonatomic, readonly, nonnull) NSString *fileName;
+@property (nonatomic, readonly, nullable) NSString *descriptiveName;
+@property (nonatomic, readonly) NSUInteger size;
+@property (nonatomic, readonly, nonnull) NSArray<NSNumber *> *crc32s;
+@end
 
 // Deliberately low; to ensure CSMachine has been declared as an @class already.
 #import "CSAtari2600.h"
@@ -46,8 +55,10 @@ NS_ASSUME_NONNULL_BEGIN
 	Initialises an instance of CSMachine.
 
 	@param result The CSStaticAnalyser result that describes the machine needed.
+	@param missingROMs An array that is filled with a list of ROMs that the machine requested but which
+		were not found; populated only if this `init` has failed.
 */
-- (nullable instancetype)initWithAnalyser:(nonnull CSStaticAnalyser *)result NS_DESIGNATED_INITIALIZER;
+- (nullable instancetype)initWithAnalyser:(nonnull CSStaticAnalyser *)result missingROMs:(nullable inout NSMutableArray<CSMissingROM *> *)missingROMs NS_DESIGNATED_INITIALIZER;
 
 - (void)runForInterval:(NSTimeInterval)interval;
 
@@ -55,10 +66,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setAudioSamplingRate:(float)samplingRate bufferSize:(NSUInteger)bufferSize;
 
 - (void)setView:(nullable CSOpenGLView *)view aspectRatio:(float)aspectRatio;
-- (void)drawViewForPixelSize:(CGSize)pixelSize onlyIfDirty:(BOOL)onlyIfDirty;
+
+- (void)updateViewForPixelSize:(CGSize)pixelSize;
+- (void)drawViewForPixelSize:(CGSize)pixelSize;
 
 - (void)setKey:(uint16_t)key characters:(nullable NSString *)characters isPressed:(BOOL)isPressed;
 - (void)clearAllKeys;
+
+- (void)setMouseButton:(int)button isPressed:(BOOL)isPressed;
+- (void)addMouseMotionX:(CGFloat)deltaX y:(CGFloat)deltaY;
 
 @property (nonatomic, strong, nullable) CSAudioQueue *audioQueue;
 @property (nonatomic, readonly, nonnull) CSOpenGLView *view;
@@ -80,6 +96,7 @@ NS_ASSUME_NONNULL_BEGIN
 // Input control.
 @property (nonatomic, readonly) BOOL hasExclusiveKeyboard;
 @property (nonatomic, readonly) BOOL hasJoystick;
+@property (nonatomic, readonly) BOOL hasMouse;
 @property (nonatomic, assign) CSMachineKeyboardInputMode inputMode;
 @property (nonatomic, nullable) CSJoystickManager *joystickManager;
 

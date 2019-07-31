@@ -24,6 +24,7 @@ class Z80MachineCycleTests: XCTestCase {
 					case .portRead:				opName = "i"
 					case .portWrite:			opName = "o"
 					case .internalOperation:	opName = "iop"
+					default:					opName = "?"
 				}
 				return "\(opName) \(length)"
 			}
@@ -35,7 +36,7 @@ class Z80MachineCycleTests: XCTestCase {
 		// Create a machine and install the supplied program at address 0, setting the PC to run from there
 		let machine = CSTestMachineZ80()
 		machine.setValue(0x0000, for: .programCounter)
-		machine.setData(Data(bytes: program), atAddress: 0x0000)
+		machine.setData(Data(_: program), atAddress: 0x0000)
 
 		// Figure out the total number of cycles implied by the bus cycles
 		var totalCycles: Int32 = 0
@@ -303,7 +304,7 @@ class Z80MachineCycleTests: XCTestCase {
 				MachineCycle(operation: .readOpcode, length: 4),
 				MachineCycle(operation: .readOpcode, length: 4),
 				MachineCycle(operation: .read, length: 3),
- 				MachineCycle(operation: .read, length: 3),
+				MachineCycle(operation: .read, length: 3),
 				MachineCycle(operation: .read, length: 3),
 				MachineCycle(operation: .read, length: 3),
 			]
@@ -318,7 +319,7 @@ class Z80MachineCycleTests: XCTestCase {
 				MachineCycle(operation: .readOpcode, length: 4),
 				MachineCycle(operation: .readOpcode, length: 4),
 				MachineCycle(operation: .read, length: 3),
- 				MachineCycle(operation: .read, length: 3),
+				MachineCycle(operation: .read, length: 3),
 				MachineCycle(operation: .write, length: 3),
 				MachineCycle(operation: .write, length: 3),
 			]
@@ -333,7 +334,7 @@ class Z80MachineCycleTests: XCTestCase {
 				MachineCycle(operation: .readOpcode, length: 4),
 				MachineCycle(operation: .readOpcode, length: 4),
 				MachineCycle(operation: .read, length: 3),
- 				MachineCycle(operation: .read, length: 3),
+				MachineCycle(operation: .read, length: 3),
 				MachineCycle(operation: .read, length: 3),
 				MachineCycle(operation: .read, length: 3),
 			]
@@ -348,7 +349,7 @@ class Z80MachineCycleTests: XCTestCase {
 				MachineCycle(operation: .readOpcode, length: 4),
 				MachineCycle(operation: .readOpcode, length: 4),
 				MachineCycle(operation: .read, length: 3),
- 				MachineCycle(operation: .read, length: 3),
+				MachineCycle(operation: .read, length: 3),
 				MachineCycle(operation: .write, length: 3),
 				MachineCycle(operation: .write, length: 3),
 			]

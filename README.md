@@ -23,6 +23,8 @@ It currently contains emulations of the:
 * Sega Master System; and
 * Sinclair ZX80/81.
 
+Work is in progress on the Macintosh 512ke; it is presently very experimental.
+
 ## Single-click Loading
 
 Through the combination of static analysis and runtime analysis, CLK seeks to be able automatically to select and configure the appropriate machine to run any provided disk, tape or ROM; to issue any commands necessary to run the software contained on the disk, tape or ROM; and to provide accelerated loading where feasible.
@@ -56,7 +58,8 @@ If your machine has a 4k monitor and a 96Khz audio output? Then you'll get a 4k 
 |![Amstrad text, with a classic 1:1 pixel emulation](READMEImages/NaiveCPC.png)|![Amstrad text, with correct aspect ratio and subject to a lowpass filter](READMEImages/FilteredCPC.png)|
 |![The Amstrad CPC version of Stormlord, with a classic 1:1 pixel emulation](READMEImages/NaiveCPCStormlord.png)|![The Amstrad CPC version of Stormlord, with correct aspect ratio and subject to a lowpass filter](READMEImages/CPCStormlord.png)|
 
-<img src="READMEImages/ReptonInterlaced.gif" height=400 alt="Repton title screen, interlaced"> <img src="READMEImages/AppleIIPrinceOfPersia.png" height=400 alt="Apple IIe Prince of Persia">
+<img src="READMEImages/ReptonInterlaced.gif" height=400 alt="Repton title screen, interlaced"><img src="READMEImages/AppleIIPrinceOfPersia.png" height=400 alt="Apple IIe Prince of Persia">
+<img src="READMEImages/MusicWorks.png" height=400 alt="Apple Macintosh MusicWorks">
 
 ## Low Latency
 

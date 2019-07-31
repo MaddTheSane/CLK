@@ -15,6 +15,7 @@
 
 #include "../RegisterSizes.hpp"
 #include "../../ClockReceiver/ClockReceiver.hpp"
+#include "../../ClockReceiver/ForceInline.hpp"
 
 namespace CPU {
 namespace Z80 {
@@ -98,7 +99,7 @@ struct PartialMachineCycle {
 	const HalfCycles length;
 	/// The current value of the address bus.
 	const uint16_t *const address;
-	/// If the Z80 is outputting to the data bus, a pointer to that value. Otherwise, a pointer to the lcoation where the current data bus value should be placed.
+	/// If the Z80 is outputting to the data bus, a pointer to that value. Otherwise, a pointer to the location where the current data bus value should be placed.
 	uint8_t *const value;
 	/// @c true if this operation is occurring only because of an external request; @c false otherwise.
 	const bool was_requested;
@@ -107,20 +108,20 @@ struct PartialMachineCycle {
 		@returns @c true if the processor believes that the bus handler should actually do something with
 		the content of this PartialMachineCycle; @c false otherwise.
 	*/
-	inline bool expects_action() const {
+	forceinline bool expects_action() const {
 		return operation <= Operation::Interrupt;
 	}
 	/*!
 		@returns @c true if this partial machine cycle completes one of the documented full machine cycles;
 		@c false otherwise.
 	*/
-	inline bool is_terminal() const {
+	forceinline bool is_terminal() const {
 		return operation <= Operation::BusAcknowledge;
 	}
 	/*!
 		@returns @c true if this partial machine cycle is a wait cycle; @c false otherwise.
 	*/
-	inline bool is_wait() const {
+	forceinline bool is_wait() const {
 		return operation >= Operation::ReadOpcodeWait && operation <= Operation::InterruptWait;
 	}
 
@@ -131,7 +132,7 @@ struct PartialMachineCycle {
 
 /*!
 	A class providing empty implementations of the methods a Z80 uses to access the bus. To wire the Z80 to a bus,
-	machines should subclass BusHandler and then declare a realisation of the Z80 template, suplying their bus
+	machines should subclass BusHandler and then declare a realisation of the Z80 template, supplying their bus
 	handler.
 */
 class BusHandler {
@@ -149,7 +150,7 @@ class BusHandler {
 		}
 
 		/*!
-			Announces completion of all the cycles supplied to a .run_for request on the 6502. Intended to allow
+			Announces completion of all the cycles supplied to a .run_for request on the Z80. Intended to allow
 			bus handlers to perform any deferred output work.
 		*/
 		void flush() {}

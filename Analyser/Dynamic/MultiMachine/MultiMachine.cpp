@@ -7,6 +7,7 @@
 //
 
 #include "MultiMachine.hpp"
+#include "../../../Outputs/Log.hpp"
 
 #include <algorithm>
 
@@ -58,6 +59,11 @@ KeyboardMachine::Machine *MultiMachine::keyboard_machine() {
 	}
 }
 
+MouseMachine::Machine *MultiMachine::mouse_machine() {
+	// TODO.
+	return nullptr;
+}
+
 Configurable::Device *MultiMachine::configurable_device() {
 	if(has_picked_) {
 		return machines_.front()->configurable_device();
@@ -73,15 +79,13 @@ bool MultiMachine::would_collapse(const std::vector<std::unique_ptr<DynamicMachi
 }
 
 void MultiMachine::multi_crt_did_run_machines() {
-	std::lock_guard<std::mutex> machines_lock(machines_mutex_);
-#ifdef DEBUG
+	std::lock_guard<decltype(machines_mutex_)> machines_lock(machines_mutex_);
+#ifndef NDEBUG
 	for(const auto &machine: machines_) {
 		CRTMachine::Machine *crt = machine->crt_machine();
-		printf("%0.2f ", crt->get_confidence());
-		crt->print_type();
-		printf("; ");
+		LOGNBR(PADHEX(2) << crt->get_confidence() << " " << crt->debug_type() << "; ");
 	}
-	printf("\n");
+	LOGNBR(std::endl);
 #endif
 
 	DynamicMachine *front = machines_.front().get();

@@ -13,7 +13,7 @@
 
 using namespace Analyser::Dynamic;
 
-MultiCRTMachine::MultiCRTMachine(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &machines, std::mutex &machines_mutex) :
+MultiCRTMachine::MultiCRTMachine(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &machines, std::recursive_mutex &machines_mutex) :
 	machines_(machines), machines_mutex_(machines_mutex), queues_(machines.size()) {
 	speaker_ = MultiSpeaker::create(machines);
 }
@@ -25,7 +25,7 @@ void MultiCRTMachine::perform_parallel(const std::function<void(::CRTMachine::Ma
 	std::condition_variable condition;
 	std::mutex mutex;
 	{
-		std::lock_guard<std::mutex> machines_lock(machines_mutex_);
+		std::lock_guard<decltype(machines_mutex_)> machines_lock(machines_mutex_);
 		std::lock_guard<std::mutex> lock(mutex);
 		outstanding_machines = machines_.size();
 
@@ -46,29 +46,18 @@ void MultiCRTMachine::perform_parallel(const std::function<void(::CRTMachine::Ma
 }
 
 void MultiCRTMachine::perform_serial(const std::function<void (::CRTMachine::Machine *)> &function) {
-	std::lock_guard<std::mutex> machines_lock(machines_mutex_);
+	std::lock_guard<decltype(machines_mutex_)> machines_lock(machines_mutex_);
 	for(const auto &machine: machines_) {
-		CRTMachine::Machine *crt_machine = machine->crt_machine();
+		CRTMachine::Machine *const crt_machine = machine->crt_machine();
 		if(crt_machine) function(crt_machine);
 	}
 }
 
-void MultiCRTMachine::setup_output(float aspect_ratio) {
-	perform_serial([=](::CRTMachine::Machine *machine) {
-		machine->setup_output(aspect_ratio);
-	});
-}
+void MultiCRTMachine::set_scan_target(Outputs::Display::ScanTarget *scan_target) {
+	scan_target_ = scan_target;
 
-void MultiCRTMachine::close_output() {
-	perform_serial([=](::CRTMachine::Machine *machine) {
-		machine->close_output();
-	});
-}
-
-Outputs::CRT::CRT *MultiCRTMachine::get_crt() {
-	std::lock_guard<std::mutex> machines_lock(machines_mutex_);
-	CRTMachine::Machine *crt_machine = machines_.front()->crt_machine();
-	return crt_machine ? crt_machine->get_crt() : nullptr;
+	CRTMachine::Machine *const crt_machine = machines_.front()->crt_machine();
+	if(crt_machine) crt_machine->set_scan_target(scan_target);
 }
 
 Outputs::Speaker::Speaker *MultiCRTMachine::get_speaker() {
@@ -84,6 +73,14 @@ void MultiCRTMachine::run_for(Time::Seconds duration) {
 }
 
 void MultiCRTMachine::did_change_machine_order() {
+	if(scan_target_) scan_target_->will_change_owner();
+
+	perform_serial([=](::CRTMachine::Machine *machine) {
+		machine->set_scan_target(nullptr);
+	});
+	CRTMachine::Machine *const crt_machine = machines_.front()->crt_machine();
+	if(crt_machine) crt_machine->set_scan_target(scan_target_);
+
 	if(speaker_) {
 		speaker_->set_new_front_machine(machines_.front().get());
 	}

@@ -26,6 +26,12 @@
 
 #include <bitset>
 
+#import <OpenGL/OpenGL.h>
+#include <OpenGL/gl3.h>
+
+#include "../../../../Outputs/OpenGL/ScanTarget.hpp"
+#include "../../../../Outputs/OpenGL/Screenshot.hpp"
+
 @interface CSMachine() <CSFastLoading>
 - (void)speaker:(Outputs::Speaker::Speaker *)speaker didCompleteSamples:(const int16_t *)samples length:(int)length;
 - (void)speakerDidChangeInputClock:(Outputs::Speaker::Speaker *)speaker;
@@ -68,6 +74,68 @@ struct ActivityObserver: public Activity::Observer {
 	__unsafe_unretained CSMachine *machine;
 };
 
+@interface CSMissingROM (Mutability)
+@property (nonatomic, nonnull, copy) NSString *machineName;
+@property (nonatomic, nonnull, copy) NSString *fileName;
+@property (nonatomic, nullable, copy) NSString *descriptiveName;
+@property (nonatomic, readwrite) NSUInteger size;
+@property (nonatomic, copy) NSArray<NSNumber *> *crc32s;
+@end
+
+@implementation CSMissingROM {
+	NSString *_machineName;
+	NSString *_fileName;
+	NSString *_descriptiveName;
+	NSUInteger _size;
+	NSArray<NSNumber *> *_crc32s;
+}
+
+- (NSString *)machineName {
+	return _machineName;
+}
+
+- (void)setMachineName:(NSString *)machineName {
+	_machineName = [machineName copy];
+}
+
+- (NSString *)fileName {
+	return _fileName;
+}
+
+- (void)setFileName:(NSString *)fileName {
+	_fileName = [fileName copy];
+}
+
+- (NSString *)descriptiveName {
+	return _descriptiveName;
+}
+
+- (void)setDescriptiveName:(NSString *)descriptiveName {
+	_descriptiveName = [descriptiveName copy];
+}
+
+- (NSUInteger)size {
+	return _size;
+}
+
+- (void)setSize:(NSUInteger)size {
+	_size = size;
+}
+
+- (NSArray<NSNumber *> *)crc32s {
+	return _crc32s;
+}
+
+- (void)setCrc32s:(NSArray<NSNumber *> *)crc32s {
+	_crc32s = [crc32s copy];
+}
+
+- (NSString *)description {
+	return [NSString stringWithFormat:@"%@/%@, %@ bytes, CRCs: %@", _fileName, _descriptiveName, @(_size), _crc32s];
+}
+
+@end
+
 @implementation CSMachine {
 	SpeakerDelegate _speakerDelegate;
 	ActivityObserver _activityObserver;
@@ -80,16 +148,41 @@ struct ActivityObserver: public Activity::Observer {
 	CSJoystickManager *_joystickManager;
 	std::bitset<65536> _depressedKeys;
 	NSMutableArray<NSString *> *_leds;
+
+	std::unique_ptr<Outputs::Display::OpenGL::ScanTarget> _scanTarget;
 }
 
-- (instancetype)initWithAnalyser:(CSStaticAnalyser *)result {
+- (instancetype)initWithAnalyser:(CSStaticAnalyser *)result missingROMs:(inout NSMutableArray<CSMissingROM *> *)missingROMs {
 	self = [super init];
 	if(self) {
 		_analyser = result;
 
 		Machine::Error error;
-		_machine.reset(Machine::MachineForTargets(_analyser.targets, CSROMFetcher(), error));
-		if(!_machine) return nil;
+		std::vector<ROMMachine::ROM> missing_roms;
+		_machine.reset(Machine::MachineForTargets(_analyser.targets, CSROMFetcher(&missing_roms), error));
+		if(!_machine) {
+			for(const auto &missing_rom : missing_roms) {
+				CSMissingROM *rom = [[CSMissingROM alloc] init];
+
+				// Copy/convert the primitive fields.
+				rom.machineName = [NSString stringWithUTF8String:missing_rom.machine_name.c_str()];
+				rom.fileName = [NSString stringWithUTF8String:missing_rom.file_name.c_str()];
+				rom.descriptiveName = missing_rom.descriptive_name.empty() ? nil : [NSString stringWithUTF8String:missing_rom.descriptive_name.c_str()];
+				rom.size = missing_rom.size;
+
+				// Convert the CRC list.
+				NSMutableArray<NSNumber *> *crc32s = [[NSMutableArray alloc] init];
+				for(const auto &crc : missing_rom.crc32s) {
+					[crc32s addObject:@(crc)];
+				}
+				rom.crc32s = [crc32s copy];
+
+				// Add to the missing list.
+				[missingROMs addObject:rom];
+			}
+
+			return nil;
+		}
 
 		_inputMode =
 			(_machine->keyboard_machine() && _machine->keyboard_machine()->get_keyboard().is_exclusive())
@@ -133,7 +226,7 @@ struct ActivityObserver: public Activity::Observer {
 
 	[_view performWithGLContext:^{
 		@synchronized(self) {
-			self->_machine->crt_machine()->close_output();
+			self->_scanTarget.reset();
 		}
 	}];
 }
@@ -178,7 +271,7 @@ struct ActivityObserver: public Activity::Observer {
 			std::vector<std::unique_ptr<Inputs::Joystick>> &machine_joysticks = _joystickMachine->get_joysticks();
 			for(CSJoystick *joystick in _joystickManager.joysticks) {
 				size_t target = c % machine_joysticks.size();
-				++++c;
+				++c;
 
 				// Post the first two analogue axes presented by the controller as horizontal and vertical inputs,
 				// unless the user seems to be using a hat.
@@ -228,15 +321,16 @@ struct ActivityObserver: public Activity::Observer {
 }
 
 - (void)setupOutputWithAspectRatio:(float)aspectRatio {
-	_machine->crt_machine()->setup_output(aspectRatio);
-
-	// Since OS X v10.6, Macs have had a gamma of 2.2.
-	_machine->crt_machine()->get_crt()->set_output_gamma(2.2f);
-	_machine->crt_machine()->get_crt()->set_target_framebuffer(0);
+	_scanTarget.reset(new Outputs::Display::OpenGL::ScanTarget);
+	_machine->crt_machine()->set_scan_target(_scanTarget.get());
 }
 
-- (void)drawViewForPixelSize:(CGSize)pixelSize onlyIfDirty:(BOOL)onlyIfDirty {
-	_machine->crt_machine()->get_crt()->draw_frame((unsigned int)pixelSize.width, (unsigned int)pixelSize.height, onlyIfDirty ? true : false);
+- (void)updateViewForPixelSize:(CGSize)pixelSize {
+	_scanTarget->update((int)pixelSize.width, (int)pixelSize.height);
+}
+
+- (void)drawViewForPixelSize:(CGSize)pixelSize {
+	_scanTarget->draw((int)pixelSize.width, (int)pixelSize.height);
 }
 
 - (void)paste:(NSString *)paste {
@@ -246,38 +340,24 @@ struct ActivityObserver: public Activity::Observer {
 }
 
 - (NSBitmapImageRep *)imageRepresentation {
-	// Get the current viewport to establish framebuffer size. Then determine how wide the
-	// centre 4/3 of that would be.
-	GLint dimensions[4];
-	glGetIntegerv(GL_VIEWPORT, dimensions);
-	GLint proportionalWidth = (dimensions[3] * 4) / 3;
+	// Grab a screenshot.
+	Outputs::Display::OpenGL::Screenshot screenshot(4, 3);
 
-	// Grab the framebuffer contents.
-	std::vector<uint8_t> temporaryData(static_cast<size_t>(proportionalWidth * dimensions[3] * 3));
-	glReadPixels((dimensions[2] - proportionalWidth) >> 1, 0, proportionalWidth, dimensions[3], GL_RGB, GL_UNSIGNED_BYTE, temporaryData.data());
-
-	// Generate an NSBitmapImageRep and populate it with a vertical flip
-	// of the original data.
+	// Generate an NSBitmapImageRep containing the screenshot's data.
 	NSBitmapImageRep *const result =
 		[[NSBitmapImageRep alloc]
 			initWithBitmapDataPlanes:NULL
-			pixelsWide:proportionalWidth
-			pixelsHigh:dimensions[3]
+			pixelsWide:screenshot.width
+			pixelsHigh:screenshot.height
 			bitsPerSample:8
-			samplesPerPixel:3
-			hasAlpha:NO
+			samplesPerPixel:4
+			hasAlpha:YES
 			isPlanar:NO
 			colorSpaceName:NSDeviceRGBColorSpace
-			bytesPerRow:3 * proportionalWidth
+			bytesPerRow:4 * screenshot.width
 			bitsPerPixel:0];
 
-	const size_t line_size = static_cast<size_t>(proportionalWidth * 3);
-	for(GLint y = 0; y < dimensions[3]; ++y) {
-		memcpy(
-			&result.bitmapData[static_cast<size_t>(y) * line_size],
-			&temporaryData[static_cast<size_t>(dimensions[3] - y - 1) * line_size],
-			line_size);
-	}
+	memcpy(result.bitmapData, screenshot.pixel_data.data(), size_t(screenshot.width*screenshot.height*4));
 
 	return result;
 }
@@ -357,7 +437,7 @@ struct ActivityObserver: public Activity::Observer {
 			BIND(VK_ForwardDelete, Delete);
 
 			BIND(VK_LeftArrow, Left);		BIND(VK_RightArrow, Right);
-			BIND(VK_DownArrow, Down); 		BIND(VK_UpArrow, Up);
+			BIND(VK_DownArrow, Down);		BIND(VK_UpArrow, Up);
 		}
 #undef BIND
 
@@ -415,19 +495,44 @@ struct ActivityObserver: public Activity::Observer {
 }
 
 - (void)clearAllKeys {
-	auto keyboard_machine = _machine->keyboard_machine();
+	const auto keyboard_machine = _machine->keyboard_machine();
 	if(keyboard_machine) {
 		@synchronized(self) {
 			keyboard_machine->get_keyboard().reset_all_keys();
 		}
 	}
 
-	auto joystick_machine = _machine->joystick_machine();
+	const auto joystick_machine = _machine->joystick_machine();
 	if(joystick_machine) {
 		@synchronized(self) {
 			for(auto &joystick : joystick_machine->get_joysticks()) {
 				joystick->reset_all_inputs();
 			}
+		}
+	}
+
+	const auto mouse_machine = _machine->mouse_machine();
+	if(mouse_machine) {
+		@synchronized(self) {
+			mouse_machine->get_mouse().reset_all_buttons();
+		}
+	}
+}
+
+- (void)setMouseButton:(int)button isPressed:(BOOL)isPressed {
+	auto mouse_machine = _machine->mouse_machine();
+	if(mouse_machine) {
+		@synchronized(self) {
+			mouse_machine->get_mouse().set_button_pressed(button % mouse_machine->get_mouse().get_number_of_buttons(), isPressed);
+		}
+	}
+}
+
+- (void)addMouseMotionX:(CGFloat)deltaX y:(CGFloat)deltaY {
+	auto mouse_machine = _machine->mouse_machine();
+	if(mouse_machine) {
+		@synchronized(self) {
+			mouse_machine->get_mouse().move(int(deltaX), int(deltaY));
 		}
 	}
 }
@@ -457,9 +562,10 @@ struct ActivityObserver: public Activity::Observer {
 		Configurable::SelectionSet selection_set;
 		Configurable::Display display;
 		switch(videoSignal) {
-			case CSMachineVideoSignalRGB:		display = Configurable::Display::RGB;		break;
-			case CSMachineVideoSignalSVideo:	display = Configurable::Display::SVideo;	break;
-			case CSMachineVideoSignalComposite:	display = Configurable::Display::Composite;	break;
+			case CSMachineVideoSignalRGB:					display = Configurable::Display::RGB;					break;
+			case CSMachineVideoSignalSVideo:				display = Configurable::Display::SVideo;				break;
+			case CSMachineVideoSignalComposite:				display = Configurable::Display::CompositeColour;		break;
+			case CSMachineVideoSignalMonochromeComposite:	display = Configurable::Display::CompositeMonochrome;	break;
 		}
 		append_display_selection(selection_set, display);
 		configurable_device->set_selections(selection_set);
@@ -479,9 +585,10 @@ struct ActivityObserver: public Activity::Observer {
 	// Get the standard option for this video signal.
 	Configurable::StandardOptions option;
 	switch(videoSignal) {
-		case CSMachineVideoSignalRGB:		option = Configurable::DisplayRGB;			break;
-		case CSMachineVideoSignalSVideo:	option = Configurable::DisplaySVideo;		break;
-		case CSMachineVideoSignalComposite:	option = Configurable::DisplayComposite;	break;
+		case CSMachineVideoSignalRGB:					option = Configurable::DisplayRGB;					break;
+		case CSMachineVideoSignalSVideo:				option = Configurable::DisplaySVideo;				break;
+		case CSMachineVideoSignalComposite:				option = Configurable::DisplayCompositeColour;		break;
+		case CSMachineVideoSignalMonochromeComposite:	option = Configurable::DisplayCompositeMonochrome;	break;
 	}
 	std::unique_ptr<Configurable::Option> display_option = std::move(standard_options(option).front());
 	Configurable::ListOption *display_list_option = dynamic_cast<Configurable::ListOption *>(display_option.get());
@@ -541,6 +648,10 @@ struct ActivityObserver: public Activity::Observer {
 
 - (BOOL)hasJoystick {
 	return !!_machine->joystick_machine();
+}
+
+- (BOOL)hasMouse {
+	return !!_machine->mouse_machine();
 }
 
 - (BOOL)hasExclusiveKeyboard {

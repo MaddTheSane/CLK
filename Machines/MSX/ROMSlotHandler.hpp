@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 /*
 	Design assumptions:
@@ -43,6 +44,8 @@ class MemoryMap {
 
 class ROMSlotHandler {
 	public:
+		virtual ~ROMSlotHandler() {}
+
 		/*! Advances time by @c half_cycles. */
 		virtual void run_for(HalfCycles half_cycles) {}
 
@@ -69,7 +72,8 @@ class ROMSlotHandler {
 			return confidence_counter_.get_confidence();
 		}
 
-		virtual void print_type() {
+		virtual std::string debug_type() {
+			return "";
 		}
 
 	protected:

@@ -34,7 +34,7 @@ namespace Electron {
 
 std::vector<std::unique_ptr<Configurable::Option>> get_options() {
 	return Configurable::standard_options(
-		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplayComposite | Configurable::QuickLoadTape)
+		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplayCompositeColour | Configurable::QuickLoadTape)
 	);
 }
 
@@ -51,6 +51,7 @@ class ConcreteMachine:
 	public:
 		ConcreteMachine(const Analyser::Static::Acorn::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
 				m6502_(*this),
+				video_output_(ram_),
 				sound_generator_(audio_queue_),
 				speaker_(sound_generator_) {
 			memset(key_states_, 0, sizeof(key_states_));
@@ -61,17 +62,22 @@ class ConcreteMachine:
 			set_clock_rate(2000000);
 
 			speaker_.set_input_rate(2000000 / SoundGenerator::clock_rate_divider);
+			speaker_.set_high_frequency_cutoff(7000);
 
-			std::vector<std::string> rom_names = {"basic.rom", "os.rom"};
+			const std::string machine_name = "Electron";
+			std::vector<ROMMachine::ROM> required_roms = {
+				{machine_name, "the Acorn BASIC II ROM", "basic.rom", 16*1024, 0x79434781},
+				{machine_name, "the Electron MOS ROM", "os.rom", 16*1024, 0xbf63fb1f}
+			};
 			if(target.has_adfs) {
-				rom_names.push_back("ADFS-E00_1.rom");
-				rom_names.push_back("ADFS-E00_2.rom");
+				required_roms.emplace_back(machine_name, "the E00 ADFS ROM, first slot", "ADFS-E00_1.rom", 16*1024, 0x51523993);
+				required_roms.emplace_back(machine_name, "the E00 ADFS ROM, second slot", "ADFS-E00_2.rom", 16*1024, 0x8d17de0e);
 			}
-			const size_t dfs_rom_position = rom_names.size();
+			const size_t dfs_rom_position = required_roms.size();
 			if(target.has_dfs) {
-				rom_names.push_back("DFS-1770-2.20.rom");
+				required_roms.emplace_back(machine_name, "the 1770 DFS ROM", "DFS-1770-2.20.rom", 16*1024, 0xf3dc9bc5);
 			}
-			const auto roms = rom_fetcher("Electron", rom_names);
+			const auto roms = rom_fetcher(required_roms);
 
 			for(const auto &rom: roms) {
 				if(!rom) {
@@ -160,7 +166,7 @@ class ConcreteMachine:
 
 				// for the entire frame, RAM is accessible only on odd cycles; in modes below 4
 				// it's also accessible only outside of the pixel regions
-				cycles += video_output_->get_cycles_until_next_ram_availability(cycles_since_display_update_.as_int() + 1);
+				cycles += video_output_.get_cycles_until_next_ram_availability(cycles_since_display_update_.as_int() + 1);
 			} else {
 				switch(address & 0xff0f) {
 					case 0xfe00:
@@ -198,8 +204,8 @@ class ConcreteMachine:
 					case 0xfe0c: case 0xfe0d: case 0xfe0e: case 0xfe0f:
 						if(!isReadOperation(operation)) {
 							update_display();
-							video_output_->set_register(address, *value);
-							video_access_range_ = video_output_->get_memory_access_range();
+							video_output_.set_register(address, *value);
+							video_access_range_ = video_output_.get_memory_access_range();
 							queue_next_display_interrupt();
 						}
 					break;
@@ -373,16 +379,12 @@ class ConcreteMachine:
 			audio_queue_.perform();
 		}
 
-		void setup_output(float aspect_ratio) override final {
-			video_output_.reset(new VideoOutput(ram_));
+		void set_scan_target(Outputs::Display::ScanTarget *scan_target) override final {
+			video_output_.set_scan_target(scan_target);
 		}
 
-		void close_output() override final {
-			video_output_.reset();
-		}
-
-		Outputs::CRT::CRT *get_crt() override final {
-			return video_output_->get_crt();
+		void set_display_type(Outputs::Display::DisplayType display_type) override {
+			video_output_.set_display_type(display_type);
 		}
 
 		Outputs::Speaker::Speaker *get_speaker() override final {
@@ -436,7 +438,7 @@ class ConcreteMachine:
 		Configurable::SelectionSet get_accurate_selections() override {
 			Configurable::SelectionSet selection_set;
 			Configurable::append_quick_load_tape_selection(selection_set, false);
-			Configurable::append_display_selection(selection_set, Configurable::Display::Composite);
+			Configurable::append_display_selection(selection_set, Configurable::Display::CompositeColour);
 			return selection_set;
 		}
 
@@ -508,12 +510,12 @@ class ConcreteMachine:
 		// MARK: - Work deferral updates.
 		inline void update_display() {
 			if(cycles_since_display_update_ > 0) {
-				video_output_->run_for(cycles_since_display_update_.flush());
+				video_output_.run_for(cycles_since_display_update_.flush<Cycles>());
 			}
 		}
 
 		inline void queue_next_display_interrupt() {
-			VideoOutput::Interrupt next_interrupt = video_output_->get_next_interrupt();
+			VideoOutput::Interrupt next_interrupt = video_output_.get_next_interrupt();
 			cycles_until_display_interrupt_ = next_interrupt.cycles;
 			next_display_interrupt_ = next_interrupt.interrupt;
 		}
@@ -583,7 +585,7 @@ class ConcreteMachine:
 		int shift_restart_counter_ = 0;
 
 		// Outputs
-		std::unique_ptr<VideoOutput> video_output_;
+		VideoOutput video_output_;
 
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
 		SoundGenerator sound_generator_;

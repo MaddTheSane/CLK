@@ -17,7 +17,9 @@
 #include "../CRTMachine.hpp"
 #include "../JoystickMachine.hpp"
 
+#include "../../Configurable/StandardOptions.hpp"
 #include "../../ClockReceiver/ForceInline.hpp"
+#include "../../ClockReceiver/JustInTime.hpp"
 
 #include "../../Outputs/Speaker/Implementation/CompoundSource.hpp"
 #include "../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
@@ -30,6 +32,12 @@ const int sn76489_divider = 2;
 
 namespace Coleco {
 namespace Vision {
+
+std::vector<std::unique_ptr<Configurable::Option>> get_options() {
+	return Configurable::standard_options(
+		static_cast<Configurable::StandardOptions>(Configurable::DisplaySVideo | Configurable::DisplayCompositeColour)
+	);
+}
 
 class Joystick: public Inputs::ConcreteJoystick {
 	public:
@@ -76,7 +84,7 @@ class Joystick: public Inputs::ConcreteJoystick {
 					}
 				break;
 
-				case Input::Up: 	if(is_active) direction_ &= ~0x01; else direction_ |= 0x01;	break;
+				case Input::Up:		if(is_active) direction_ &= ~0x01; else direction_ |= 0x01;	break;
 				case Input::Right:	if(is_active) direction_ &= ~0x02; else direction_ |= 0x02;	break;
 				case Input::Down:	if(is_active) direction_ &= ~0x04; else direction_ |= 0x04;	break;
 				case Input::Left:	if(is_active) direction_ &= ~0x08; else direction_ |= 0x08;	break;
@@ -107,11 +115,13 @@ class ConcreteMachine:
 	public Machine,
 	public CPU::Z80::BusHandler,
 	public CRTMachine::Machine,
+	public Configurable::Device,
 	public JoystickMachine::Machine {
 
 	public:
 		ConcreteMachine(const Analyser::Static::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
 			z80_(*this),
+			vdp_(TI::TMS::TMS9918A),
 			sn76489_(TI::SN76489::Personality::SN76489, audio_queue_, sn76489_divider),
 			ay_(audio_queue_),
 			mixer_(sn76489_, ay_),
@@ -122,8 +132,7 @@ class ConcreteMachine:
 			joysticks_.emplace_back(new Joystick);
 
 			const auto roms = rom_fetcher(
-				"ColecoVision",
-				{ "coleco.rom" });
+				{ {"ColecoVision", "the ColecoVision BIOS", "coleco.rom", 8*1024, 0x3aa93ef3} });
 
 			if(!roms[0]) {
 				throw ROMMachine::Error::MissingROMs;
@@ -159,6 +168,9 @@ class ConcreteMachine:
 					is_megacart_ = false;
 				}
 			}
+
+			// ColecoVisions have composite output only.
+			vdp_->set_display_type(Outputs::Display::DisplayType::CompositeColour);
 		}
 
 		~ConcreteMachine() {
@@ -169,17 +181,12 @@ class ConcreteMachine:
 			return joysticks_;
 		}
 
-		void setup_output(float aspect_ratio) override {
-			vdp_.reset(new TI::TMS::TMS9918(TI::TMS::TMS9918A));
-			get_crt()->set_video_signal(Outputs::CRT::VideoSignal::Composite);
+		void set_scan_target(Outputs::Display::ScanTarget *scan_target) override {
+			vdp_->set_scan_target(scan_target);
 		}
 
-		void close_output() override {
-			vdp_.reset();
-		}
-
-		Outputs::CRT::CRT *get_crt() override {
-			return vdp_->get_crt();
+		void set_display_type(Outputs::Display::DisplayType display_type) override {
+			vdp_->set_display_type(display_type);
 		}
 
 		Outputs::Speaker::Speaker *get_speaker() override {
@@ -192,18 +199,19 @@ class ConcreteMachine:
 
 		// MARK: Z80::BusHandler
 		forceinline HalfCycles perform_machine_cycle(const CPU::Z80::PartialMachineCycle &cycle) {
-			// The SN76489 will use its ready line to trigger the Z80's wait for three
-			// cycles when accessed. Everything else runs at full speed. Short-circuit
-			// that whole piece of communications by just accruing the time here if applicable.
-			const HalfCycles penalty(
-				(
-					cycle.operation == CPU::Z80::PartialMachineCycle::Output &&
-					((*cycle.address >> 5) & 7) == 7
-				) ? 6 : 0
-			);
+			// The SN76489 will use its ready line to trigger the Z80's wait, which will add
+			// thirty-one (!) cycles when accessed. M1 cycles are extended by a single cycle.
+			// This code works out the delay up front in order to simplify execution flow, though
+			// technically this is a little duplicative.
+			HalfCycles penalty(0);
+			if(cycle.operation == CPU::Z80::PartialMachineCycle::Output && ((*cycle.address >> 5) & 7) == 7) {
+				penalty = HalfCycles(62);
+			} else if(cycle.operation == CPU::Z80::PartialMachineCycle::ReadOpcode) {
+				penalty = HalfCycles(2);
+			}
 			const HalfCycles length = cycle.length + penalty;
 
-			time_since_vdp_update_ += length;
+			vdp_ += length;
 			time_since_sn76489_update_ += length;
 
 			// Act only if necessary.
@@ -248,7 +256,6 @@ class ConcreteMachine:
 					case CPU::Z80::PartialMachineCycle::Input:
 						switch((address >> 5) & 7) {
 							case 5:
-								update_video();
 								*cycle.value = vdp_->get_register(address);
 								z80_.set_non_maskable_interrupt_line(vdp_->get_interrupt_line());
 								time_until_interrupt_ = vdp_->get_time_until_interrupt();
@@ -292,7 +299,6 @@ class ConcreteMachine:
 							break;
 
 							case 5:
-								update_video();
 								vdp_->set_register(address, *cycle.value);
 								z80_.set_non_maskable_interrupt_line(vdp_->get_interrupt_line());
 								time_until_interrupt_ = vdp_->get_time_until_interrupt();
@@ -347,7 +353,7 @@ class ConcreteMachine:
 		}
 
 		void flush() {
-			update_video();
+			vdp_.flush();
 			update_audio();
 			audio_queue_.perform();
 		}
@@ -355,6 +361,30 @@ class ConcreteMachine:
 		float get_confidence() override {
 			if(pc_zero_accesses_ > 1) return 0.0f;
 			return confidence_counter_.get_confidence();
+		}
+
+		// MARK: - Configuration options.
+		std::vector<std::unique_ptr<Configurable::Option>> get_options() override {
+			return Coleco::Vision::get_options();
+		}
+
+		void set_selections(const Configurable::SelectionSet &selections_by_option) override {
+			Configurable::Display display;
+			if(Configurable::get_display(selections_by_option, display)) {
+				set_video_signal_configurable(display);
+			}
+		}
+
+		Configurable::SelectionSet get_accurate_selections() override {
+			Configurable::SelectionSet selection_set;
+			Configurable::append_display_selection(selection_set, Configurable::Display::CompositeColour);
+			return selection_set;
+		}
+
+		Configurable::SelectionSet get_user_friendly_selections() override {
+			Configurable::SelectionSet selection_set;
+			Configurable::append_display_selection(selection_set, Configurable::Display::SVideo);
+			return selection_set;
 		}
 
 	private:
@@ -365,12 +395,9 @@ class ConcreteMachine:
 		inline void update_audio() {
 			speaker_.run_for(audio_queue_, time_since_sn76489_update_.divide_cycles(Cycles(sn76489_divider)));
 		}
-		inline void update_video() {
-			vdp_->run_for(time_since_vdp_update_.flush());
-		}
 
 		CPU::Z80::Processor<ConcreteMachine, false, false> z80_;
-		std::unique_ptr<TI::TMS::TMS9918> vdp_;
+		JustInTimeActor<TI::TMS::TMS9918, HalfCycles> vdp_;
 
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
 		TI::SN76489 sn76489_;
@@ -393,7 +420,6 @@ class ConcreteMachine:
 		std::vector<std::unique_ptr<Inputs::Joystick>> joysticks_;
 		bool joysticks_in_keypad_mode_ = false;
 
-		HalfCycles time_since_vdp_update_;
 		HalfCycles time_since_sn76489_update_;
 		HalfCycles time_until_interrupt_;
 

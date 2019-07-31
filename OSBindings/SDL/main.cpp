@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -26,7 +27,9 @@
 #include "../../Concurrency/BestEffortUpdater.hpp"
 
 #include "../../Activity/Observer.hpp"
-#include "../../Outputs/CRT/Internals/Rectangle.hpp"
+#include "../../Outputs/OpenGL/Primitives/Rectangle.hpp"
+#include "../../Outputs/OpenGL/ScanTarget.hpp"
+#include "../../Outputs/OpenGL/Screenshot.hpp"
 
 namespace {
 
@@ -109,7 +112,7 @@ class ActivityObserver: public Activity::Observer {
 			float y = 1.0f - 2.0f * height;
 			for(const auto &drive: drives_) {
 				// TODO: use std::make_unique as below, if/when formally embracing C++14.
-				lights_.emplace(std::make_pair(drive, std::unique_ptr<OpenGL::Rectangle>(new OpenGL::Rectangle(right_x, y, width, height))));
+				lights_.emplace(std::make_pair(drive, std::unique_ptr<Outputs::Display::OpenGL::Rectangle>(new Outputs::Display::OpenGL::Rectangle(right_x, y, width, height))));
 				y -= height * 2.0f;
 			}
 
@@ -154,7 +157,7 @@ class ActivityObserver: public Activity::Observer {
 			blinking_leds_.insert(name);
 		}
 
-		std::map<std::string, std::unique_ptr<OpenGL::Rectangle>> lights_;
+		std::map<std::string, std::unique_ptr<Outputs::Display::OpenGL::Rectangle>> lights_;
 		std::set<std::string> lit_leds_;
 		std::set<std::string> blinking_leds_;
 };
@@ -337,21 +340,21 @@ int main(int argc, char *argv[]) {
 			}
 			std::cout << std::endl;
 		}
-		return 0;
+		return EXIT_SUCCESS;
 	}
 
 	// Perform a sanity check on arguments.
 	if(arguments.file_name.empty()) {
 		std::cerr << "Usage: " << final_path_component(argv[0]) << usage_suffix << std::endl;
 		std::cerr << "Use --help to learn more about available options." << std::endl;
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	// Determine the machine for the supplied file.
 	Analyser::Static::TargetList targets = Analyser::Static::GetTargets(arguments.file_name);
 	if(targets.empty()) {
 		std::cerr << "Cannot open " << arguments.file_name << "; no target machine found" << std::endl;
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	Concurrency::BestEffortUpdater updater;
@@ -363,12 +366,10 @@ int main(int argc, char *argv[]) {
 	//	/usr/local/share/CLK/[system];
 	//	/usr/share/CLK/[system]; or
 	//	[user-supplied path]/[system]
-	std::vector<std::string> rom_names;
-	std::string machine_name;
-	ROMMachine::ROMFetcher rom_fetcher = [&rom_names, &machine_name, &arguments]
-		(const std::string &machine, const std::vector<std::string> &names) -> std::vector<std::unique_ptr<std::vector<uint8_t>>> {
-			rom_names.insert(rom_names.end(), names.begin(), names.end());
-			machine_name = machine;
+	std::vector<ROMMachine::ROM> requested_roms;
+	ROMMachine::ROMFetcher rom_fetcher = [&requested_roms, &arguments]
+		(const std::vector<ROMMachine::ROM> &roms) -> std::vector<std::unique_ptr<std::vector<uint8_t>>> {
+			requested_roms.insert(requested_roms.end(), roms.begin(), roms.end());
 
 			std::vector<std::string> paths = {
 				"/usr/local/share/CLK/",
@@ -384,10 +385,10 @@ int main(int argc, char *argv[]) {
 			}
 
 			std::vector<std::unique_ptr<std::vector<uint8_t>>> results;
-			for(const auto &name: names) {
+			for(const auto &rom: roms) {
 				FILE *file = nullptr;
 				for(const auto &path: paths) {
-					std::string local_path = path + machine + "/" + name;
+					std::string local_path = path + rom.machine_name + "/" + rom.file_name;
 					file = std::fopen(local_path.c_str(), "rb");
 					if(file) break;
 				}
@@ -422,14 +423,18 @@ int main(int argc, char *argv[]) {
 			default: break;
 			case ::Machine::Error::MissingROM:
 				std::cerr << "Could not find system ROMs; please install to /usr/local/share/CLK/ or /usr/share/CLK/, or provide a --rompath." << std::endl;
-				std::cerr << "One or more of the following were needed but not found:" << std::endl;
-				for(const auto &name: rom_names) {
-					std::cerr << machine_name << '/' << name << std::endl;
+				std::cerr << "One or more of the following was needed but not found:" << std::endl;
+				for(const auto &rom: requested_roms) {
+					std::cerr << rom.machine_name << '/' << rom.file_name;
+					if(!rom.descriptive_name.empty()) {
+						std::cerr << " (" << rom.descriptive_name << ")";
+					}
+					std::cerr << std::endl;
 				}
 			break;
 		}
 
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	best_effort_updater_delegate.machine = machine.get();
@@ -439,7 +444,7 @@ int main(int argc, char *argv[]) {
 	// Attempt to set up video and audio.
 	if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
 		std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	// Ask for no depth buffer, a core profile and vsync-aligned rendering.
@@ -454,22 +459,24 @@ int main(int argc, char *argv[]) {
 								400, 300,
 								SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
-	if(!window)
-	{
-		std::cerr << "Could not create window" << std::endl;
-		return -1;
+	SDL_GLContext gl_context = nullptr;
+	if(window) {
+		gl_context = SDL_GL_CreateContext(window);
+	}
+	if(!window || !gl_context) {
+		std::cerr << "Could not create " << (window ? "OpenGL context" : "window");
+		std::cerr << "; reported error: \"" << SDL_GetError() << "\"" << std::endl;
+		return EXIT_FAILURE;
 	}
 
-	SDL_GLContext gl_context = SDL_GL_CreateContext(window);
 	SDL_GL_MakeCurrent(window, gl_context);
 
 	GLint target_framebuffer = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &target_framebuffer);
 
 	// Setup output, assuming a CRT machine for now, and prepare a best-effort updater.
-	machine->crt_machine()->setup_output(4.0 / 3.0);
-	machine->crt_machine()->get_crt()->set_output_gamma(2.2f);
-	machine->crt_machine()->get_crt()->set_target_framebuffer(target_framebuffer);
+	Outputs::Display::OpenGL::ScanTarget scan_target(target_framebuffer);
+	machine->crt_machine()->set_scan_target(&scan_target);
 
 	// For now, lie about audio output intentions.
 	auto speaker = machine->crt_machine()->get_speaker();
@@ -579,6 +586,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Run the main event loop until the OS tells us to quit.
+	const bool uses_mouse = !!machine->mouse_machine();
 	bool should_quit = false;
 	Uint32 fullscreen_mode = 0;
 	while(!should_quit) {
@@ -593,7 +601,7 @@ int main(int argc, char *argv[]) {
 						case SDL_WINDOWEVENT_RESIZED: {
 							GLint target_framebuffer = 0;
 							glGetIntegerv(GL_FRAMEBUFFER_BINDING, &target_framebuffer);
-							machine->crt_machine()->get_crt()->set_target_framebuffer(target_framebuffer);
+							scan_target.set_target_framebuffer(target_framebuffer);
 							SDL_GetWindowSize(window, &window_width, &window_height);
 							if(activity_observer) activity_observer->set_aspect_ratio(static_cast<float>(window_width) / static_cast<float>(window_height));
 						} break;
@@ -617,23 +625,15 @@ int main(int argc, char *argv[]) {
 						}
 					}
 
+					// Use ctrl+escape to release the mouse (if captured).
+					if(event.key.keysym.sym == SDLK_ESCAPE && (SDL_GetModState()&KMOD_CTRL)) {
+						SDL_SetRelativeMouseMode(SDL_FALSE);
+					}
+
 					// Capture ctrl+shift+d as a take-a-screenshot command.
 					if(event.key.keysym.sym == SDLK_d && (SDL_GetModState()&KMOD_CTRL) && (SDL_GetModState()&KMOD_SHIFT)) {
-						// Pick a width to capture that will preserve a 4:3 output aspect ratio.
-						const int proportional_width = (window_height * 4) / 3;
-
 						// Grab the screen buffer.
-						std::vector<uint8_t> pixels(proportional_width * window_height * 4);
-						glReadPixels((window_width - proportional_width) >> 1, 0, proportional_width, window_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-
-						// Flip the buffer vertically, because SDL and OpenGL do not agree about
-						// the basis axes.
-						std::vector<uint8_t> swap_buffer(proportional_width*4);
-						for(int y = 0; y < window_height >> 1; ++y) {
-							memcpy(swap_buffer.data(), &pixels[y*proportional_width*4], swap_buffer.size());
-							memcpy(&pixels[y*proportional_width*4], &pixels[(window_height - 1 - y)*proportional_width*4], swap_buffer.size());
-							memcpy(&pixels[(window_height - 1 - y)*proportional_width*4], swap_buffer.data(), swap_buffer.size());
-						}
+						Outputs::Display::OpenGL::Screenshot screenshot(4, 3);
 
 						// Pick the directory for images. Try `xdg-user-dir PICTURES` first.
 						std::string target_directory = system_get("xdg-user-dir PICTURES");
@@ -661,10 +661,10 @@ int main(int argc, char *argv[]) {
 						// Create a suitable SDL surface and save the thing.
 						const bool is_big_endian = SDL_BYTEORDER == SDL_BIG_ENDIAN;
 						SDL_Surface *const surface = SDL_CreateRGBSurfaceFrom(
-							pixels.data(),
-							proportional_width, window_height,
+							screenshot.pixel_data.data(),
+							screenshot.width, screenshot.height,
 							8*4,
-							proportional_width*4,
+							screenshot.width*4,
 							is_big_endian ? 0xff000000 : 0x000000ff,
 							is_big_endian ? 0x00ff0000 : 0x0000ff00,
 							is_big_endian ? 0x0000ff00 : 0x00ff0000,
@@ -731,6 +731,29 @@ int main(int argc, char *argv[]) {
 					}
 				} break;
 
+				case SDL_MOUSEBUTTONDOWN:
+					if(uses_mouse && !SDL_GetRelativeMouseMode()) {
+						SDL_SetRelativeMouseMode(SDL_TRUE);
+						break;
+					}
+				case SDL_MOUSEBUTTONUP: {
+					const auto mouse_machine = machine->mouse_machine();
+					if(mouse_machine) {
+						mouse_machine->get_mouse().set_button_pressed(
+							event.button.button % mouse_machine->get_mouse().get_number_of_buttons(),
+							event.type == SDL_MOUSEBUTTONDOWN);
+					}
+				} break;
+
+				case SDL_MOUSEMOTION: {
+					if(SDL_GetRelativeMouseMode()) {
+						const auto mouse_machine = machine->mouse_machine();
+						if(mouse_machine) {
+							mouse_machine->get_mouse().move(event.motion.xrel, event.motion.yrel);
+						}
+					}
+				} break;
+
 				default: break;
 			}
 		}
@@ -785,7 +808,8 @@ int main(int argc, char *argv[]) {
 
 		// Display a new frame and wait for vsync.
 		updater.update();
-		machine->crt_machine()->get_crt()->draw_frame(static_cast<unsigned int>(window_width), static_cast<unsigned int>(window_height), false);
+		scan_target.update(int(window_width), int(window_height));
+		scan_target.draw(int(window_width), int(window_height));
 		if(activity_observer) activity_observer->draw();
 		SDL_GL_SwapWindow(window);
 	}
@@ -795,5 +819,5 @@ int main(int argc, char *argv[]) {
 	SDL_DestroyWindow( window );
 	SDL_Quit();
 
-	return 0;
+	return EXIT_SUCCESS;
 }

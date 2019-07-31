@@ -11,15 +11,24 @@
 
 @class CSOpenGLView;
 
+typedef NS_ENUM(NSInteger, CSOpenGLViewRedrawEvent) {
+	/// Indicates that AppKit requested a redraw for some reason (mostly likely, the window is being resized). So,
+	/// if the delegate doesn't redraw the view, the user is likely to see a graphical flaw.
+	CSOpenGLViewRedrawEventAppKit,
+	/// Indicates that the view's display-linked timer has triggered a redraw request. So, if the delegate doesn't
+	/// redraw the view, the user will just see the previous drawing without interruption.
+	CSOpenGLViewRedrawEventTimer
+};
+
 @protocol CSOpenGLViewDelegate <NSObject>
 /*!
 	Requests that the delegate produce an image of its current output state. May be called on
 	any queue or thread.
 	@param view The view making the request.
-	@param onlyIfDirty If @c YES then the delegate may decline to redraw if its output would be
+	@param redrawEvent If @c YES then the delegate may decline to redraw if its output would be
 	identical to the previous frame. If @c NO then the delegate must draw.
 */
-- (void)openGLView:(nonnull CSOpenGLView *)view drawViewOnlyIfDirty:(BOOL)onlyIfDirty;
+- (void)openGLViewRedraw:(nonnull CSOpenGLView *)view event:(CSOpenGLViewRedrawEvent)redrawEvent;
 
 /*!
 	Announces receipt of a file by drag and drop to the delegate.
@@ -54,6 +63,29 @@
 */
 - (void)paste:(nonnull id)sender;
 
+@optional
+
+/*!
+	Supplies a mouse moved event to the delegate. This functions only if
+	shouldCaptureMouse is set to YES, in which case the view will ensure it captures
+	the mouse and returns only relative motion
+	(Cf. CGAssociateMouseAndMouseCursorPosition). It will also elide mouseDragged:
+	(and rightMouseDragged:, etc) and mouseMoved: events.
+*/
+- (void)mouseMoved:(nonnull NSEvent *)event;
+
+/*!
+	Supplies a mouse button down event. This elides mouseDown, rightMouseDown and otherMouseDown.
+	@c shouldCaptureMouse must be set to @c YES to receive these events.
+*/
+- (void)mouseDown:(nonnull NSEvent *)event;
+
+/*!
+	Supplies a mouse button up event. This elides mouseUp, rightMouseUp and otherMouseUp.
+	@c shouldCaptureMouse must be set to @c YES to receive these events.
+*/
+- (void)mouseUp:(nonnull NSEvent *)event;
+
 @end
 
 /*!
@@ -64,6 +96,8 @@
 
 @property (atomic, weak, nullable) id <CSOpenGLViewDelegate> delegate;
 @property (nonatomic, weak, nullable) id <CSOpenGLViewResponderDelegate> responderDelegate;
+
+@property (nonatomic, assign) BOOL shouldCaptureMouse;
 
 /*!
 	Ends the timer tracking time; should be called prior to giving up the last owning reference
@@ -79,5 +113,10 @@
 	the context. @c action is performed on the calling queue.
 */
 - (void)performWithGLContext:(nonnull dispatch_block_t NS_NOESCAPE)action;
+
+/*!
+	Instructs that the mouse cursor, if currently captured, should be released.
+*/
+- (void)releaseMouse;
 
 @end

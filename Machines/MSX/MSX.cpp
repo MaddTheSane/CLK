@@ -38,12 +38,14 @@
 #include "../MediaTarget.hpp"
 #include "../KeyboardMachine.hpp"
 
+#include "../../Outputs/Log.hpp"
 #include "../../Outputs/Speaker/Implementation/CompoundSource.hpp"
 #include "../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
 #include "../../Outputs/Speaker/Implementation/SampleSource.hpp"
 
 #include "../../Configurable/StandardOptions.hpp"
 #include "../../ClockReceiver/ForceInline.hpp"
+#include "../../ClockReceiver/JustInTime.hpp"
 
 #include "../../Analyser/Static/MSX/Target.hpp"
 
@@ -51,7 +53,7 @@ namespace MSX {
 
 std::vector<std::unique_ptr<Configurable::Option>> get_options() {
 	return Configurable::standard_options(
-		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplaySVideo | Configurable::DisplayComposite | Configurable::QuickLoadTape)
+		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplaySVideo | Configurable::DisplayCompositeColour | Configurable::QuickLoadTape)
 	);
 }
 
@@ -146,8 +148,11 @@ class ConcreteMachine:
 	public ClockingHint::Observer,
 	public Activity::Source {
 	public:
-		ConcreteMachine(const Analyser::Static::MSX::Target &target, const ROMMachine::ROMFetcher &rom_fetcher):
+		using Target = Analyser::Static::MSX::Target;
+
+		ConcreteMachine(const Target &target, const ROMMachine::ROMFetcher &rom_fetcher):
 			z80_(*this),
+			vdp_(TI::TMS::TMS9918A),
 			i8255_(i8255_port_handler_),
 			ay_(audio_queue_),
 			audio_toggle_(audio_queue_),
@@ -168,19 +173,74 @@ class ConcreteMachine:
 			// Set the AY to 50% of available volume, the toggle to 10% and leave 40% for an SCC.
 			mixer_.set_relative_volumes({0.5f, 0.1f, 0.4f});
 
-			// Fetch the necessary ROMs.
-			std::vector<std::string> rom_names = {"msx.rom"};
-			if(target.has_disk_drive) {
-				rom_names.push_back("disk.rom");
-			}
-			const auto roms = rom_fetcher("MSX", rom_names);
+			// Install the proper TV standard and select an ideal BIOS name.
+			const std::string machine_name = "MSX";
+			std::vector<ROMMachine::ROM> required_roms = {
+				{machine_name, "any MSX BIOS", "msx.rom", 32*1024, 0x94ee12f3}
+			};
 
-			if(!roms[0] || (target.has_disk_drive && !roms[1])) {
+			bool is_ntsc = true;
+			uint8_t character_generator = 1;	/* 0 = Japan, 1 = USA, etc, 2 = USSR */
+			uint8_t date_format = 1;			/* 0 = Y/M/D, 1 = M/D/Y, 2 = D/M/Y */
+			uint8_t keyboard = 1;				/* 0 = Japan, 1 = USA, 2 = France, 3 = UK, 4 = Germany, 5 = USSR, 6 = Spain */
+
+			// TODO: CRCs below are incomplete, at best.
+			switch(target.region) {
+				case Target::Region::Japan:
+					required_roms.emplace_back(machine_name, "a Japanese MSX BIOS", "msx-japanese.rom", 32*1024, 0xee229390);
+					vdp_->set_tv_standard(TI::TMS::TVStandard::NTSC);
+
+					is_ntsc = true;
+					character_generator = 0;
+					date_format = 0;
+				break;
+				case Target::Region::USA:
+					required_roms.emplace_back(machine_name, "an American MSX BIOS", "msx-american.rom", 32*1024, 0);
+					vdp_->set_tv_standard(TI::TMS::TVStandard::NTSC);
+
+					is_ntsc = true;
+					character_generator = 1;
+					date_format = 1;
+				break;
+				case Target::Region::Europe:
+					required_roms.emplace_back(machine_name, "a European MSX BIOS", "msx-european.rom", 32*1024, 0);
+					vdp_->set_tv_standard(TI::TMS::TVStandard::PAL);
+
+					is_ntsc = false;
+					character_generator = 1;
+					date_format = 2;
+				break;
+			}
+
+			// Fetch the necessary ROMs; try the region-specific ROM first,
+			// but failing that fall back on patching the main one.
+			size_t disk_index = 0;
+			if(target.has_disk_drive) {
+				disk_index = required_roms.size();
+				required_roms.emplace_back(machine_name, "the MSX-DOS ROM", "disk.rom", 16*1024, 0x721f61df);
+			}
+			const auto roms = rom_fetcher(required_roms);
+
+			if((!roms[0] && !roms[1]) || (target.has_disk_drive && !roms[2])) {
 				throw ROMMachine::Error::MissingROMs;
 			}
 
-			memory_slots_[0].source = std::move(*roms[0]);
-			memory_slots_[0].source.resize(32768);
+			// Figure out which BIOS to use, either a specific one or the generic
+			// one appropriately patched.
+			if(roms[1]) {
+				memory_slots_[0].source = std::move(*roms[1]);
+				memory_slots_[0].source.resize(32768);
+			} else {
+				memory_slots_[0].source = std::move(*roms[0]);
+				memory_slots_[0].source.resize(32768);
+
+				memory_slots_[0].source[0x2b] = uint8_t(
+					(is_ntsc ? 0x00 : 0x80) |
+					(date_format << 4) |
+					character_generator
+				);
+				memory_slots_[0].source[0x2c] = keyboard;
+			}
 
 			for(size_t c = 0; c < 8; ++c) {
 				for(size_t slot = 0; slot < 3; ++slot) {
@@ -198,7 +258,7 @@ class ConcreteMachine:
 			// Add a disk cartridge if any disks were supplied.
 			if(target.has_disk_drive) {
 				memory_slots_[2].set_handler(new DiskROM(memory_slots_[2].source));
-				memory_slots_[2].source = std::move(*roms[1]);
+				memory_slots_[2].source = std::move(*roms[disk_index]);
 				memory_slots_[2].source.resize(16384);
 
 				map(2, 0, 0x4000, 0x2000);
@@ -218,16 +278,12 @@ class ConcreteMachine:
 			audio_queue_.flush();
 		}
 
-		void setup_output(float aspect_ratio) override {
-			vdp_.reset(new TI::TMS::TMS9918(TI::TMS::TMS9918A));
+		void set_scan_target(Outputs::Display::ScanTarget *scan_target) override {
+			vdp_->set_scan_target(scan_target);
 		}
 
-		void close_output() override {
-			vdp_.reset();
-		}
-
-		Outputs::CRT::CRT *get_crt() override {
-			return vdp_->get_crt();
+		void set_display_type(Outputs::Display::DisplayType display_type) override {
+			vdp_->set_display_type(display_type);
 		}
 
 		Outputs::Speaker::Speaker *get_speaker() override {
@@ -246,10 +302,11 @@ class ConcreteMachine:
 			return 0.5f;
 		}
 
-		void print_type() override {
+		std::string debug_type() override {
 			if(memory_slots_[1].handler) {
-				memory_slots_[1].handler->print_type();
+				return "MSX:" + memory_slots_[1].handler->debug_type();
 			}
+			return "MSX";
 		}
 
 		bool insert_media(const Analyser::Static::Media &media) override {
@@ -346,6 +403,7 @@ class ConcreteMachine:
 				write_pointers_[c+1] = memory_slots_[value & 3].write_pointers[c+1];
 				value >>= 2;
 			}
+			set_use_fast_tape();
 		}
 
 		// MARK: Z80::BusHandler
@@ -354,7 +412,7 @@ class ConcreteMachine:
 			// but otherwise runs without pause.
 			const HalfCycles addition((cycle.operation == CPU::Z80::PartialMachineCycle::ReadOpcode) ? 2 : 0);
 			const HalfCycles total_length = addition + cycle.length;
-			time_since_vdp_update_ += total_length;
+			vdp_ += total_length;
 			time_since_ay_update_ += total_length;
 			memory_slots_[0].cycles_since_update += total_length;
 			memory_slots_[1].cycles_since_update += total_length;
@@ -432,7 +490,7 @@ class ConcreteMachine:
 							*cycle.value = read_pointers_[address >> 13][address & 8191];
 						} else {
 							int slot_hit = (paged_memory_ >> ((address >> 14) * 2)) & 3;
-							memory_slots_[slot_hit].handler->run_for(memory_slots_[slot_hit].cycles_since_update.flush());
+							memory_slots_[slot_hit].handler->run_for(memory_slots_[slot_hit].cycles_since_update.flush<HalfCycles>());
 							*cycle.value = memory_slots_[slot_hit].handler->read(address);
 						}
 					break;
@@ -443,7 +501,7 @@ class ConcreteMachine:
 						int slot_hit = (paged_memory_ >> ((address >> 14) * 2)) & 3;
 						if(memory_slots_[slot_hit].handler) {
 							update_audio();
-							memory_slots_[slot_hit].handler->run_for(memory_slots_[slot_hit].cycles_since_update.flush());
+							memory_slots_[slot_hit].handler->run_for(memory_slots_[slot_hit].cycles_since_update.flush<HalfCycles>());
 							memory_slots_[slot_hit].handler->write(address, *cycle.value, read_pointers_[pc_address_ >> 13] != memory_slots_[0].read_pointers[pc_address_ >> 13]);
 						}
 					} break;
@@ -451,7 +509,6 @@ class ConcreteMachine:
 					case CPU::Z80::PartialMachineCycle::Input:
 						switch(address & 0xff) {
 							case 0x98:	case 0x99:
-								vdp_->run_for(time_since_vdp_update_.flush());
 								*cycle.value = vdp_->get_register(address);
 								z80_.set_interrupt_line(vdp_->get_interrupt_line());
 								time_until_interrupt_ = vdp_->get_time_until_interrupt();
@@ -479,7 +536,6 @@ class ConcreteMachine:
 						const int port = address & 0xff;
 						switch(port) {
 							case 0x98:	case 0x99:
-								vdp_->run_for(time_since_vdp_update_.flush());
 								vdp_->set_register(address, *cycle.value);
 								z80_.set_interrupt_line(vdp_->get_interrupt_line());
 								time_until_interrupt_ = vdp_->get_time_until_interrupt();
@@ -555,7 +611,7 @@ class ConcreteMachine:
 		}
 
 		void flush() {
-			vdp_->run_for(time_since_vdp_update_.flush());
+			vdp_.flush();
 			update_audio();
 			audio_queue_.perform();
 		}
@@ -603,7 +659,7 @@ class ConcreteMachine:
 		Configurable::SelectionSet get_accurate_selections() override {
 			Configurable::SelectionSet selection_set;
 			Configurable::append_quick_load_tape_selection(selection_set, false);
-			Configurable::append_display_selection(selection_set, Configurable::Display::Composite);
+			Configurable::append_display_selection(selection_set, Configurable::Display::CompositeColour);
 			return selection_set;
 		}
 
@@ -626,6 +682,7 @@ class ConcreteMachine:
 			if(disk_rom) {
 				disk_rom->set_activity_observer(observer);
 			}
+			i8255_port_handler_.set_activity_observer(observer);
 		}
 
 		// MARK: - Joysticks
@@ -652,10 +709,11 @@ class ConcreteMachine:
 						case 2: {
 							// TODO:
 							//	b6	caps lock LED
-							//	b5 	audio output
+							//	b5	audio output
 
 							//	b4: cassette motor relay
 							tape_player_.set_motor_control(!(value & 0x10));
+							if(activity_observer_) activity_observer_->set_led_status("Tape motor", !(value & 0x10));
 
 							//	b7: keyboard click
 							bool new_audio_level = !!(value & 0x80);
@@ -667,25 +725,34 @@ class ConcreteMachine:
 							// b0-b3: keyboard line
 							machine_.set_keyboard_line(value & 0xf);
 						} break;
-						default: printf("What what what what?\n"); break;
+						default: LOG("Unrecognised: MSX set 8255 output port " << port << " to value " << PADHEX(2) << value); break;
 					}
 				}
 
 				uint8_t get_value(int port) {
 					if(port == 1) {
 						return machine_.read_keyboard();
-					} else printf("What what?\n");
+					} else LOG("MSX attempted to read from 8255 port " << port);
 					return 0xff;
+				}
+
+				void set_activity_observer(Activity::Observer *observer) {
+					activity_observer_ = observer;
+					if(activity_observer_) {
+						activity_observer_->register_led("Tape motor");
+						activity_observer_->set_led_status("Tape motor", tape_player_.get_motor_control());
+					}
 				}
 
 			private:
 				ConcreteMachine &machine_;
 				Audio::Toggle &audio_toggle_;
 				Storage::Tape::BinaryTapePlayer &tape_player_;
+				Activity::Observer *activity_observer_ = nullptr;
 		};
 
 		CPU::Z80::Processor<ConcreteMachine, false, false> z80_;
-		std::unique_ptr<TI::TMS::TMS9918> vdp_;
+		JustInTimeActor<TI::TMS::TMS9918, HalfCycles> vdp_;
 		Intel::i8255::i8255<i8255PortHandler> i8255_;
 
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
@@ -700,7 +767,7 @@ class ConcreteMachine:
 		bool allow_fast_tape_ = false;
 		bool use_fast_tape_ = false;
 		void set_use_fast_tape() {
-			use_fast_tape_ = !tape_player_is_sleeping_ && allow_fast_tape_ && tape_player_.has_tape();
+			use_fast_tape_ = !tape_player_is_sleeping_ && allow_fast_tape_ && tape_player_.has_tape() && !(paged_memory_&3);
 		}
 
 		i8255PortHandler i8255_port_handler_;
@@ -729,7 +796,6 @@ class ConcreteMachine:
 		uint8_t scratch_[8192];
 		uint8_t unpopulated_[8192];
 
-		HalfCycles time_since_vdp_update_;
 		HalfCycles time_since_ay_update_;
 		HalfCycles time_until_interrupt_;
 
