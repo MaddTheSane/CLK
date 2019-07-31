@@ -1076,7 +1076,6 @@
 		4B9378E322A199C600973513 /* Audio.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Audio.hpp; sourceTree = "<group>"; };
 		4B95FA9C1F11893B0008E395 /* ZX8081OptionsPanel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ZX8081OptionsPanel.swift; sourceTree = "<group>"; };
 		4B961408222760E0001A7BF2 /* Screenshot.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Screenshot.hpp; sourceTree = "<group>"; };
-		4B97ADC722C6FD9B00A22A41 /* 68000ArithmeticTests.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = 68000ArithmeticTests.mm; sourceTree = "<group>"; };
 		4B98A05C1FFAD3F600ADF63B /* CSROMFetcher.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CSROMFetcher.hpp; sourceTree = "<group>"; };
 		4B98A05D1FFAD3F600ADF63B /* CSROMFetcher.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CSROMFetcher.mm; sourceTree = "<group>"; };
 		4B98A0601FFADCDE00ADF63B /* MSXStaticAnalyserTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = MSXStaticAnalyserTests.mm; sourceTree = "<group>"; };
@@ -2959,7 +2958,6 @@
 			children = (
 				4B85322922778E4200F26553 /* Comparative68000.hpp */,
 				4B90467222C6FA31000E2074 /* TestRunner68000.hpp */,
-				4B97ADC722C6FD9B00A22A41 /* 68000ArithmeticTests.mm */,
 				4B9D0C4A22C7D70900DE1AD3 /* 68000BCDTests.mm */,
 				4B90467322C6FADD000E2074 /* 68000BitwiseTests.mm */,
 				4B9D0C4C22C7DA1A00DE1AD3 /* 68000ControlFlowTests.mm */,
