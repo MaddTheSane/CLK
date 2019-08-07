@@ -188,6 +188,12 @@ template <class T, bool dtack_is_implicit, bool signal_will_perform> void Proces
 
 							case BusStep::Action::AdvancePrefetch:
 								prefetch_queue_.halves.high = prefetch_queue_.halves.low;
+
+								// During prefetch advance seems to be the only time the interrupt inputs are sampled;
+								// TODO: determine whether this really happens on *every* advance.
+								if(bus_interrupt_level_ > interrupt_level_) {
+									pending_interrupt_level_ = bus_interrupt_level_;
+								}
 							break;
 						}
 
@@ -199,6 +205,7 @@ template <class T, bool dtack_is_implicit, bool signal_will_perform> void Proces
 					// If an interrupt (TODO: or reset) has finally arrived that will be serviced,
 					// exit the STOP.
 					if(bus_interrupt_level_ > interrupt_level_) {
+						pending_interrupt_level_ = bus_interrupt_level_;
 						execution_state_ = ExecutionState::BeginInterrupt;
 						continue;
 					}
@@ -234,12 +241,6 @@ template <class T, bool dtack_is_implicit, bool signal_will_perform> void Proces
 				continue;
 
 				case ExecutionState::BeginInterrupt:
-#ifdef LOG_TRACE
-//					should_log = true;
-					if(should_log) {
-						printf("\n\nInterrupt\n\n");
-					}
-#endif
 					active_program_ = nullptr;
 					active_micro_op_ = interrupt_micro_ops_;
 					execution_state_ = ExecutionState::Executing;
@@ -260,7 +261,7 @@ template <class T, bool dtack_is_implicit, bool signal_will_perform> void Proces
 						// Either the micro-operations for this instruction have been exhausted, or
 						// no instruction was ongoing. Either way, do a standard instruction operation.
 
-						if(bus_interrupt_level_ > interrupt_level_) {
+						if(pending_interrupt_level_) {
 							execution_state_ = ExecutionState::BeginInterrupt;
 							break;
 						}
@@ -1055,51 +1056,56 @@ template <class T, bool dtack_is_implicit, bool signal_will_perform> void Proces
 										break;
 									}
 
-									int32_t dividend = int32_t(destination()->full);
-									int32_t divisor = s_extend16(source()->halves.low.full);
-									const int64_t quotient = int64_t(dividend) / int64_t(divisor);
+									const int32_t signed_dividend = int32_t(destination()->full);
+									const int32_t signed_divisor = s_extend16(source()->halves.low.full);
+									const auto result_sign =
+										( (0 <= signed_dividend) - (signed_dividend < 0) ) *
+										( (0 <= signed_divisor) - (signed_divisor < 0) );
+
+									const uint32_t dividend = uint32_t(abs(signed_dividend));
+									const uint32_t divisor = uint32_t(abs(signed_divisor));
 
 									int cycles_expended = 12;	// Covers the nn nnn n to get beyond the sign test.
-									if(dividend < 0) {
+									if(signed_dividend < 0) {
 										cycles_expended += 2;	// An additional microycle applies if the dividend is negative.
 									}
 
 									// Check for overflow. If it exists, work here is already done.
-									if(quotient > 32767 || quotient < -32768) {
+									const auto quotient = dividend / divisor;
+									if(quotient > 32767) {
 										overflow_flag_ = 1;
-										set_next_microcycle_length(HalfCycles(3*2*2));
+										set_next_microcycle_length(HalfCycles(6*2*2));
 
 										// These are officially undefined for results that overflow, so the below is a guess.
-										zero_result_ = decltype(zero_result_)(divisor & 0xffff);
+										zero_result_ = decltype(zero_result_)(dividend);
 										negative_flag_ = zero_result_ & 0x8000;
 
 										break;
 									}
 
-									zero_result_ = decltype(zero_result_)(quotient);
+									const uint16_t remainder = uint16_t(signed_dividend % signed_divisor);
+									const int signed_quotient = result_sign*int(quotient);
+									destination()->halves.high.full = remainder;
+									destination()->halves.low.full = uint16_t(signed_quotient);
+
+									zero_result_ = decltype(zero_result_)(signed_quotient);
 									negative_flag_ = zero_result_ & 0x8000;
 									overflow_flag_ = 0;
 
-									// TODO: check sign rules here; am I necessarily giving the remainder the correct sign?
-									// (and, if not, am I counting it in the correct direction?)
-									const uint16_t remainder = uint16_t(dividend % divisor);
-									destination()->halves.high.full = remainder;
-									destination()->halves.low.full = uint16_t(quotient);
-
-									// Algorithm here: there is a fixed three-microcycle cost per bit set
-									// in the unsigned quotient; there is an additional microcycle for
-									// every bit that is set. Also, since the possibility of overflow
-									// was already dealt with, it's now a smaller number.
-									int positive_quotient_bits = int(abs(quotient)) & 0xfffe;
+									// Algorithm here: there is a fixed cost per unset bit
+									// in the first 15 bits of the unsigned quotient.
+									auto positive_quotient_bits = ~quotient & 0xfffe;
 									convert_to_bit_count_16(positive_quotient_bits);
 									cycles_expended += 2 * positive_quotient_bits;
 
-									// There's then no way to terminate the loop that isn't at least six cycles long.
-									cycles_expended += 6;
+									// There's then no way to terminate the loop that isn't at least ten cycles long;
+									// there's also a fixed overhead per bit. The two together add up to the 104 below.
+									cycles_expended += 104;
 
-									if(divisor < 0) {
+									// This picks up at 'No more bits' in yacht.txt's diagram.
+									if(signed_divisor < 0) {
 										cycles_expended += 2;
-									} else if(dividend < 0) {
+									} else if(signed_dividend < 0) {
 										cycles_expended += 4;
 									}
 									set_next_microcycle_length(HalfCycles(cycles_expended * 2));
@@ -1960,10 +1966,13 @@ template <class T, bool dtack_is_implicit, bool signal_will_perform> void Proces
 
 							// Mutate neessary internal state — effective_address_[0] is exposed
 							// on the data bus as the accepted interrupt number during the interrupt
-							// acknowledge cycle, with the low bit set since a real 68000 uses the lower
-							// data strobe to collect the corresponding vector byte.
-							accepted_interrupt_level_ = interrupt_level_ = bus_interrupt_level_;
-							effective_address_[0].full = 1 | uint32_t(accepted_interrupt_level_ << 1);
+							// acknowledge cycle, with all other bits set, including the low bit as
+							// a real 68000 uses the lower data strobe to collect the corresponding vector byte.
+							//
+							// Cf. M68000 8-/16-/32-BIT MICROPROCESSORS USER'S MANUAL 5.1.4.
+							accepted_interrupt_level_ = interrupt_level_ = pending_interrupt_level_;
+							pending_interrupt_level_ = 0;
+							effective_address_[0].full = 0xfffffff1 | uint32_t(accepted_interrupt_level_ << 1);
 
 							// Recede the program counter to where it would have been were there no
 							// prefetch; that's where the reading stream should pick up upon RTE.
