@@ -74,7 +74,7 @@ struct ActivityObserver: public Activity::Observer {
 	__unsafe_unretained CSMachine *machine;
 };
 
-@interface CSMissingROM (Mutability)
+@interface CSMissingROM (/*Mutability*/)
 @property (nonatomic, nonnull, copy) NSString *machineName;
 @property (nonatomic, nonnull, copy) NSString *fileName;
 @property (nonatomic, nullable, copy) NSString *descriptiveName;
@@ -88,46 +88,6 @@ struct ActivityObserver: public Activity::Observer {
 	NSString *_descriptiveName;
 	NSUInteger _size;
 	NSArray<NSNumber *> *_crc32s;
-}
-
-- (NSString *)machineName {
-	return _machineName;
-}
-
-- (void)setMachineName:(NSString *)machineName {
-	_machineName = [machineName copy];
-}
-
-- (NSString *)fileName {
-	return _fileName;
-}
-
-- (void)setFileName:(NSString *)fileName {
-	_fileName = [fileName copy];
-}
-
-- (NSString *)descriptiveName {
-	return _descriptiveName;
-}
-
-- (void)setDescriptiveName:(NSString *)descriptiveName {
-	_descriptiveName = [descriptiveName copy];
-}
-
-- (NSUInteger)size {
-	return _size;
-}
-
-- (void)setSize:(NSUInteger)size {
-	_size = size;
-}
-
-- (NSArray<NSNumber *> *)crc32s {
-	return _crc32s;
-}
-
-- (void)setCrc32s:(NSArray<NSNumber *> *)crc32s {
-	_crc32s = [crc32s copy];
 }
 
 - (NSString *)description {

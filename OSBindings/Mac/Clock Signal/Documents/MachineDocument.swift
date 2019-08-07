@@ -36,7 +36,7 @@ class MachineDocument:
 	/// The active machine, following its successful creation.
 	private var machine: CSMachine!
 
-	/// @returns the appropriate window content aspect ratio for this @c self.machine.
+	/// - returns: the appropriate window content aspect ratio for this `self.machine`.
 	private func aspectRatio() -> NSSize {
 		return NSSize(width: 4.0, height: 3.0)
 	}
