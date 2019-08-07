@@ -34,11 +34,11 @@ typedef NS_ENUM(NSInteger, CSMachineKeyboardInputMode) {
 };
 
 @interface CSMissingROM: NSObject
-@property (nonatomic, readonly, nonnull) NSString *machineName;
-@property (nonatomic, readonly, nonnull) NSString *fileName;
-@property (nonatomic, readonly, nullable) NSString *descriptiveName;
+@property (nonatomic, readonly, nonnull, copy) NSString *machineName;
+@property (nonatomic, readonly, nonnull, copy) NSString *fileName;
+@property (nonatomic, readonly, nullable, copy) NSString *descriptiveName;
 @property (nonatomic, readonly) NSUInteger size;
-@property (nonatomic, readonly, nonnull) NSArray<NSNumber *> *crc32s;
+@property (nonatomic, readonly, nonnull, copy) NSArray<NSNumber *> *crc32s;
 @end
 
 // Deliberately low; to ensure CSMachine has been declared as an @class already.
@@ -56,7 +56,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 	@param result The CSStaticAnalyser result that describes the machine needed.
 	@param missingROMs An array that is filled with a list of ROMs that the machine requested but which
-		were not found; populated only if this `init` has failed.
+		were not found; populated only if this @c init has failed.
 */
 - (nullable instancetype)initWithAnalyser:(nonnull CSStaticAnalyser *)result missingROMs:(nullable inout NSMutableArray<CSMissingROM *> *)missingROMs NS_DESIGNATED_INITIALIZER;
 

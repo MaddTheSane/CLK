@@ -60,15 +60,15 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate, public LockP
 
 struct ActivityObserver: public Activity::Observer {
 	void register_led(const std::string &name) override {
-		[machine addLED:[NSString stringWithUTF8String:name.c_str()]];
+		[machine addLED:@(name.c_str())];
 	}
 
 	void set_led_status(const std::string &name, bool lit) override {
-		[machine.delegate machine:machine led:[NSString stringWithUTF8String:name.c_str()] didChangeToLit:lit];
+		[machine.delegate machine:machine led:@(name.c_str()) didChangeToLit:lit];
 	}
 
 	void announce_drive_event(const std::string &name, DriveEvent event) override {
-		[machine.delegate machine:machine ledShouldBlink:[NSString stringWithUTF8String:name.c_str()]];
+		[machine.delegate machine:machine ledShouldBlink:@(name.c_str())];
 	}
 
 	__unsafe_unretained CSMachine *machine;
