@@ -121,7 +121,7 @@ typedef NS_ENUM(NSInteger, CSOpenGLViewRedrawEvent) {
 	messages because I haven't yet found a way to track that other than polling, in which case I might as well put
 	that into the display link callback.
 */
-@protocol CSOpenGLViewDisplayLinkDelegate
+@protocol CSOpenGLViewDisplayLinkDelegate <NSObject>
 
 /*!
 	Informs the delegate that the display link has fired.
