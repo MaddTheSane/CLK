@@ -19,14 +19,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 		// Insert code here to tear down your application.
 	}
 
+	private var hasShownOpenDocument = false
 	func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
-		// Decline to show the 'New...' selector by default, preferring to offer
-		// an 'Open...' dialogue.
+		// Decline to show the 'New...' selector by default; the 'Open...'
+		// dialogue has already been shown if this application was started
+		// without a file.
 		//
 		// Obiter: I dislike it when other applications do this for me, but it
 		// seems to be the new norm, and I've had user feedback that showing
 		// nothing is confusing. So here it is.
-		NSDocumentController.shared.openDocument(self)
+		if !hasShownOpenDocument {
+			NSDocumentController.shared.openDocument(self)
+			hasShownOpenDocument = true
+		}
 		return false
 	}
 }

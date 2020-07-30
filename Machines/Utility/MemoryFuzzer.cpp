@@ -11,22 +11,18 @@
 #include <cstdlib>
 
 void Memory::Fuzz(uint8_t *buffer, std::size_t size) {
-	unsigned int divider = (static_cast<unsigned int>(RAND_MAX) + 1) / 256;
+	const unsigned int divider = (unsigned(RAND_MAX) + 1) / 256;
 	unsigned int shift = 1, value = 1;
 	while(value < divider) {
 		value <<= 1;
-		shift++;
+		++shift;
 	}
 
-	for(std::size_t c = 0; c < size; c++) {
-		buffer[c] = static_cast<uint8_t>(std::rand() >> shift);
+	for(size_t c = 0; c < size; c++) {
+		buffer[c] = uint8_t(std::rand() >> shift);
 	}
 }
 
 void Memory::Fuzz(uint16_t *buffer, std::size_t size) {
 	Fuzz(reinterpret_cast<uint8_t *>(buffer), size * sizeof(uint16_t));
-}
-
-void Memory::Fuzz(std::vector<uint8_t> &buffer) {
-	Fuzz(buffer.data(), buffer.size());
 }

@@ -18,7 +18,7 @@
 namespace Apple {
 namespace Macintosh {
 
-static const uint16_t KeypadMask = 0x100;
+constexpr uint16_t KeypadMask = 0x100;
 
 /*!
 	Defines the keycodes that could be passed directly to a Macintosh via set_key_pressed.
@@ -63,25 +63,25 @@ enum class Key: uint16_t {
 	Up = KeypadMask | 0x1b,
 	Down = KeypadMask | 0x11,
 
-	KeyPadDelete = KeypadMask | 0x0f,
-	KeyPadEquals = KeypadMask | 0x11,
-	KeyPadSlash = KeypadMask | 0x1b,
-	KeyPadAsterisk = KeypadMask | 0x05,
-	KeyPadMinus = KeypadMask | 0x1d,
-	KeyPadPlus = KeypadMask | 0x0d,
-	KeyPadEnter = KeypadMask | 0x19,
-	KeyPadDecimalPoint = KeypadMask | 0x03,
+	KeypadDelete = KeypadMask | 0x0f,
+	KeypadEquals = KeypadMask | 0x11,
+	KeypadSlash = KeypadMask | 0x1b,
+	KeypadAsterisk = KeypadMask | 0x05,
+	KeypadMinus = KeypadMask | 0x1d,
+	KeypadPlus = KeypadMask | 0x0d,
+	KeypadEnter = KeypadMask | 0x19,
+	KeypadDecimalPoint = KeypadMask | 0x03,
 
-	KeyPad9 = KeypadMask | 0x39,
-	KeyPad8 = KeypadMask | 0x37,
-	KeyPad7 = KeypadMask | 0x33,
-	KeyPad6 = KeypadMask | 0x31,
-	KeyPad5 = KeypadMask | 0x2f,
-	KeyPad4 = KeypadMask | 0x2d,
-	KeyPad3 = KeypadMask | 0x2b,
-	KeyPad2 = KeypadMask | 0x29,
-	KeyPad1 = KeypadMask | 0x27,
-	KeyPad0 = KeypadMask | 0x25
+	Keypad9 = KeypadMask | 0x39,
+	Keypad8 = KeypadMask | 0x37,
+	Keypad7 = KeypadMask | 0x33,
+	Keypad6 = KeypadMask | 0x31,
+	Keypad5 = KeypadMask | 0x2f,
+	Keypad4 = KeypadMask | 0x2d,
+	Keypad3 = KeypadMask | 0x2b,
+	Keypad2 = KeypadMask | 0x29,
+	Keypad1 = KeypadMask | 0x27,
+	Keypad0 = KeypadMask | 0x25
 };
 
 class Keyboard {
@@ -135,7 +135,7 @@ class Keyboard {
 		/*!
 			The keyboard expects ~10 µs-frequency ticks, i.e. a clock rate of just around 100 kHz.
 		*/
-		void run_for(HalfCycles cycle) {
+		void run_for(HalfCycles) {	// TODO: honour the HalfCycles argument.
 			switch(mode_) {
 				default:
 				case Mode::Waiting: return;
@@ -210,7 +210,7 @@ class Keyboard {
 
 		void enqueue_key_state(uint16_t key, bool is_pressed) {
 			// Front insert; messages will be pop_back'd.
-			std::lock_guard<decltype(key_queue_mutex_)> lock(key_queue_mutex_);
+			std::lock_guard lock(key_queue_mutex_);
 
 			// Keys on the keypad are preceded by a $79 keycode; in the internal naming scheme
 			// they are indicated by having bit 8 set. So add the $79 prefix if required.
@@ -228,7 +228,7 @@ class Keyboard {
 			switch(command) {
 				case 0x10:		// Inquiry.
 				case 0x14: {	// Instant.
-					std::lock_guard<decltype(key_queue_mutex_)> lock(key_queue_mutex_);
+					std::lock_guard lock(key_queue_mutex_);
 					if(!key_queue_.empty()) {
 						const auto new_message = key_queue_.back();
 						key_queue_.pop_back();
@@ -290,8 +290,8 @@ class Keyboard {
 /*!
 	Provides a mapping from idiomatic PC keys to Macintosh keys.
 */
-class KeyboardMapper: public KeyboardMachine::MappedMachine::KeyboardMapper {
-	uint16_t mapped_key_for_key(Inputs::Keyboard::Key key) override;
+class KeyboardMapper: public MachineTypes::MappedKeyboardMachine::KeyboardMapper {
+	uint16_t mapped_key_for_key(Inputs::Keyboard::Key key) const final;
 };
 
 }

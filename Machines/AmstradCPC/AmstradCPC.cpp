@@ -21,10 +21,7 @@
 #include "../Utility/Typer.hpp"
 
 #include "../../Activity/Source.hpp"
-#include "../MediaTarget.hpp"
-#include "../CRTMachine.hpp"
-#include "../JoystickMachine.hpp"
-#include "../KeyboardMachine.hpp"
+#include "../MachineTypes.hpp"
 
 #include "../../Storage/Tape/Tape.hpp"
 
@@ -34,16 +31,11 @@
 
 #include "../../Analyser/Static/AmstradCPC/Target.hpp"
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
 namespace AmstradCPC {
-
-std::vector<std::unique_ptr<Configurable::Option>> get_options() {
-	return Configurable::standard_options(
-		static_cast<Configurable::StandardOptions>(Configurable::DisplayRGB | Configurable::DisplayCompositeColour)
-	);
-}
 
 /*!
 	Models the CPC's interrupt timer. Inputs are vsync, hsync, interrupt acknowledge and reset, and its output
@@ -62,7 +54,7 @@ class InterruptTimer {
 		inline void signal_hsync() {
 			// Increment the timer and if it has hit 52 then reset it and
 			// set the interrupt request line to true.
-			timer_++;
+			++timer_;
 			if(timer_ == 52) {
 				timer_ = 0;
 				interrupt_request_ = true;
@@ -72,7 +64,7 @@ class InterruptTimer {
 			// further horizontal syncs the timer should either (i) set the interrupt
 			// line, if bit 4 is clear; or (ii) reset the timer.
 			if(reset_counter_) {
-				reset_counter_--;
+				--reset_counter_;
 				if(!reset_counter_) {
 					if(timer_ & 32) {
 						interrupt_request_ = true;
@@ -124,8 +116,11 @@ class InterruptTimer {
 class AYDeferrer {
 	public:
 		/// Constructs a new AY instance and sets its clock rate.
-		AYDeferrer() : ay_(audio_queue_), speaker_(ay_) {
+		AYDeferrer() : ay_(GI::AY38910::Personality::AY38910, audio_queue_), speaker_(ay_) {
 			speaker_.set_input_rate(1000000);
+			// Per the CPC Wiki:
+			// "A is output to the right, channel C is output left, and channel B is output to both left and right".
+			ay_.set_output_mixing(0.0, 0.5, 1.0, 1.0, 0.5, 0.0);
 		}
 
 		~AYDeferrer() {
@@ -153,14 +148,14 @@ class AYDeferrer {
 		}
 
 		/// @returns the AY itself.
-		GI::AY38910::AY38910 &ay() {
+		GI::AY38910::AY38910<true> &ay() {
 			return ay_;
 		}
 
 	private:
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
-		GI::AY38910::AY38910 ay_;
-		Outputs::Speaker::LowpassSpeaker<GI::AY38910::AY38910> speaker_;
+		GI::AY38910::AY38910<true> ay_;
+		Outputs::Speaker::LowpassSpeaker<GI::AY38910::AY38910<true>> speaker_;
 		HalfCycles cycles_since_update_;
 };
 
@@ -171,7 +166,7 @@ class AYDeferrer {
 */
 class CRTCBusHandler {
 	public:
-		CRTCBusHandler(uint8_t *ram, InterruptTimer &interrupt_timer) :
+		CRTCBusHandler(const uint8_t *ram, InterruptTimer &interrupt_timer) :
 			crt_(1024, 1, Outputs::Display::Type::PAL50, Outputs::Display::InputDataType::Red2Green2Blue2),
 			ram_(ram),
 			interrupt_timer_(interrupt_timer) {
@@ -196,12 +191,12 @@ class CRTCBusHandler {
 				cycles_into_hsync_ = 0;
 			}
 
-			bool is_hsync = (cycles_into_hsync_ >= 2 && cycles_into_hsync_ < 6);
-			bool is_colour_burst = (cycles_into_hsync_ >= 7 && cycles_into_hsync_ < 11);
+			const bool is_hsync = (cycles_into_hsync_ >= 2 && cycles_into_hsync_ < 6);
+			const bool is_colour_burst = (cycles_into_hsync_ >= 7 && cycles_into_hsync_ < 11);
 
 			// Sync is taken to override pixels, and is combined as a simple OR.
-			bool is_sync = is_hsync || state.vsync;
-			bool is_blank = !is_sync && state.hsync;
+			const bool is_sync = is_hsync || state.vsync;
+			const bool is_blank = !is_sync && state.hsync;
 
 			OutputMode output_mode;
 			if(is_sync) {
@@ -222,9 +217,9 @@ class CRTCBusHandler {
 				if(cycles_) {
 					switch(previous_output_mode_) {
 						default:
-						case OutputMode::Blank:			crt_.output_blank(cycles_ * 16);					break;
+						case OutputMode::Blank:			crt_.output_blank(cycles_ * 16);				break;
 						case OutputMode::Sync:			crt_.output_sync(cycles_ * 16);					break;
-						case OutputMode::Border:		output_border(cycles_);								break;
+						case OutputMode::Border:		output_border(cycles_);							break;
 						case OutputMode::ColourBurst:	crt_.output_default_colour_burst(cycles_ * 16);	break;
 						case OutputMode::Pixels:
 							crt_.output_data(cycles_ * 16, size_t(cycles_ * 16 / pixel_divider_));
@@ -249,44 +244,46 @@ class CRTCBusHandler {
 					// the CPC shuffles output lines as:
 					//	MA13 MA12	RA2 RA1 RA0		MA9 MA8 MA7 MA6 MA5 MA4 MA3 MA2 MA1 MA0		CCLK
 					// ... so form the real access address.
-					uint16_t address =
-						static_cast<uint16_t>(
+					const uint16_t address =
+						uint16_t(
 							((state.refresh_address & 0x3ff) << 1) |
 							((state.row_address & 0x7) << 11) |
 							((state.refresh_address & 0x3000) << 2)
 						);
 
-					// fetch two bytes and translate into pixels
+					// Fetch two bytes and translate into pixels. Guaranteed: the mode can change only at
+					// hsync, so there's no risk of pixel_pointer_ overrunning 320 output pixels without
+					// exactly reaching 320 output pixels.
 					switch(mode_) {
 						case 0:
 							reinterpret_cast<uint16_t *>(pixel_pointer_)[0] = mode0_output_[ram_[address]];
 							reinterpret_cast<uint16_t *>(pixel_pointer_)[1] = mode0_output_[ram_[address+1]];
-							pixel_pointer_ += 4;
+							pixel_pointer_ += 2 * sizeof(uint16_t);
 						break;
 
 						case 1:
 							reinterpret_cast<uint32_t *>(pixel_pointer_)[0] = mode1_output_[ram_[address]];
 							reinterpret_cast<uint32_t *>(pixel_pointer_)[1] = mode1_output_[ram_[address+1]];
-							pixel_pointer_ += 8;
+							pixel_pointer_ += 2 * sizeof(uint32_t);
 						break;
 
 						case 2:
 							reinterpret_cast<uint64_t *>(pixel_pointer_)[0] = mode2_output_[ram_[address]];
 							reinterpret_cast<uint64_t *>(pixel_pointer_)[1] = mode2_output_[ram_[address+1]];
-							pixel_pointer_ += 16;
+							pixel_pointer_ += 2 * sizeof(uint64_t);
 						break;
 
 						case 3:
 							reinterpret_cast<uint16_t *>(pixel_pointer_)[0] = mode3_output_[ram_[address]];
 							reinterpret_cast<uint16_t *>(pixel_pointer_)[1] = mode3_output_[ram_[address+1]];
-							pixel_pointer_ += 4;
+							pixel_pointer_ += 2 * sizeof(uint16_t);
 						break;
 
 					}
 
-					// flush the current buffer pixel if full; the CRTC allows many different display
+					// Flush the current buffer pixel if full; the CRTC allows many different display
 					// widths so it's not necessarily possible to predict the correct number in advance
-					// and using the upper bound could lead to inefficient behaviour
+					// and using the upper bound could lead to inefficient behaviour.
 					if(pixel_pointer_ == pixel_data_ + 320) {
 						crt_.output_data(cycles_ * 16, size_t(cycles_ * 16 / pixel_divider_));
 						pixel_pointer_ = pixel_data_ = nullptr;
@@ -301,9 +298,16 @@ class CRTCBusHandler {
 			visible early. The CPC uses changes in sync to clock the interrupt timer.
 		*/
 		void perform_bus_cycle_phase2(const Motorola::CRTC::BusState &state) {
-			// check for a trailing CRTC hsync; if one occurred then that's the trigger potentially to change
-			// modes, and should also be sent on to the interrupt timer
+			// Notify a leading hsync edge to the interrupt timer.
+			// Per Interrupts in the CPC: "to be confirmed: does gate array count positive or negative edge transitions of HSYNC signal?";
+			// if you take it as given that display mode is latched as a result of hsync then Pipe Mania seems to imply that the count
+			// occurs on a leading edge and the mode lock on a trailing.
 			if(was_hsync_ && !state.hsync) {
+				interrupt_timer_.signal_hsync();
+			}
+
+			// Check for a trailing CRTC hsync; if one occurred then that's the trigger potentially to change modes.
+			if(!was_hsync_ && state.hsync) {
 				if(mode_ != next_mode_) {
 					mode_ = next_mode_;
 					switch(mode_) {
@@ -314,8 +318,6 @@ class CRTCBusHandler {
 					}
 					build_mode_table();
 				}
-
-				interrupt_timer_.signal_hsync();
 			}
 
 			// check for a leading vsync; that also needs to be communicated to the interrupt timer
@@ -333,9 +335,19 @@ class CRTCBusHandler {
 			crt_.set_scan_target(scan_target);
 		}
 
+		/// @returns The current scan status.
+		Outputs::Display::ScanStatus get_scaled_scan_status() const {
+			return crt_.get_scaled_scan_status() / 4.0f;
+		}
+
 		/// Sets the type of display.
 		void set_display_type(Outputs::Display::DisplayType display_type) {
 			crt_.set_display_type(display_type);
+		}
+
+		/// Gets the type of display.
+		Outputs::Display::DisplayType get_display_type() const {
+			return crt_.get_display_type();
 		}
 
 		/*!
@@ -363,40 +375,59 @@ class CRTCBusHandler {
 				border_ = mapped_palette_value(colour);
 			} else {
 				palette_[pen_] = mapped_palette_value(colour);
-				patch_mode_table(pen_);
+				patch_mode_table(size_t(pen_));
 			}
 		}
 
 	private:
 		void output_border(int length) {
-			uint8_t *colour_pointer = static_cast<uint8_t *>(crt_.begin_data(1));
-			if(colour_pointer) *colour_pointer = border_;
-			crt_.output_level(length * 16);
+			assert(length >= 0);
+
+			// A black border can be output via crt_.output_blank for a minor performance
+			// win; otherwise paint whatever the border colour really is.
+			if(border_) {
+				uint8_t *const colour_pointer = static_cast<uint8_t *>(crt_.begin_data(1));
+				if(colour_pointer) *colour_pointer = border_;
+				crt_.output_level(length * 16);
+			} else {
+				crt_.output_blank(length * 16);
+			}
 		}
 
-#define Mode0Colour0(c) ((c & 0x80) >> 7) | ((c & 0x20) >> 3) | ((c & 0x08) >> 2) | ((c & 0x02) << 2)
-#define Mode0Colour1(c) ((c & 0x40) >> 6) | ((c & 0x10) >> 2) | ((c & 0x04) >> 1) | ((c & 0x01) << 3)
+#define Mode0Colour0(c) (((c & 0x80) >> 7) | ((c & 0x20) >> 3) | ((c & 0x08) >> 2) | ((c & 0x02) << 2))
+#define Mode0Colour1(c) (((c & 0x40) >> 6) | ((c & 0x10) >> 2) | ((c & 0x04) >> 1) | ((c & 0x01) << 3))
 
-#define Mode1Colour0(c) ((c & 0x80) >> 7) | ((c & 0x08) >> 2)
-#define Mode1Colour1(c) ((c & 0x40) >> 6) | ((c & 0x04) >> 1)
-#define Mode1Colour2(c) ((c & 0x20) >> 5) | ((c & 0x02) >> 0)
-#define Mode1Colour3(c) ((c & 0x10) >> 4) | ((c & 0x01) << 1)
+#define Mode1Colour0(c) (((c & 0x80) >> 7) | ((c & 0x08) >> 2))
+#define Mode1Colour1(c) (((c & 0x40) >> 6) | ((c & 0x04) >> 1))
+#define Mode1Colour2(c) (((c & 0x20) >> 5) | ((c & 0x02) >> 0))
+#define Mode1Colour3(c) (((c & 0x10) >> 4) | ((c & 0x01) << 1))
 
-#define Mode3Colour0(c)	((c & 0x80) >> 7) | ((c & 0x08) >> 2)
-#define Mode3Colour1(c) ((c & 0x40) >> 6) | ((c & 0x04) >> 1)
+#define Mode3Colour0(c)	(((c & 0x80) >> 7) | ((c & 0x08) >> 2))
+#define Mode3Colour1(c) (((c & 0x40) >> 6) | ((c & 0x04) >> 1))
 
+		/*!
+			Creates a lookup table from palette entry to list of affected entries in the value -> pixels lookup tables.
+		*/
 		void establish_palette_hits() {
-			for(int c = 0; c < 256; c++) {
-				mode0_palette_hits_[Mode0Colour0(c)].push_back(static_cast<uint8_t>(c));
-				mode0_palette_hits_[Mode0Colour1(c)].push_back(static_cast<uint8_t>(c));
+			for(size_t c = 0; c < 256; c++) {
+				assert(Mode0Colour0(c) < mode0_palette_hits_.size());
+				assert(Mode0Colour1(c) < mode0_palette_hits_.size());
+				mode0_palette_hits_[Mode0Colour0(c)].push_back(uint8_t(c));
+				mode0_palette_hits_[Mode0Colour1(c)].push_back(uint8_t(c));
 
-				mode1_palette_hits_[Mode1Colour0(c)].push_back(static_cast<uint8_t>(c));
-				mode1_palette_hits_[Mode1Colour1(c)].push_back(static_cast<uint8_t>(c));
-				mode1_palette_hits_[Mode1Colour2(c)].push_back(static_cast<uint8_t>(c));
-				mode1_palette_hits_[Mode1Colour3(c)].push_back(static_cast<uint8_t>(c));
+				assert(Mode1Colour0(c) < mode1_palette_hits_.size());
+				assert(Mode1Colour1(c) < mode1_palette_hits_.size());
+				assert(Mode1Colour2(c) < mode1_palette_hits_.size());
+				assert(Mode1Colour3(c) < mode1_palette_hits_.size());
+				mode1_palette_hits_[Mode1Colour0(c)].push_back(uint8_t(c));
+				mode1_palette_hits_[Mode1Colour1(c)].push_back(uint8_t(c));
+				mode1_palette_hits_[Mode1Colour2(c)].push_back(uint8_t(c));
+				mode1_palette_hits_[Mode1Colour3(c)].push_back(uint8_t(c));
 
-				mode3_palette_hits_[Mode3Colour0(c)].push_back(static_cast<uint8_t>(c));
-				mode3_palette_hits_[Mode3Colour1(c)].push_back(static_cast<uint8_t>(c));
+				assert(Mode3Colour0(c) < mode3_palette_hits_.size());
+				assert(Mode3Colour1(c) < mode3_palette_hits_.size());
+				mode3_palette_hits_[Mode3Colour0(c)].push_back(uint8_t(c));
+				mode3_palette_hits_[Mode3Colour1(c)].push_back(uint8_t(c));
 			}
 		}
 
@@ -404,18 +435,18 @@ class CRTCBusHandler {
 			switch(mode_) {
 				case 0:
 					// Mode 0: abcdefgh -> [gcea] [hdfb]
-					for(int c = 0; c < 256; c++) {
-						// prepare mode 0
-						uint8_t *mode0_pixels = reinterpret_cast<uint8_t *>(&mode0_output_[c]);
+					for(size_t c = 0; c < 256; c++) {
+						// Prepare mode 0.
+						uint8_t *const mode0_pixels = reinterpret_cast<uint8_t *>(&mode0_output_[c]);
 						mode0_pixels[0] = palette_[Mode0Colour0(c)];
 						mode0_pixels[1] = palette_[Mode0Colour1(c)];
 					}
 				break;
 
 				case 1:
-					for(int c = 0; c < 256; c++) {
-						// prepare mode 1
-						uint8_t *mode1_pixels = reinterpret_cast<uint8_t *>(&mode1_output_[c]);
+					for(size_t c = 0; c < 256; c++) {
+						// Prepare mode 1.
+						uint8_t *const mode1_pixels = reinterpret_cast<uint8_t *>(&mode1_output_[c]);
 						mode1_pixels[0] = palette_[Mode1Colour0(c)];
 						mode1_pixels[1] = palette_[Mode1Colour1(c)];
 						mode1_pixels[2] = palette_[Mode1Colour2(c)];
@@ -424,9 +455,9 @@ class CRTCBusHandler {
 				break;
 
 				case 2:
-					for(int c = 0; c < 256; c++) {
-						// prepare mode 2
-						uint8_t *mode2_pixels = reinterpret_cast<uint8_t *>(&mode2_output_[c]);
+					for(size_t c = 0; c < 256; c++) {
+						// Prepare mode 2.
+						uint8_t *const mode2_pixels = reinterpret_cast<uint8_t *>(&mode2_output_[c]);
 						mode2_pixels[0] = palette_[((c & 0x80) >> 7)];
 						mode2_pixels[1] = palette_[((c & 0x40) >> 6)];
 						mode2_pixels[2] = palette_[((c & 0x20) >> 5)];
@@ -439,9 +470,9 @@ class CRTCBusHandler {
 				break;
 
 				case 3:
-					for(int c = 0; c < 256; c++) {
-						// prepare mode 3
-						uint8_t *mode3_pixels = reinterpret_cast<uint8_t *>(&mode3_output_[c]);
+					for(size_t c = 0; c < 256; c++) {
+						// Prepare mode 3.
+						uint8_t *const mode3_pixels = reinterpret_cast<uint8_t *>(&mode3_output_[c]);
 						mode3_pixels[0] = palette_[Mode3Colour0(c)];
 						mode3_pixels[1] = palette_[Mode3Colour1(c)];
 					}
@@ -449,19 +480,21 @@ class CRTCBusHandler {
 			}
 		}
 
-		void patch_mode_table(int pen) {
+		void patch_mode_table(size_t pen) {
 			switch(mode_) {
 				case 0: {
 					for(uint8_t c : mode0_palette_hits_[pen]) {
-						uint8_t *mode0_pixels = reinterpret_cast<uint8_t *>(&mode0_output_[c]);
+						assert(c < mode0_output_.size());
+						uint8_t *const mode0_pixels = reinterpret_cast<uint8_t *>(&mode0_output_[c]);
 						mode0_pixels[0] = palette_[Mode0Colour0(c)];
 						mode0_pixels[1] = palette_[Mode0Colour1(c)];
 					}
 				} break;
 				case 1:
-					if(pen > 3) return;
+					if(pen >= mode1_palette_hits_.size()) return;
 					for(uint8_t c : mode1_palette_hits_[pen]) {
-						uint8_t *mode1_pixels = reinterpret_cast<uint8_t *>(&mode1_output_[c]);
+						assert(c < mode1_output_.size());
+						uint8_t *const mode1_pixels = reinterpret_cast<uint8_t *>(&mode1_output_[c]);
 						mode1_pixels[0] = palette_[Mode1Colour0(c)];
 						mode1_pixels[1] = palette_[Mode1Colour1(c)];
 						mode1_pixels[2] = palette_[Mode1Colour2(c)];
@@ -475,10 +508,11 @@ class CRTCBusHandler {
 					build_mode_table();
 				break;
 				case 3:
-					if(pen > 3) return;
+					if(pen >= mode3_palette_hits_.size()) return;
 					// Same argument applies here as to case 1, as the unused bits aren't masked out.
 					for(uint8_t c : mode3_palette_hits_[pen]) {
-						uint8_t *mode3_pixels = reinterpret_cast<uint8_t *>(&mode3_output_[c]);
+						assert(c < mode3_output_.size());
+						uint8_t *const mode3_pixels = reinterpret_cast<uint8_t *>(&mode3_output_[c]);
 						mode3_pixels[0] = palette_[Mode3Colour0(c)];
 						mode3_pixels[1] = palette_[Mode3Colour1(c)];
 					}
@@ -499,7 +533,7 @@ class CRTCBusHandler {
 
 		uint8_t mapped_palette_value(uint8_t colour) {
 #define COL(r, g, b) (r << 4) | (g << 2) | b
-			static const uint8_t mapping[32] = {
+			constexpr uint8_t mapping[32] = {
 				COL(1, 1, 1),	COL(1, 1, 1),	COL(0, 2, 1),	COL(2, 2, 1),
 				COL(0, 0, 1),	COL(2, 0, 1),	COL(0, 1, 1),	COL(2, 1, 1),
 				COL(2, 0, 1),	COL(2, 2, 1),	COL(2, 2, 0),	COL(2, 2, 2),
@@ -528,19 +562,19 @@ class CRTCBusHandler {
 		Outputs::CRT::CRT crt_;
 		uint8_t *pixel_data_ = nullptr, *pixel_pointer_ = nullptr;
 
-		uint8_t *ram_ = nullptr;
+		const uint8_t *const ram_ = nullptr;
 
 		int next_mode_ = 2, mode_ = 2;
 
 		int pixel_divider_ = 1;
-		uint16_t mode0_output_[256];
-		uint32_t mode1_output_[256];
-		uint64_t mode2_output_[256];
-		uint16_t mode3_output_[256];
+		std::array<uint16_t, 256> mode0_output_;
+		std::array<uint32_t, 256> mode1_output_;
+		std::array<uint64_t, 256> mode2_output_;
+		std::array<uint16_t, 256> mode3_output_;
 
-		std::vector<uint8_t> mode0_palette_hits_[16];
-		std::vector<uint8_t> mode1_palette_hits_[4];
-		std::vector<uint8_t> mode3_palette_hits_[4];
+		std::array<std::vector<uint8_t>, 16> mode0_palette_hits_;
+		std::array<std::vector<uint8_t>, 4> mode1_palette_hits_;
+		std::array<std::vector<uint8_t>, 4> mode3_palette_hits_;
 
 		int pen_ = 0;
 		uint8_t palette_[16];
@@ -564,7 +598,7 @@ class KeyboardState: public GI::AY38910::PortHandler {
 			Sets the row currently being reported to the AY.
 		*/
 		void set_row(int row) {
-			row_ = static_cast<size_t>(row);
+			row_ = size_t(row);
 		}
 
 		/*!
@@ -583,7 +617,7 @@ class KeyboardState: public GI::AY38910::PortHandler {
 		*/
 		void set_is_pressed(bool is_pressed, int line, int key) {
 			int mask = 1 << key;
-			assert(static_cast<size_t>(line) < sizeof(rows_));
+			assert(size_t(line) < sizeof(rows_));
 			if(is_pressed) rows_[line] &= ~mask; else rows_[line] |= mask;
 		}
 
@@ -594,7 +628,7 @@ class KeyboardState: public GI::AY38910::PortHandler {
 			memset(rows_, 0xff, sizeof(rows_));
 		}
 
-		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() {
+		const std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() {
 			return joysticks_;
 		}
 
@@ -617,7 +651,7 @@ class KeyboardState: public GI::AY38910::PortHandler {
 					}),
 					state_(state) {}
 
-				void did_set_input(const Input &input, bool is_active) override {
+				void did_set_input(const Input &input, bool is_active) final {
 					uint8_t mask = 0;
 					switch(input.type) {
 						default: return;
@@ -646,29 +680,27 @@ class KeyboardState: public GI::AY38910::PortHandler {
 class FDC: public Intel::i8272::i8272 {
 	private:
 		Intel::i8272::BusHandler bus_handler_;
-		std::shared_ptr<Storage::Disk::Drive> drive_;
 
 	public:
-		FDC() :
-			i8272(bus_handler_, Cycles(8000000)),
-			drive_(new Storage::Disk::Drive(8000000, 300, 1)) {
-			set_drive(drive_);
+		FDC() : i8272(bus_handler_, Cycles(8000000)) {
+			emplace_drive(8000000, 300, 1);
+			set_drive(1);
 		}
 
 		void set_motor_on(bool on) {
-			drive_->set_motor_on(on);
+			get_drive().set_motor_on(on);
 		}
 
-		void select_drive(int c) {
-			// TODO: support more than one drive.
+		void select_drive(int) {
+			// TODO: support more than one drive. (and in set_disk)
 		}
 
-		void set_disk(std::shared_ptr<Storage::Disk::Disk> disk, int drive) {
-			drive_->set_disk(disk);
+		void set_disk(std::shared_ptr<Storage::Disk::Disk> disk, int) {
+			get_drive().set_disk(disk);
 		}
 
 		void set_activity_observer(Activity::Observer *observer) {
-			drive_->set_activity_observer(observer, "Drive 1", true);
+			get_drive().set_activity_observer(observer, "Drive 1", true);
 		}
 };
 
@@ -747,14 +779,16 @@ class i8255PortHandler : public Intel::i8255::PortHandler {
 	The actual Amstrad CPC implementation; tying the 8255, 6845 and AY to the Z80.
 */
 template <bool has_fdc> class ConcreteMachine:
-	public CRTMachine::Machine,
-	public MediaTarget::Machine,
-	public KeyboardMachine::MappedMachine,
-	public Utility::TypeRecipient,
+	public MachineTypes::ScanProducer,
+	public MachineTypes::AudioProducer,
+	public MachineTypes::TimedMachine,
+	public MachineTypes::MediaTarget,
+	public MachineTypes::MappedKeyboardMachine,
+	public MachineTypes::JoystickMachine,
+	public Utility::TypeRecipient<CharacterMapper>,
 	public CPU::Z80::BusHandler,
 	public ClockingHint::Observer,
 	public Configurable::Device,
-	public JoystickMachine::Machine,
 	public Machine,
 	public Activity::Source {
 	public:
@@ -816,18 +850,18 @@ template <bool has_fdc> class ConcreteMachine:
 			for(std::size_t index = 0; index < roms.size(); ++index) {
 				auto &data = roms[index];
 				if(!data) throw ROMMachine::Error::MissingROMs;
-				roms_[static_cast<int>(index)] = std::move(*data);
-				roms_[static_cast<int>(index)].resize(16384);
+				roms_[index] = std::move(*data);
+				roms_[index].resize(16384);
 			}
 
 			// Establish default memory map
 			upper_rom_is_paged_ = true;
 			upper_rom_ = ROMType::BASIC;
 
-			write_pointers_[0] = &ram_[0];
-			write_pointers_[1] = &ram_[16384];
-			write_pointers_[2] = &ram_[32768];
-			write_pointers_[3] = &ram_[49152];
+			write_pointers_[0] = &ram_[0x0000];
+			write_pointers_[1] = &ram_[0x4000];
+			write_pointers_[2] = &ram_[0x8000];
+			write_pointers_[3] = &ram_[0xc000];
 
 			read_pointers_[0] = roms_[ROMType::OS].data();
 			read_pointers_[1] = write_pointers_[1];
@@ -853,7 +887,7 @@ template <bool has_fdc> class ConcreteMachine:
 			// will do as it's safe to conclude that nobody else has touched video RAM
 			// during that whole window
 			crtc_counter_ += cycle.length;
-			Cycles crtc_cycles = crtc_counter_.divide_cycles(Cycles(4));
+			const Cycles crtc_cycles = crtc_counter_.divide_cycles(Cycles(4));
 			if(crtc_cycles > Cycles(0)) crtc_.run_for(crtc_cycles);
 
 			// Check whether that prompted a change in the interrupt line. If so then date
@@ -862,13 +896,15 @@ template <bool has_fdc> class ConcreteMachine:
 
 			// TODO (in the player, not here): adapt it to accept an input clock rate and
 			// run_for as HalfCycles
-			if(!tape_player_is_sleeping_) tape_player_.run_for(cycle.length.as_int());
+			if(!tape_player_is_sleeping_) tape_player_.run_for(cycle.length.as_integral());
 
 			// Pump the AY
 			ay_.run_for(cycle.length);
 
-			// Clock the FDC, if connected, using a lazy scale by two
-			time_since_fdc_update_ += cycle.length;
+			if constexpr (has_fdc) {
+				// Clock the FDC, if connected, using a lazy scale by two
+				time_since_fdc_update_ += cycle.length;
+			}
 
 			// Update typing activity
 			if(typer_) typer_->run_for(cycle.length);
@@ -894,9 +930,11 @@ template <bool has_fdc> class ConcreteMachine:
 					}
 
 					// Check for an upper ROM selection
-					if(has_fdc && !(address&0x2000)) {
-						upper_rom_ = (*cycle.value == 7) ? ROMType::AMSDOS : ROMType::BASIC;
-						if(upper_rom_is_paged_) read_pointers_[3] = roms_[upper_rom_].data();
+					if constexpr (has_fdc) {
+						if(!(address&0x2000)) {
+							upper_rom_ = (*cycle.value == 7) ? ROMType::AMSDOS : ROMType::BASIC;
+							if(upper_rom_is_paged_) read_pointers_[3] = roms_[upper_rom_].data();
+						}
 					}
 
 					// Check for a CRTC access
@@ -910,19 +948,21 @@ template <bool has_fdc> class ConcreteMachine:
 
 					// Check for an 8255 PIO access
 					if(!(address & 0x800)) {
-						i8255_.set_register((address >> 8) & 3, *cycle.value);
+						i8255_.write((address >> 8) & 3, *cycle.value);
 					}
 
-					// Check for an FDC access
-					if(has_fdc && (address & 0x580) == 0x100) {
-						flush_fdc();
-						fdc_.set_register(address & 1, *cycle.value);
-					}
+					if constexpr (has_fdc) {
+						// Check for an FDC access
+						if((address & 0x580) == 0x100) {
+							flush_fdc();
+							fdc_.write(address & 1, *cycle.value);
+						}
 
-					// Check for a disk motor access
-					if(has_fdc && !(address & 0x580)) {
-						flush_fdc();
-						fdc_.set_motor_on(!!(*cycle.value));
+						// Check for a disk motor access
+						if(!(address & 0x580)) {
+							flush_fdc();
+							fdc_.set_motor_on(!!(*cycle.value));
+						}
 					}
 				break;
 				case CPU::Z80::PartialMachineCycle::Input:
@@ -931,13 +971,15 @@ template <bool has_fdc> class ConcreteMachine:
 
 					// Check for a PIO access
 					if(!(address & 0x800)) {
-						*cycle.value &= i8255_.get_register((address >> 8) & 3);
+						*cycle.value &= i8255_.read((address >> 8) & 3);
 					}
 
 					// Check for an FDC access
-					if(has_fdc && (address & 0x580) == 0x100) {
-						flush_fdc();
-						*cycle.value &= fdc_.get_register(address & 1);
+					if constexpr (has_fdc) {
+						if((address & 0x580) == 0x100) {
+							flush_fdc();
+							*cycle.value &= fdc_.read(address & 1);
+						}
 					}
 
 					// Check for a CRTC access; the below is not a typo, the CRTC can be selected
@@ -968,6 +1010,9 @@ template <bool has_fdc> class ConcreteMachine:
 				default: break;
 			}
 
+			// Check whether the interrupt signal has changed the other way.
+			if(interrupt_timer_.request_has_changed()) z80_.set_interrupt_line(interrupt_timer_.get_request());
+
 			// This implementation doesn't use time-stuffing; once in-phase waits won't be longer
 			// than a single cycle so there's no real performance benefit to trying to find the
 			// next non-wait when a wait cycle comes in, and there'd be no benefit to reproducing
@@ -984,26 +1029,36 @@ template <bool has_fdc> class ConcreteMachine:
 		}
 
 		/// A CRTMachine function; sets the destination for video.
-		void set_scan_target(Outputs::Display::ScanTarget *scan_target) override final {
+		void set_scan_target(Outputs::Display::ScanTarget *scan_target) final {
 			crtc_bus_handler_.set_scan_target(scan_target);
 		}
 
+		/// A CRTMachine function; returns the current scan status.
+		Outputs::Display::ScanStatus get_scaled_scan_status() const final {
+			return crtc_bus_handler_.get_scaled_scan_status();
+		}
+
 		/// A CRTMachine function; sets the output display type.
-		void set_display_type(Outputs::Display::DisplayType display_type) override final {
+		void set_display_type(Outputs::Display::DisplayType display_type) final {
 			crtc_bus_handler_.set_display_type(display_type);
 		}
 
+		/// A CRTMachine function; gets the output display type.
+		Outputs::Display::DisplayType get_display_type() const final {
+			return crtc_bus_handler_.get_display_type();
+		}
+
 		/// @returns the speaker in use.
-		Outputs::Speaker::Speaker *get_speaker() override final {
+		Outputs::Speaker::Speaker *get_speaker() final {
 			return ay_.get_speaker();
 		}
 
 		/// Wires virtual-dispatched CRTMachine run_for requests to the static Z80 method.
-		void run_for(const Cycles cycles) override final {
+		void run_for(const Cycles cycles) final {
 			z80_.run_for(cycles);
 		}
 
-		bool insert_media(const Analyser::Static::Media &media) override final {
+		bool insert_media(const Analyser::Static::Media &media) final {
 			// If there are any tapes supplied, use the first of them.
 			if(!media.tapes.empty()) {
 				tape_player_.set_tape(media.tapes.front());
@@ -1020,70 +1075,61 @@ template <bool has_fdc> class ConcreteMachine:
 			return !media.tapes.empty() || (!media.disks.empty() && has_fdc);
 		}
 
-		void set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference clocking) override final {
+		void set_component_prefers_clocking(ClockingHint::Source *, ClockingHint::Preference) final {
 			fdc_is_sleeping_ = fdc_.preferred_clocking() == ClockingHint::Preference::None;
 			tape_player_is_sleeping_ = tape_player_.preferred_clocking() == ClockingHint::Preference::None;
 		}
 
 		// MARK: - Keyboard
-		void type_string(const std::string &string) override final {
-			std::unique_ptr<CharacterMapper> mapper(new CharacterMapper());
-			Utility::TypeRecipient::add_typer(string, std::move(mapper));
+		void type_string(const std::string &string) final {
+			Utility::TypeRecipient<CharacterMapper>::add_typer(string);
 		}
 
-		HalfCycles get_typer_delay() override final {
-			return Cycles(4000000);	// Wait 1 second before typing.
+		bool can_type(char c) const final {
+			return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 		}
 
-		HalfCycles get_typer_frequency() override final {
-			return Cycles(160000);	// Type one character per frame.
+		HalfCycles get_typer_delay() const final {
+			return z80_.get_is_resetting() ? Cycles(3'400'000) : Cycles(0);
+		}
+
+		HalfCycles get_typer_frequency() const final {
+			return Cycles(80'000);	// Perform one key transition per frame.
 		}
 
 		// See header; sets a key as either pressed or released.
-		void set_key_state(uint16_t key, bool isPressed) override final {
+		void set_key_state(uint16_t key, bool isPressed) final {
 			key_state_.set_is_pressed(isPressed, key >> 4, key & 7);
 		}
 
 		// See header; sets all keys to released.
-		void clear_all_keys() override final {
+		void clear_all_keys() final {
 			key_state_.clear_all_keys();
 		}
 
-		KeyboardMapper *get_keyboard_mapper() override {
+		KeyboardMapper *get_keyboard_mapper() final {
 			return &keyboard_mapper_;
 		}
 
 		// MARK: - Activity Source
-		void set_activity_observer(Activity::Observer *observer) override {
-			if(has_fdc) fdc_.set_activity_observer(observer);
+		void set_activity_observer([[maybe_unused]] Activity::Observer *observer) final {
+			if constexpr (has_fdc) fdc_.set_activity_observer(observer);
 		}
 
 		// MARK: - Configuration options.
-		std::vector<std::unique_ptr<Configurable::Option>> get_options() override {
-			return AmstradCPC::get_options();
+		std::unique_ptr<Reflection::Struct> get_options() final {
+			auto options = std::make_unique<Options>(Configurable::OptionsType::UserFriendly);
+			options->output = get_video_signal_configurable();
+			return options;
 		}
 
-		void set_selections(const Configurable::SelectionSet &selections_by_option) override {
-			Configurable::Display display;
-			if(Configurable::get_display(selections_by_option, display)) {
-				set_video_signal_configurable(display);
-			}
-		}
-
-		Configurable::SelectionSet get_accurate_selections() override {
-			Configurable::SelectionSet selection_set;
-			Configurable::append_display_selection(selection_set, Configurable::Display::RGB);
-			return selection_set;
-		}
-
-		Configurable::SelectionSet get_user_friendly_selections() override {
-			Configurable::SelectionSet selection_set;
-			Configurable::append_display_selection(selection_set, Configurable::Display::RGB);
-			return selection_set;
+		void set_options(const std::unique_ptr<Reflection::Struct> &str) {
+			const auto options = dynamic_cast<Options *>(str.get());
+			set_video_signal_configurable(options->output);
 		}
 
 		// MARK: - Joysticks
-		std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() override {
+		const std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() final {
 			return key_state_.get_joysticks();
 		}
 
@@ -1108,8 +1154,8 @@ template <bool has_fdc> class ConcreteMachine:
 				case 3:
 					// Perform RAM paging, if 128kb is permitted.
 					if(has_128k_) {
-						bool adjust_low_read_pointer = read_pointers_[0] == write_pointers_[0];
-						bool adjust_high_read_pointer = read_pointers_[3] == write_pointers_[3];
+						const bool adjust_low_read_pointer = read_pointers_[0] == write_pointers_[0];
+						const bool adjust_high_read_pointer = read_pointers_[3] == write_pointers_[3];
 #define RAM_BANK(x) &ram_[x * 16384]
 #define RAM_CONFIG(a, b, c, d) write_pointers_[0] = RAM_BANK(a); write_pointers_[1] = RAM_BANK(b); write_pointers_[2] = RAM_BANK(c); write_pointers_[3] = RAM_BANK(d);
 						switch(value & 7) {
@@ -1145,11 +1191,13 @@ template <bool has_fdc> class ConcreteMachine:
 		FDC fdc_;
 		HalfCycles time_since_fdc_update_;
 		void flush_fdc() {
-			// Clock the FDC, if connected, using a lazy scale by two
-			if(has_fdc && !fdc_is_sleeping_) {
-				fdc_.run_for(Cycles(time_since_fdc_update_.as_int()));
+			if constexpr (has_fdc) {
+				// Clock the FDC, if connected, using a lazy scale by two
+				if(!fdc_is_sleeping_) {
+					fdc_.run_for(Cycles(time_since_fdc_update_.as_integral()));
+				}
+				time_since_fdc_update_ = HalfCycles(0);
 			}
-			time_since_fdc_update_ = HalfCycles(0);
 		}
 
 		InterruptTimer interrupt_timer_;
@@ -1158,8 +1206,6 @@ template <bool has_fdc> class ConcreteMachine:
 		HalfCycles clock_offset_;
 		HalfCycles crtc_counter_;
 		HalfCycles half_cycles_since_ay_update_;
-
-		uint8_t ram_[128 * 1024];
 
 		bool fdc_is_sleeping_;
 		bool tape_player_is_sleeping_;
@@ -1178,6 +1224,9 @@ template <bool has_fdc> class ConcreteMachine:
 
 		KeyboardState key_state_;
 		AmstradCPC::KeyboardMapper keyboard_mapper_;
+
+		bool has_run_ = false;
+		uint8_t ram_[128 * 1024];
 };
 
 }

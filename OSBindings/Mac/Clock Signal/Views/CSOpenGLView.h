@@ -50,6 +50,18 @@ typedef NS_ENUM(NSInteger, CSOpenGLViewRedrawEvent) {
 */
 - (void)openGLViewDidReleaseMouse:(nonnull CSOpenGLView *)view;
 
+/*!
+	Announces that the OS mouse cursor is now being displayed again, after having been invisible.
+	@param view The view making the announcement.
+*/
+- (void)openGLViewDidShowOSMouseCursor:(nonnull CSOpenGLView *)view;
+
+/*!
+	Announces that the OS mouse cursor will now be hidden.
+	@param view The view making the announcement.
+*/
+- (void)openGLViewWillHideOSMouseCursor:(nonnull CSOpenGLView *)view;
+
 @end
 
 @protocol CSOpenGLViewResponderDelegate <NSObject>
@@ -102,6 +114,23 @@ typedef NS_ENUM(NSInteger, CSOpenGLViewRedrawEvent) {
 @end
 
 /*!
+	Although I'm still on the fence about this as a design decision, CSOpenGLView  is itself responsible
+	for creating and destroying a CVDisplayLink. There's a practical reason for this: you'll get real synchronisation
+	only if a link is explicitly tied to a particular display, and the CSOpenGLView therefore owns the knowledge
+	necessary to decide when to create and modify them. It doesn't currently just propagate "did change screen"-type
+	messages because I haven't yet found a way to track that other than polling, in which case I might as well put
+	that into the display link callback.
+*/
+@protocol CSOpenGLViewDisplayLinkDelegate
+
+/*!
+	Informs the delegate that the display link has fired.
+*/
+- (void)openGLViewDisplayLinkDidFire:(nonnull CSOpenGLView *)view now:(nonnull const CVTimeStamp *)now outputTime:(nonnull const CVTimeStamp *)outputTime;
+
+@end
+
+/*!
 	Provides an OpenGL canvas with a refresh-linked update timer that can forward a subset
 	of typical first-responder actions.
 */
@@ -109,8 +138,23 @@ typedef NS_ENUM(NSInteger, CSOpenGLViewRedrawEvent) {
 
 @property (atomic, weak, nullable) id <CSOpenGLViewDelegate> delegate;
 @property (nonatomic, weak, nullable) id <CSOpenGLViewResponderDelegate> responderDelegate;
+@property (atomic, weak, nullable) id <CSOpenGLViewDisplayLinkDelegate> displayLinkDelegate;
 
+/// Determines whether the view offers mouse capturing — i.e. if the user clicks on the view then
+/// then the system cursor is disabled and the mouse events defined by CSOpenGLViewResponderDelegate
+/// are forwarded, unless and until the user releases the mouse using the control+command shortcut.
 @property (nonatomic, assign) BOOL shouldCaptureMouse;
+
+/// Determines whether the CSOpenGLViewResponderDelegate of this window expects to use the command
+/// key as though it were any other key — i.e. all command combinations should be forwarded to the delegate,
+/// not being allowed to trigger regular application shortcuts such as command+q or command+h.
+///
+/// How the view respects this will depend on other state; if this view is one that captures the mouse then it
+/// will usurp command only while the mouse is captured.
+///
+/// TODO: what's smart behaviour if this view doesn't capture the mouse? Probably
+/// force a similar capturing behaviour?
+@property (nonatomic, assign) BOOL shouldUsurpCommand;
 
 /*!
 	Ends the timer tracking time; should be called prior to giving up the last owning reference
@@ -125,6 +169,7 @@ typedef NS_ENUM(NSInteger, CSOpenGLViewRedrawEvent) {
 	Locks this view's OpenGL context and makes it current, performs @c action and then unlocks
 	the context. @c action is performed on the calling queue.
 */
+- (void)performWithGLContext:(nonnull dispatch_block_t NS_NOESCAPE)action flushDrawable:(BOOL)flushDrawable;
 - (void)performWithGLContext:(nonnull dispatch_block_t NS_NOESCAPE)action;
 
 /*!

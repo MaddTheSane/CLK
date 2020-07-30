@@ -7,7 +7,6 @@
 //
 
 #include "TimedEventLoop.hpp"
-#include "../NumberTheory/Factors.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -15,13 +14,13 @@
 
 using namespace Storage;
 
-TimedEventLoop::TimedEventLoop(int input_clock_rate) :
+TimedEventLoop::TimedEventLoop(Cycles::IntType input_clock_rate) :
 	input_clock_rate_(input_clock_rate) {}
 
 void TimedEventLoop::run_for(const Cycles cycles) {
-	int remaining_cycles = cycles.as_int();
+	auto remaining_cycles = cycles.as_integral();
 #ifndef NDEBUG
-	int cycles_advanced = 0;
+	decltype(remaining_cycles) cycles_advanced = 0;
 #endif
 
 	while(cycles_until_event_ <= remaining_cycles) {
@@ -42,15 +41,15 @@ void TimedEventLoop::run_for(const Cycles cycles) {
 		advance(remaining_cycles);
 	}
 
-	assert(cycles_advanced == cycles.as_int());
+	assert(cycles_advanced == cycles.as_integral());
 	assert(cycles_until_event_ > 0);
 }
 
-int TimedEventLoop::get_cycles_until_next_event() {
-	return std::max(cycles_until_event_, 0);
+Cycles::IntType TimedEventLoop::get_cycles_until_next_event() const {
+	return std::max(cycles_until_event_, Cycles::IntType(0));
 }
 
-int TimedEventLoop::get_input_clock_rate() {
+Cycles::IntType TimedEventLoop::get_input_clock_rate() const {
 	return input_clock_rate_;
 }
 
@@ -70,16 +69,16 @@ void TimedEventLoop::set_next_event_time_interval(Time interval) {
 
 void TimedEventLoop::set_next_event_time_interval(float interval) {
 	// Calculate [interval]*[input clock rate] + [subcycles until this event]
-	float float_interval = interval * float(input_clock_rate_) + subcycles_until_event_;
+	const float float_interval = interval * float(input_clock_rate_) + subcycles_until_event_;
 
-	// So this event will fire in the integral number of cycles from now, putting us at the remainder
-	// number of subcycles
-	const int addition = int(float_interval);
+	// This event will fire in the integral number of cycles from now, putting us at the remainder
+	// number of subcycles.
+	const Cycles::IntType addition = Cycles::IntType(float_interval);
 	cycles_until_event_ += addition;
-	subcycles_until_event_ = fmodf(float_interval, 1.0);
+	subcycles_until_event_ = fmodf(float_interval, 1.0f);
 
 	assert(cycles_until_event_ >= 0);
-	assert(subcycles_until_event_ >= 0.0);
+	assert(subcycles_until_event_ >= 0.0f);
 }
 
 Time TimedEventLoop::get_time_into_next_event() {

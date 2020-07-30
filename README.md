@@ -1,9 +1,10 @@
+![Clock Signal Application Icon](READMEImages/Icon.png)
 # Clock Signal
 Clock Signal ('CLK') is an emulator for tourists that seeks to be invisible. Users directly launch classic software with no emulator or per-emulated-machine learning curve.
 
-[Releases](https://github.com/TomHarte/CLK/releases) are hosted on GitHub.
+macOS and source releases are [hosted on GitHub](https://github.com/TomHarte/CLK/releases). For desktop Linux it is also available as a [Snap](https://snapcraft.io/clock-signal).
 
-On the Mac it is a native Cocoa application. Under Linux, BSD and other UNIXes and UNIX-alikes it relies upon SDL 2.
+On the Mac it is a native Cocoa application; under Linux, BSD and other UNIXes and UNIX-alikes it can be built either with Qt or with SDL; the Qt build should be considered preliminary and is currently closely bound to X11 as Qt doesn't abstract game-like keyboard handling.
 
 So its aims are:
 * single-click load of any piece of source media for any supported platform;
@@ -18,12 +19,13 @@ It currently contains emulations of the:
 * Atari 2600;
 * ColecoVision;
 * Commodore Vic-20 (and Commodore 1540/1);
+* Macintosh 512ke and Plus;
 * MSX 1;
 * Oric 1/Atmos;
 * Sega Master System; and
 * Sinclair ZX80/81.
 
-Work is in progress on the Macintosh 512ke; it is presently very experimental.
+In addition, emulation of the Atari ST is experimental.
 
 ## Single-click Loading
 
@@ -58,9 +60,6 @@ If your machine has a 4k monitor and a 96Khz audio output? Then you'll get a 4k 
 |![Amstrad text, with a classic 1:1 pixel emulation](READMEImages/NaiveCPC.png)|![Amstrad text, with correct aspect ratio and subject to a lowpass filter](READMEImages/FilteredCPC.png)|
 |![The Amstrad CPC version of Stormlord, with a classic 1:1 pixel emulation](READMEImages/NaiveCPCStormlord.png)|![The Amstrad CPC version of Stormlord, with correct aspect ratio and subject to a lowpass filter](READMEImages/CPCStormlord.png)|
 
-<img src="READMEImages/ReptonInterlaced.gif" height=400 alt="Repton title screen, interlaced"><img src="READMEImages/AppleIIPrinceOfPersia.png" height=400 alt="Apple IIe Prince of Persia">
-<img src="READMEImages/MusicWorks.png" height=400 alt="Apple Macintosh MusicWorks">
-
 ## Low Latency
 
 The display produced is an emulated CRT, with phosphor decay. Therefore if you have a 140Hz monitor it can produce 140 distinct frames per second. Latency is dictated by the output hardware, not the emulated machine.
@@ -73,10 +72,15 @@ A corollary of emulating the continuous nature CRT, not merely performing end-of
 
 Cycle-accurate emulation for the supported target machines is fairly trite; this emulator seeks to follow that precedent. All emulation logic is written in C++ for explicit control over costs but, where a conflict arises, the presumption is towards clarity and simplicity of code. This emulator is willing to spend the processing resources available on modern hardware.
 
-Self-ratings:
-* the Electron, Oric and Vic-20 are pretty much perfect;
-* the ZX80, ZX81, ColecoVision, MSX 1 and Apple IIs are very strong;
-* the Master System is almost perfect, access windows and CRAM dots and all the rest, but further work is required on some small aspects of behaviour;
-* the Amstrad CPC has known accuracy deficiencies in its 8272 and 6845;
-* the Atari 2600 has some known accuracy deficiencies in its TIA;
-* the C-1540(/1) is locked in reading mode and doesn't yet support writing.
+## Additional Screenshots
+| | |
+|---|---|
+|![Apple IIe Prince of Persia](READMEImages/AppleIIPrinceOfPersia.png) | ![Apple Macintosh MusicWorks](READMEImages/MusicWorks.png)
+|![Atari ST Stung Car Racer](READMEImages/STStuntCarRacer.png) | ![Amstrad CPC Chase HQ](READMEImages/CPCChaseHQ.png)
+|![Acorn Electron Chuckie Egg](READMEImages/ElectronChuckieEgg.png) | ![ColecoVision Galaxian](READMEImages/ColecoVisionGalaxian.png)
+|![ZX81 3D Monster Maze](READMEImages/ZX81MonsterMaze.png) | ![ZX80 Kong](READMEImages/ZX80Kong.png)
+|![SG1000 Chack'n'Pop](READMEImages/SGChackNPop.png) | ![Atari 2600 Solaris](READMEImages/Atari2600Solaris.png)
+|![Vic-20 Gridrunner](READMEImages/Vic20Gridrunner.png) | ![VIC-20 BASIC](READMEImages/Vic20BASIC.png)
+
+![macOS Version](READMEImages/MultipleSystems.png)
+![Qt Version](READMEImages/MultipleSystems-Ubuntu.png)

@@ -12,11 +12,11 @@
 #include "../Inputs/Joystick.hpp"
 #include <vector>
 
-namespace JoystickMachine {
+namespace MachineTypes {
 
-class Machine {
+class JoystickMachine {
 	public:
-		virtual std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() = 0;
+		virtual const std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() = 0;
 };
 
 }

@@ -78,20 +78,20 @@ void DiskII::select_drive(int drive) {
 void DiskII::run_for(const Cycles cycles) {
 	if(preferred_clocking() == ClockingHint::Preference::None) return;
 
-	int integer_cycles = cycles.as_int();
+	auto integer_cycles = cycles.as_integral();
 	while(integer_cycles--) {
 		const int address = (state_ & 0xf0) | inputs_ | ((shift_register_&0x80) >> 6);
 		if(flux_duration_) {
 			--flux_duration_;
 			if(!flux_duration_) inputs_ |= input_flux;
 		}
-		state_ = state_machine_[static_cast<std::size_t>(address)];
+		state_ = state_machine_[size_t(address)];
 		switch(state_ & 0xf) {
-			default:	shift_register_ = 0;													break;	// clear
-			case 0x8:																			break;	// nop
+			default:	shift_register_ = 0;										break;	// clear
+			case 0x8:																break;	// nop
 
-			case 0x9:	shift_register_ = static_cast<uint8_t>(shift_register_ << 1);			break;	// shift left, bringing in a zero
-			case 0xd:	shift_register_ = static_cast<uint8_t>((shift_register_ << 1) | 1);		break;	// shift left, bringing in a one
+			case 0x9:	shift_register_ = uint8_t(shift_register_ << 1);			break;	// shift left, bringing in a zero
+			case 0xd:	shift_register_ = uint8_t((shift_register_ << 1) | 1);		break;	// shift left, bringing in a one
 
 			case 0xa:	// shift right, bringing in write protected status
 				shift_register_ = (shift_register_ >> 1) | (is_write_protected() ? 0x80 : 0x00);
@@ -105,7 +105,7 @@ void DiskII::run_for(const Cycles cycles) {
 					return;
 				}
 			break;
-			case 0xb:	shift_register_ = data_input_;											break;	// load data register from data bus
+			case 0xb:	shift_register_ = data_input_;								break;	// load data register from data bus
 		}
 
 		// Currently writing?
@@ -124,7 +124,7 @@ void DiskII::run_for(const Cycles cycles) {
 	// motor switch being flipped and the drive motor actually switching off.
 	// This models that, accepting overrun as a risk.
 	if(motor_off_time_ >= 0) {
-		motor_off_time_ -= cycles.as_int();
+		motor_off_time_ -= cycles.as_integral();
 		if(motor_off_time_ < 0) {
 			set_control(Control::Motor, false);
 		}
@@ -191,7 +191,6 @@ void DiskII::set_state_machine(const std::vector<uint8_t> &state_machine) {
 				((source_address&0x02) ? 0x02 : 0x00);
 			uint8_t source_value = state_machine[source_address];
 
-			// Remap into Beneath Apple Pro-DOS value form.
 			source_value =
 				((source_value & 0x80) ? 0x10 : 0x0) |
 				((source_value & 0x40) ? 0x20 : 0x0) |
@@ -219,13 +218,13 @@ void DiskII::process_event(const Storage::Disk::Drive::Event &event) {
 	}
 }
 
-void DiskII::set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference preference) {
+void DiskII::set_component_prefers_clocking(ClockingHint::Source *, ClockingHint::Preference) {
 	drive_is_sleeping_[0] = drives_[0].preferred_clocking() == ClockingHint::Preference::None;
 	drive_is_sleeping_[1] = drives_[1].preferred_clocking() == ClockingHint::Preference::None;
 	decide_clocking_preference();
 }
 
-ClockingHint::Preference DiskII::preferred_clocking() {
+ClockingHint::Preference DiskII::preferred_clocking() const {
 	return clocking_preference_;
 }
 
@@ -266,7 +265,7 @@ int DiskII::read_address(int address) {
 		break;
 		case 0xf:
 			if(!(inputs_ & input_mode))
-				drives_[active_drive_].begin_writing(Storage::Time(1, clock_rate_), false);
+				drives_[active_drive_].begin_writing(Storage::Time(1, int(clock_rate_)), false);
 			inputs_ |= input_mode;
 		break;
 	}

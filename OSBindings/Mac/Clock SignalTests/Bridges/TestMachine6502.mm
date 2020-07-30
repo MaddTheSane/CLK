@@ -23,7 +23,7 @@ static CPU::MOS6502::Register registerForRegister(CSTestMachine6502Register reg)
 		case CSTestMachine6502RegisterA:					return CPU::MOS6502::Register::A;
 		case CSTestMachine6502RegisterX:					return CPU::MOS6502::Register::X;
 		case CSTestMachine6502RegisterY:					return CPU::MOS6502::Register::Y;
-		case CSTestMachine6502RegisterStackPointer:			return CPU::MOS6502::Register::S;
+		case CSTestMachine6502RegisterStackPointer:			return CPU::MOS6502::Register::StackPointer;
 	}
 }
 
@@ -79,7 +79,7 @@ static CPU::MOS6502::Register registerForRegister(CSTestMachine6502Register reg)
 }
 
 - (uint32_t)timestamp {
-	return _processor->get_timestamp().as_int();
+	return uint32_t(_processor->get_timestamp().as_integral());
 }
 
 - (void)setIrqLine:(BOOL)irqLine {

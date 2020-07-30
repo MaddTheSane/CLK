@@ -20,11 +20,12 @@ namespace i8272 {
 
 class BusHandler {
 	public:
-		virtual void set_dma_data_request(bool drq) {}
-		virtual void set_interrupt(bool irq) {}
+		virtual ~BusHandler() {}
+		virtual void set_dma_data_request([[maybe_unused]] bool drq) {}
+		virtual void set_interrupt([[maybe_unused]] bool irq) {}
 };
 
-class i8272: public Storage::Disk::MFMController {
+class i8272 : public Storage::Disk::MFMController {
 	public:
 		i8272(BusHandler &bus_handler, Cycles clock_rate);
 
@@ -33,19 +34,19 @@ class i8272: public Storage::Disk::MFMController {
 		void set_data_input(uint8_t value);
 		uint8_t get_data_output();
 
-		void set_register(int address, uint8_t value);
-		uint8_t get_register(int address);
+		void write(int address, uint8_t value);
+		uint8_t read(int address);
 
 		void set_dma_acknowledge(bool dack);
 		void set_terminal_count(bool tc);
 
-		ClockingHint::Preference preferred_clocking() override;
+		ClockingHint::Preference preferred_clocking() const final;
 
 	protected:
 		virtual void select_drive(int number) = 0;
 
 	private:
-		// The bus handler, for interrupt and DMA-driven usage.
+		// The bus handler, for interrupt and DMA-driven usage. [TODO]
 		BusHandler &bus_handler_;
 		std::unique_ptr<BusHandler> allocated_bus_handler_;
 
@@ -67,13 +68,13 @@ class i8272: public Storage::Disk::MFMController {
 			ResultEmpty = (1 << 5),
 			NoLongerReady = (1 << 6)
 		};
-		void posit_event(int type) override;
-		int interesting_event_mask_ = static_cast<int>(Event8272::CommandByte);
+		void posit_event(int type) final;
+		int interesting_event_mask_ = int(Event8272::CommandByte);
 		int resume_point_ = 0;
 		bool is_access_command_ = false;
 
 		// The counter used for ::Timer events.
-		int delay_time_ = 0;
+		Cycles::IntType delay_time_ = 0;
 
 		// The connected drives.
 		struct Drive {
@@ -89,12 +90,12 @@ class i8272: public Storage::Disk::MFMController {
 			bool seek_failed = false;
 
 			// Seeking: transient state.
-			int step_rate_counter = 0;
+			Cycles::IntType step_rate_counter = 0;
 			int steps_taken = 0;
 			int target_head_position = 0;	// either an actual number, or -1 to indicate to step until track zero
 
 			// Head state.
-			int head_unload_delay[2] = {0, 0};
+			Cycles::IntType head_unload_delay[2] = {0, 0};
 			bool head_is_loaded[2] = {false, false};
 
 		} drives_[4];

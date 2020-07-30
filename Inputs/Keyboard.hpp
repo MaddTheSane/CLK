@@ -30,47 +30,61 @@ class Keyboard {
 			LeftControl, LeftOption, LeftMeta, Space, RightMeta, RightOption, RightControl,
 			Left, Right, Up, Down,
 			Insert, Home, PageUp, Delete, End, PageDown,
-			NumLock, KeyPadSlash, KeyPadAsterisk, KeyPadDelete,
-			KeyPad7, KeyPad8, KeyPad9, KeyPadPlus,
-			KeyPad4, KeyPad5, KeyPad6, KeyPadMinus,
-			KeyPad1, KeyPad2, KeyPad3, KeyPadEnter,
-			KeyPad0, KeyPadDecimalPoint, KeyPadEquals,
-			Help
+			NumLock, KeypadSlash, KeypadAsterisk, KeypadDelete,
+			Keypad7, Keypad8, Keypad9, KeypadPlus,
+			Keypad4, Keypad5, Keypad6, KeypadMinus,
+			Keypad1, Keypad2, Keypad3, KeypadEnter,
+			Keypad0, KeypadDecimalPoint, KeypadEquals,
+			Help,
+
+			Max = Help
 		};
 
 		/// Constructs a Keyboard that declares itself to observe all keys.
-		Keyboard();
+		Keyboard(const std::set<Key> &essential_modifiers = {});
 
 		/// Constructs a Keyboard that declares itself to observe only members of @c observed_keys.
-		Keyboard(const std::set<Key> &observed_keys);
+		Keyboard(const std::set<Key> &observed_keys, const std::set<Key> &essential_modifiers);
 
 		// Host interface.
-		virtual void set_key_pressed(Key key, char value, bool is_pressed);
+
+		/// @returns @c true if the key press affects the machine; @c false otherwise.
+		virtual bool set_key_pressed(Key key, char value, bool is_pressed);
 		virtual void reset_all_keys();
 
 		/// @returns a set of all Keys that this keyboard responds to.
-		virtual const std::set<Key> &observed_keys();
+		virtual const std::set<Key> &observed_keys() const;
 
-		/*
+		/// @returns the list of modifiers that this keyboard considers 'essential' (i.e. both mapped and highly used).
+		virtual const std::set<Inputs::Keyboard::Key> &get_essential_modifiers() const;
+
+		/*!
 			@returns @c true if this keyboard, on its original machine, looked
 			like a complete keyboard — i.e. if a user would expect this keyboard
 			to be the only thing a real keyboard maps to.
+
+			So this would be true of something like the Amstrad CPC, which has a full
+			keyboard, but it would be false of something like the Sega Master System
+			which has some buttons that you'd expect an emulator to map to its host
+			keyboard but which does not offer a full keyboard.
 		*/
-		virtual bool is_exclusive();
+		virtual bool is_exclusive() const;
 
 		// Delegate interface.
 		struct Delegate {
-			virtual void keyboard_did_change_key(Keyboard *keyboard, Key key, bool is_pressed) = 0;
+			virtual bool keyboard_did_change_key(Keyboard *keyboard, Key key, bool is_pressed) = 0;
 			virtual void reset_all_keys(Keyboard *keyboard) = 0;
 		};
 		void set_delegate(Delegate *delegate);
-		bool get_key_state(Key key);
+		bool get_key_state(Key key) const;
 
 	private:
 		std::set<Key> observed_keys_;
+		const std::set<Key> essential_modifiers_;
+		const bool is_exclusive_ = true;
+
 		std::vector<bool> key_states_;
 		Delegate *delegate_ = nullptr;
-		bool is_exclusive_ = true;
 };
 
 }

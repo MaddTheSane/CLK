@@ -1,19 +1,19 @@
 import glob
 import sys
 
-# establish UTF-8 encoding for Python 2
+# Establish UTF-8 encoding for Python 2.
 if sys.version_info < (3, 0):
 	reload(sys)
 	sys.setdefaultencoding('utf-8')
 
-# create build environment
+# Create build environment.
 env = Environment()
 
-# determine compiler and linker flags for SDL
+# Determine compiler and linker flags for SDL.
 env.ParseConfig('sdl2-config --cflags')
 env.ParseConfig('sdl2-config --libs')
 
-# gather a list of source files
+# Gather a list of source files.
 SOURCES = glob.glob('*.cpp')
 
 SOURCES += glob.glob('../../Analyser/Dynamic/*.cpp')
@@ -24,7 +24,8 @@ SOURCES += glob.glob('../../Analyser/Static/*.cpp')
 SOURCES += glob.glob('../../Analyser/Static/Acorn/*.cpp')
 SOURCES += glob.glob('../../Analyser/Static/AmstradCPC/*.cpp')
 SOURCES += glob.glob('../../Analyser/Static/AppleII/*.cpp')
-SOURCES += glob.glob('../../Analyser/Static/Atari/*.cpp')
+SOURCES += glob.glob('../../Analyser/Static/Atari2600/*.cpp')
+SOURCES += glob.glob('../../Analyser/Static/AtariST/*.cpp')
 SOURCES += glob.glob('../../Analyser/Static/Coleco/*.cpp')
 SOURCES += glob.glob('../../Analyser/Static/Commodore/*.cpp')
 SOURCES += glob.glob('../../Analyser/Static/Disassembler/*.cpp')
@@ -36,8 +37,11 @@ SOURCES += glob.glob('../../Analyser/Static/Sega/*.cpp')
 SOURCES += glob.glob('../../Analyser/Static/ZX8081/*.cpp')
 
 SOURCES += glob.glob('../../Components/1770/*.cpp')
+SOURCES += glob.glob('../../Components/5380/*.cpp')
 SOURCES += glob.glob('../../Components/6522/Implementation/*.cpp')
 SOURCES += glob.glob('../../Components/6560/*.cpp')
+SOURCES += glob.glob('../../Components/6850/*.cpp')
+SOURCES += glob.glob('../../Components/68901/*.cpp')
 SOURCES += glob.glob('../../Components/8272/*.cpp')
 SOURCES += glob.glob('../../Components/8530/*.cpp')
 SOURCES += glob.glob('../../Components/9918/*.cpp')
@@ -46,7 +50,9 @@ SOURCES += glob.glob('../../Components/AudioToggle/*.cpp')
 SOURCES += glob.glob('../../Components/AY38910/*.cpp')
 SOURCES += glob.glob('../../Components/DiskII/*.cpp')
 SOURCES += glob.glob('../../Components/KonamiSCC/*.cpp')
+SOURCES += glob.glob('../../Components/OPx/*.cpp')
 SOURCES += glob.glob('../../Components/SN76489/*.cpp')
+SOURCES += glob.glob('../../Components/Serial/*.cpp')
 
 SOURCES += glob.glob('../../Concurrency/*.cpp')
 
@@ -58,7 +64,8 @@ SOURCES += glob.glob('../../Machines/*.cpp')
 SOURCES += glob.glob('../../Machines/AmstradCPC/*.cpp')
 SOURCES += glob.glob('../../Machines/Apple/AppleII/*.cpp')
 SOURCES += glob.glob('../../Machines/Apple/Macintosh/*.cpp')
-SOURCES += glob.glob('../../Machines/Atari2600/*.cpp')
+SOURCES += glob.glob('../../Machines/Atari/2600/*.cpp')
+SOURCES += glob.glob('../../Machines/Atari/ST/*.cpp')
 SOURCES += glob.glob('../../Machines/ColecoVision/*.cpp')
 SOURCES += glob.glob('../../Machines/Commodore/*.cpp')
 SOURCES += glob.glob('../../Machines/Commodore/1540/Implementation/*.cpp')
@@ -76,8 +83,13 @@ SOURCES += glob.glob('../../Outputs/OpenGL/*.cpp')
 SOURCES += glob.glob('../../Outputs/OpenGL/Primitives/*.cpp')
 
 SOURCES += glob.glob('../../Processors/6502/Implementation/*.cpp')
+SOURCES += glob.glob('../../Processors/6502/State/*.cpp')
 SOURCES += glob.glob('../../Processors/68000/Implementation/*.cpp')
+SOURCES += glob.glob('../../Processors/68000/State/*.cpp')
 SOURCES += glob.glob('../../Processors/Z80/Implementation/*.cpp')
+SOURCES += glob.glob('../../Processors/Z80/State/*.cpp')
+
+SOURCES += glob.glob('../../Reflection/*.cpp')
 
 SOURCES += glob.glob('../../SignalProcessing/*.cpp')
 
@@ -97,15 +109,19 @@ SOURCES += glob.glob('../../Storage/Disk/Encodings/MFM/*.cpp')
 SOURCES += glob.glob('../../Storage/Disk/Parsers/*.cpp')
 SOURCES += glob.glob('../../Storage/Disk/Track/*.cpp')
 SOURCES += glob.glob('../../Storage/Disk/Data/*.cpp')
+SOURCES += glob.glob('../../Storage/MassStorage/*.cpp')
+SOURCES += glob.glob('../../Storage/MassStorage/Encodings/*.cpp')
+SOURCES += glob.glob('../../Storage/MassStorage/Formats/*.cpp')
+SOURCES += glob.glob('../../Storage/MassStorage/SCSI/*.cpp')
 SOURCES += glob.glob('../../Storage/Tape/*.cpp')
 SOURCES += glob.glob('../../Storage/Tape/Formats/*.cpp')
 SOURCES += glob.glob('../../Storage/Tape/Parsers/*.cpp')
 
-# add additional compiler flags
-env.Append(CCFLAGS = ['--std=c++11', '-Wall', '-O3', '-DNDEBUG'])
+# Add additional compiler flags; c++1z is insurance in case c++17 isn't fully implemented.
+env.Append(CCFLAGS = ['--std=c++17', '--std=c++1z', '-Wall', '-O2', '-DNDEBUG'])
 
-# add additional libraries to link against
+# Add additional libraries to link against.
 env.Append(LIBS = ['libz', 'pthread', 'GL'])
 
-# build target
+# Build target.
 env.Program(target = 'clksignal', source = SOURCES)

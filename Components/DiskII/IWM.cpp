@@ -13,15 +13,15 @@
 using namespace Apple;
 
 namespace  {
-	const int CA0		= 1 << 0;
-	const int CA1		= 1 << 1;
-	const int CA2		= 1 << 2;
-	const int LSTRB		= 1 << 3;
-	const int ENABLE	= 1 << 4;
-	const int DRIVESEL	= 1 << 5;	/* This means drive select, like on the original Disk II. */
-	const int Q6		= 1 << 6;
-	const int Q7		= 1 << 7;
-	const int SEL		= 1 << 8;	/* This is an additional input, not available on a Disk II, with a confusingly-similar name to SELECT but a distinct purpose. */
+	constexpr int CA0		= 1 << 0;
+	constexpr int CA1		= 1 << 1;
+	constexpr int CA2		= 1 << 2;
+	constexpr int LSTRB		= 1 << 3;
+	constexpr int ENABLE	= 1 << 4;
+	constexpr int DRIVESEL	= 1 << 5;	/* This means drive select, like on the original Disk II. */
+	constexpr int Q6		= 1 << 6;
+	constexpr int Q7		= 1 << 7;
+	constexpr int SEL		= 1 << 8;	/* This is an additional input, not available on a Disk II, with a confusingly-similar name to SELECT but a distinct purpose. */
 }
 
 IWM::IWM(int clock_rate) :
@@ -233,7 +233,7 @@ void IWM::run_for(const Cycles cycles) {
 	}
 
 	// Activity otherwise depends on mode and motor state.
-	int integer_cycles = cycles.as_int();
+	auto integer_cycles = cycles.as_integral();
 	switch(shift_mode_) {
 		case ShiftMode::Reading: {
 			// Per the IWM patent, column 7, around line 35 onwards: "The expected time
@@ -241,7 +241,7 @@ void IWM::run_for(const Cycles cycles) {
 			// expected time since the data is not precisely spaced when read due to
 			// variations in drive speed and other external factors". The error_margin
 			// here implements the 'after' part of that contract.
-			const auto error_margin = Cycles(bit_length_.as_int() >> 1);
+			const auto error_margin = Cycles(bit_length_.as_integral() >> 1);
 
 			if(drive_is_rotating_[active_drive_]) {
 				while(integer_cycles--) {
@@ -254,7 +254,7 @@ void IWM::run_for(const Cycles cycles) {
 			} else {
 				while(cycles_since_shift_ + integer_cycles >= bit_length_ + error_margin) {
 					const auto run_length = bit_length_ + error_margin - cycles_since_shift_;
-					integer_cycles -= run_length.as_int();
+					integer_cycles -= run_length.as_integral();
 					cycles_since_shift_ += run_length;
 					propose_shift(0);
 				}
@@ -272,7 +272,7 @@ void IWM::run_for(const Cycles cycles) {
 					drives_[active_drive_]->write_bit(shift_register_ & 0x80);
 					shift_register_ <<= 1;
 
-					integer_cycles -= cycles_until_write.as_int();
+					integer_cycles -= cycles_until_write.as_integral();
 					cycles_since_shift_ = Cycles(0);
 
 					--output_bits_remaining_;
@@ -307,8 +307,8 @@ void IWM::run_for(const Cycles cycles) {
 			} else {
 				shift_register_ = sense();
 			}
+			[[fallthrough]];
 
-		/* Deliberate fallthrough. */
 		default:
 			if(drive_is_rotating_[active_drive_]) drives_[active_drive_]->run_for(cycles);
 		break;
@@ -333,7 +333,7 @@ void IWM::select_shift_mode() {
 
 	// If writing mode just began, set the drive into write mode and cue up the first output byte.
 	if(drives_[active_drive_] && old_shift_mode != ShiftMode::Writing && shift_mode_ == ShiftMode::Writing) {
-		drives_[active_drive_]->begin_writing(Storage::Time(1, clock_rate_ / bit_length_.as_int()), false);
+		drives_[active_drive_]->begin_writing(Storage::Time(1, clock_rate_ / bit_length_.as_integral()), false);
 		shift_register_ = next_output_;
 		write_handshake_ |= 0x80 | 0x40;
 		output_bits_remaining_ = 8;
@@ -369,7 +369,7 @@ void IWM::propose_shift(uint8_t bit) {
 	// shift in a 1 and start a new window wherever the first found 1 was.
 	//
 	// If no 1s are found, shift in a 0 and don't alter expectations as to window placement.
-	const auto error_margin = Cycles(bit_length_.as_int() >> 1);
+	const auto error_margin = Cycles(bit_length_.as_integral() >> 1);
 	if(bit && cycles_since_shift_ < error_margin) return;
 
 	shift_register_ = uint8_t((shift_register_ << 1) | bit);
@@ -401,6 +401,6 @@ void IWM::set_component_prefers_clocking(ClockingHint::Source *component, Clocki
 }
 
 void IWM::set_activity_observer(Activity::Observer *observer) {
-	if(drives_[0]) drives_[0]->set_activity_observer(observer, "Internal Drive", true);
-	if(drives_[1]) drives_[1]->set_activity_observer(observer, "External Drive", true);
+	if(drives_[0]) drives_[0]->set_activity_observer(observer, "Internal Floppy", true);
+	if(drives_[1]) drives_[1]->set_activity_observer(observer, "External Floppy", true);
 }

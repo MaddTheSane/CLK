@@ -54,7 +54,7 @@ class Card {
 			no constraints, that want to be informed of every machine cycle, will receive
 			a call to perform_bus_operation every cycle and should use that for time keeping.
 		*/
-		virtual void run_for(Cycles half_cycles, int stretches) {}
+		virtual void run_for([[maybe_unused]] Cycles half_cycles, [[maybe_unused]] int stretches) {}
 
 		/// Requests a flush of any pending audio or video output.
 		virtual void flush() {}
@@ -83,15 +83,13 @@ class Card {
 			will receive a perform_bus_operation every cycle. To reduce the number of
 			virtual method calls, they **will not** receive run_for. run_for will propagate
 			only to cards that register for IO and/or Device accesses only.
-
-
 		*/
-		int get_select_constraints() {
+		int get_select_constraints() const {
 			return select_constraints_;
 		}
 
 		/*! Cards may supply a target for activity observation if desired. */
-		virtual void set_activity_observer(Activity::Observer *observer) {}
+		virtual void set_activity_observer([[maybe_unused]] Activity::Observer *observer) {}
 
 		struct Delegate {
 			virtual void card_did_change_select_constraints(Card *card) = 0;

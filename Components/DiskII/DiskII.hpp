@@ -26,7 +26,7 @@ namespace Apple {
 /*!
 	Provides an emulation of the Apple Disk II.
 */
-class DiskII:
+class DiskII :
 	public Storage::Disk::Drive::EventDelegate,
 	public ClockingHint::Source,
 	public ClockingHint::Observer {
@@ -48,7 +48,7 @@ class DiskII:
 			The value returned by @c read_address if accessing that address
 			didn't cause the disk II to place anything onto the bus.
 		*/
-		const int DidNotLoad = -1;
+		static constexpr int DidNotLoad = -1;
 
 		/// Advances the controller by @c cycles.
 		void run_for(const Cycles cycles);
@@ -76,7 +76,7 @@ class DiskII:
 		void set_disk(const std::shared_ptr<Storage::Disk::Disk> &disk, int drive);
 
 		// As per Sleeper.
-		ClockingHint::Preference preferred_clocking() override;
+		ClockingHint::Preference preferred_clocking() const final;
 
 		// The Disk II functions as a potential target for @c Activity::Sources.
 		void set_activity_observer(Activity::Observer *observer);
@@ -98,10 +98,10 @@ class DiskII:
 		void select_drive(int drive);
 
 		uint8_t trigger_address(int address, uint8_t value);
-		void process_event(const Storage::Disk::Drive::Event &event) override;
-		void set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference preference) override;
+		void process_event(const Storage::Disk::Drive::Event &event) final;
+		void set_component_prefers_clocking(ClockingHint::Source *component, ClockingHint::Preference preference) final;
 
-		const int clock_rate_ = 0;
+		const Cycles::IntType clock_rate_ = 0;
 
 		uint8_t state_ = 0;
 		uint8_t inputs_ = 0;
@@ -109,7 +109,7 @@ class DiskII:
 
 		int stepper_mask_ = 0;
 		int stepper_position_ = 0;
-		int motor_off_time_ = -1;
+		Cycles::IntType motor_off_time_ = -1;
 
 		bool is_write_protected();
 		std::array<uint8_t, 256> state_machine_;

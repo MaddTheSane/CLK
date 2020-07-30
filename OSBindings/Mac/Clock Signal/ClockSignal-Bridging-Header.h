@@ -3,7 +3,6 @@
 //
 
 #import "CSMachine.h"
-#import "CSFastLoading.h"
 
 #import "CSAtari2600.h"
 #import "CSZX8081.h"
@@ -14,7 +13,6 @@
 #import	"CSOpenGLView.h"
 #import "CSROMReceiverView.h"
 
-#import "CSBestEffortUpdater.h"
 #import "CSJoystickManager.h"
 
 #import "NSData+CRC32.h"

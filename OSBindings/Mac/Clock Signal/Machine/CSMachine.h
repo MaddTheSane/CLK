@@ -9,7 +9,6 @@
 #import <Foundation/Foundation.h>
 
 #import "CSAudioQueue.h"
-#import "CSFastLoading.h"
 #import "CSOpenGLView.h"
 #import "CSStaticAnalyser.h"
 #import "CSJoystickManager.h"
@@ -29,8 +28,9 @@ typedef NS_ENUM(NSInteger, CSMachineVideoSignal) {
 };
 
 typedef NS_ENUM(NSInteger, CSMachineKeyboardInputMode) {
-	CSMachineKeyboardInputModeKeyboard,
-	CSMachineKeyboardInputModeJoystick
+	CSMachineKeyboardInputModeKeyboardPhysical,
+	CSMachineKeyboardInputModeKeyboardLogical,
+	CSMachineKeyboardInputModeJoystick,
 };
 
 @interface CSMissingROM: NSObject
@@ -60,12 +60,14 @@ NS_ASSUME_NONNULL_BEGIN
 */
 - (nullable instancetype)initWithAnalyser:(nonnull CSStaticAnalyser *)result missingROMs:(nullable inout NSMutableArray<CSMissingROM *> *)missingROMs NS_DESIGNATED_INITIALIZER;
 
-- (void)runForInterval:(NSTimeInterval)interval;
-
 - (float)idealSamplingRateFromRange:(NSRange)range;
-- (void)setAudioSamplingRate:(float)samplingRate bufferSize:(NSUInteger)bufferSize;
+- (BOOL)isStereo;
+- (void)setAudioSamplingRate:(float)samplingRate bufferSize:(NSUInteger)bufferSize stereo:(BOOL)stereo;
 
 - (void)setView:(nullable CSOpenGLView *)view aspectRatio:(float)aspectRatio;
+
+- (void)start;
+- (void)stop;
 
 - (void)updateViewForPixelSize:(CGSize)pixelSize;
 - (void)drawViewForPixelSize:(CGSize)pixelSize;
@@ -76,7 +78,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setMouseButton:(int)button isPressed:(BOOL)isPressed;
 - (void)addMouseMotionX:(CGFloat)deltaX y:(CGFloat)deltaY;
 
-@property (nonatomic, strong, nullable) CSAudioQueue *audioQueue;
+@property (atomic, strong, nullable) CSAudioQueue *audioQueue;
 @property (nonatomic, readonly, nonnull) CSOpenGLView *view;
 @property (nonatomic, weak, nullable) id<CSMachineDelegate> delegate;
 
@@ -88,13 +90,19 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL useFastLoadingHack;
 @property (nonatomic, assign) CSMachineVideoSignal videoSignal;
 @property (nonatomic, assign) BOOL useAutomaticTapeMotorControl;
+@property (nonatomic, assign) BOOL useQuickBootingHack;
 
 @property (nonatomic, readonly) BOOL canInsertMedia;
 
-- (bool)supportsVideoSignal:(CSMachineVideoSignal)videoSignal;
+- (BOOL)supportsVideoSignal:(CSMachineVideoSignal)videoSignal;
+
+// Volume contorl.
+- (void)setVolume:(float)volume;
+@property (nonatomic, readonly) BOOL hasAudioOutput;
 
 // Input control.
 @property (nonatomic, readonly) BOOL hasExclusiveKeyboard;
+@property (nonatomic, readonly) BOOL shouldUsurpCommand;
 @property (nonatomic, readonly) BOOL hasJoystick;
 @property (nonatomic, readonly) BOOL hasMouse;
 @property (nonatomic, assign) CSMachineKeyboardInputMode inputMode;

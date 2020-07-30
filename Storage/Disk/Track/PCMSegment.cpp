@@ -9,6 +9,7 @@
 #include "PCMSegment.hpp"
 
 #include <cassert>
+#include <cstdlib>
 
 using namespace Storage::Disk;
 
@@ -59,42 +60,44 @@ void PCMSegment::rotate_right(size_t length) {
 	// the left, do the opposite.
 	std::vector<uint8_t> data_copy;
 	if(length > 0) {
-		data_copy.insert(data_copy.end(), data.end() - static_cast<off_t>(length), data.end());
-		data.erase(data.end() - static_cast<off_t>(length), data.end());
+		data_copy.insert(data_copy.end(), data.end() - off_t(length), data.end());
+		data.erase(data.end() - off_t(length), data.end());
 		data.insert(data.begin(), data_copy.begin(), data_copy.end());
 	} else {
-		data_copy.insert(data_copy.end(), data.begin(), data.begin() - static_cast<off_t>(length));
-		data.erase(data.begin(), data.begin() - static_cast<off_t>(length));
+		data_copy.insert(data_copy.end(), data.begin(), data.begin() - off_t(length));
+		data.erase(data.begin(), data.begin() - off_t(length));
 		data.insert(data.end(), data_copy.begin(), data_copy.end());
 	}
 }
 
 Storage::Disk::Track::Event PCMSegmentEventSource::get_next_event() {
-	// track the initial bit pointer for potentially considering whether this was an
-	// initial index hole or a subsequent one later on
+	// Track the initial bit pointer for potentially considering whether this was an
+	// initial index hole or a subsequent one later on.
 	const std::size_t initial_bit_pointer = bit_pointer_;
 
-	// if starting from the beginning, pull half a bit backward, as if the initial bit
-	// is set, it should be in the centre of its window
+	// If starting from the beginning, pull half a bit backward, as if the initial bit
+	// is set, it should be in the centre of its window.
 	next_event_.length.length = bit_pointer_ ? 0 : -(segment_->length_of_a_bit.length >> 1);
 
 	// search for the next bit that is set, if any
 	while(bit_pointer_ < segment_->data.size()) {
 		bool bit = segment_->data[bit_pointer_];
-		bit_pointer_++;	// so this always points one beyond the most recent bit returned
+		++bit_pointer_;	// so this always points one beyond the most recent bit returned
 		next_event_.length.length += segment_->length_of_a_bit.length;
 
-		// if this bit is set, return the event
-		if(bit) return next_event_;
+		// if this bit is set, or is fuzzy and a random bit of 1 is selected, return the event.
+		if(bit ||
+			(!segment_->fuzzy_mask.empty() && segment_->fuzzy_mask[bit_pointer_] && lfsr_.next())
+		)	return next_event_;
 	}
 
-	// if the end is reached without a bit being set, it'll be index holes from now on
+	// If the end is reached without a bit being set, it'll be index holes from now on.
 	next_event_.type = Track::Event::IndexHole;
 
-	// test whether this is the very first time that bits have been exhausted. If so then
+	// Test whether this is the very first time that bits have been exhausted. If so then
 	// allow an extra half bit's length to run from the position of the potential final transition
 	// event to the end of the segment. Otherwise don't allow any extra time, as it's already
-	// been consumed
+	// been consumed.
 	if(initial_bit_pointer <= segment_->data.size()) {
 		next_event_.length.length += (segment_->length_of_a_bit.length >> 1);
 		bit_pointer_++;
@@ -103,12 +106,12 @@ Storage::Disk::Track::Event PCMSegmentEventSource::get_next_event() {
 }
 
 Storage::Time PCMSegmentEventSource::get_length() {
-	return segment_->length_of_a_bit * static_cast<unsigned int>(segment_->data.size());
+	return segment_->length_of_a_bit * unsigned(segment_->data.size());
 }
 
-Storage::Time PCMSegmentEventSource::seek_to(const Time &time_from_start) {
+float PCMSegmentEventSource::seek_to(float time_from_start) {
 	// test for requested time being beyond the end
-	const Time length = get_length();
+	const float length = get_length().get<float>();
 	if(time_from_start >= length) {
 		next_event_.type = Track::Event::IndexHole;
 		bit_pointer_ = segment_->data.size()+1;
@@ -119,21 +122,21 @@ Storage::Time PCMSegmentEventSource::seek_to(const Time &time_from_start) {
 	next_event_.type = Track::Event::FluxTransition;
 
 	// test for requested time being before the first bit
-	Time half_bit_length = segment_->length_of_a_bit;
-	half_bit_length.length >>= 1;
+	const float bit_length = segment_->length_of_a_bit.get<float>();
+	const float half_bit_length = bit_length / 2.0f;
 	if(time_from_start < half_bit_length) {
 		bit_pointer_ = 0;
-		return Storage::Time(0);
+		return 0.0f;
 	}
 
 	// adjust for time to get to bit zero and determine number of bits in;
 	// bit_pointer_ always records _the next bit_ that might trigger an event,
 	// so should be one beyond the one reached by a seek.
-	const Time relative_time = time_from_start - half_bit_length;
-	bit_pointer_ = 1 + (relative_time / segment_->length_of_a_bit).get<unsigned int>();
+	const float relative_time = time_from_start + half_bit_length;	// the period [0, 0.5) should map to window 0, ending with bit 0; [0.5, 1.5) should map to window 1; etc.
+	bit_pointer_ = size_t(relative_time / bit_length);
 
-	// map up to the correct amount of time
-	return half_bit_length + segment_->length_of_a_bit * static_cast<unsigned int>(bit_pointer_ - 1);
+	// Map up to the correct amount of time; this should be the start of the window that ends upon the bit at bit_pointer_.
+	return bit_length * float(bit_pointer_) - half_bit_length;
 }
 
 const PCMSegment &PCMSegmentEventSource::segment() const {

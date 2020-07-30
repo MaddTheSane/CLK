@@ -17,6 +17,12 @@
 namespace Apple {
 namespace Macintosh {
 
+constexpr HalfCycles line_length(704);
+constexpr int number_of_lines = 370;
+constexpr HalfCycles frame_length(line_length * HalfCycles(number_of_lines));
+constexpr int sync_start = 36;
+constexpr int sync_end = 38;
+
 /*!
 	Models the 68000-era Macintosh video hardware, producing a 512x348 pixel image,
 	within a total scanning area of 370 lines, at 352 cycles per line.
@@ -29,12 +35,15 @@ class Video {
 			Constructs an instance of @c Video sourcing its pixel data from @c ram and
 			providing audio and drive-speed bytes to @c audio and @c drive_speed_accumulator.
 		*/
-		Video(uint16_t *ram, DeferredAudio &audio, DriveSpeedAccumulator &drive_speed_accumulator);
+		Video(DeferredAudio &audio, DriveSpeedAccumulator &drive_speed_accumulator);
 
 		/*!
 			Sets the target device for video data.
 		*/
 		void set_scan_target(Outputs::Display::ScanTarget *scan_target);
+
+		/// Gets the current scan status.
+		Outputs::Display::ScanStatus get_scaled_scan_status() const;
 
 		/*!
 			Produces the next @c duration period of pixels.
@@ -47,10 +56,10 @@ class Video {
 		void set_use_alternate_buffers(bool use_alternate_screen_buffer, bool use_alternate_audio_buffer);
 
 		/*!
-			Provides a mask indicating which parts of the generated video and audio/drive addresses are
+			Provides a base address and a mask indicating which parts of the generated video and audio/drive addresses are
 			actually decoded, accessing *word-sized memory*; e.g. for a 128kb Macintosh this should be (1 << 16) - 1 = 0xffff.
 		*/
-		void set_ram_mask(uint32_t);
+		void set_ram(uint16_t *ram, uint32_t mask);
 
 		/*!
 			@returns @c true if the video is currently outputting a vertical sync, @c false otherwise.
@@ -61,7 +70,12 @@ class Video {
 			@returns @c true if in @c offset half cycles from now, the video will be outputting pixels;
 				@c false otherwise.
 		*/
-		bool is_outputting(HalfCycles offset = HalfCycles(0));
+		bool is_outputting(HalfCycles offset = HalfCycles(0)) {
+			const auto offset_position = frame_position_ + offset % frame_length;
+			const int column = int((offset_position % line_length).as_integral()) >> 4;
+			const int line = int((offset_position / line_length).as_integral());
+			return line < 342 && column < 32;
+		}
 
 		/*!
 			@returns the amount of time until there is next a transition on the

@@ -11,7 +11,6 @@
 
 #include <array>
 
-#define LOG_TRACE
 #include "../../../Processors/68000/68000.hpp"
 
 using Flag = CPU::MC68000::Flag;
@@ -128,7 +127,11 @@ class RAM68000: public CPU::MC68000::BusHandler {
 		}
 
 		int get_cycle_count() {
-			return duration_.as_int() >> 1;
+			return int(duration_.as_integral()) >> 1;
+		}
+
+		void reset_cycle_count() {
+			duration_ = HalfCycles(0);
 		}
 
 	private:

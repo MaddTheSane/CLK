@@ -12,16 +12,6 @@
 
 using namespace Apple::Macintosh;
 
-namespace {
-
-const HalfCycles line_length(704);
-const int number_of_lines = 370;
-const HalfCycles frame_length(line_length * HalfCycles(number_of_lines));
-const int sync_start = 36;
-const int sync_end = 38;
-
-}
-
 // Re: CRT timings, see the Apple Guide to the Macintosh Hardware Family,
 // bottom of page 400:
 //
@@ -33,11 +23,10 @@ const int sync_end = 38;
 //	"The visible portion of a full-screen display consists of 342 horizontal scan lines...
 //	During the vertical blanking interval, the turned-off beam ... traces out an additional 28 scan lines,"
 //
-Video::Video(uint16_t *ram, DeferredAudio &audio, DriveSpeedAccumulator &drive_speed_accumulator) :
+Video::Video(DeferredAudio &audio, DriveSpeedAccumulator &drive_speed_accumulator) :
 	audio_(audio),
 	drive_speed_accumulator_(drive_speed_accumulator),
- 	crt_(704, 1, 370, Outputs::Display::ColourSpace::YIQ, 1, 1, 6, false, Outputs::Display::InputDataType::Luminance1),
- 	ram_(ram) {
+ 	crt_(704, 1, 370, 6, Outputs::Display::InputDataType::Luminance1) {
 
  	crt_.set_display_type(Outputs::Display::DisplayType::RGB);
 	crt_.set_visible_area(Outputs::Display::Rect(0.08f, -0.025f, 0.82f, 0.82f));
@@ -46,6 +35,10 @@ Video::Video(uint16_t *ram, DeferredAudio &audio, DriveSpeedAccumulator &drive_s
 
 void Video::set_scan_target(Outputs::Display::ScanTarget *scan_target) {
 	crt_.set_scan_target(scan_target);
+}
+
+Outputs::Display::ScanStatus Video::get_scaled_scan_status() const {
+	return crt_.get_scaled_scan_status() / 2.0f;
 }
 
 void Video::run_for(HalfCycles duration) {
@@ -58,7 +51,7 @@ void Video::run_for(HalfCycles duration) {
 	// the number of fetches.
 	while(duration > HalfCycles(0)) {
 		const auto pixel_start = frame_position_ % line_length;
-		const int line = (frame_position_ / line_length).as_int();
+		const int line = int((frame_position_ / line_length).as_integral());
 
 		const auto cycles_left_in_line = std::min(line_length - pixel_start, duration);
 
@@ -73,8 +66,8 @@ void Video::run_for(HalfCycles duration) {
 		//
 		//	Then 12 lines of border, 3 of sync, 11 more of border.
 
-		const int first_word = pixel_start.as_int() >> 4;
-		const int final_word = (pixel_start + cycles_left_in_line).as_int() >> 4;
+		const int first_word = int(pixel_start.as_integral()) >> 4;
+		const int final_word = int((pixel_start + cycles_left_in_line).as_integral()) >> 4;
 
 		if(first_word != final_word) {
 			if(line < 342) {
@@ -164,12 +157,12 @@ void Video::run_for(HalfCycles duration) {
 }
 
 bool Video::vsync() {
-	const int line = (frame_position_ / line_length).as_int();
+	const auto line = (frame_position_ / line_length).as_integral();
 	return line >= 353 && line < 356;
 }
 
 HalfCycles Video::get_next_sequence_point() {
-	const int line = (frame_position_ / line_length).as_int();
+	const auto line = (frame_position_ / line_length).as_integral();
 	if(line >= 353 && line < 356) {
 		// Currently in vsync, so get time until start of line 357,
 		// when vsync will end.
@@ -184,18 +177,12 @@ HalfCycles Video::get_next_sequence_point() {
 	}
 }
 
-bool Video::is_outputting(HalfCycles offset) {
-	const auto offset_position = frame_position_ + offset % frame_length;
-	const int column = (offset_position % line_length).as_int() >> 4;
-	const int line = (offset_position / line_length).as_int();
-	return line < 342 && column < 32;
-}
-
 void Video::set_use_alternate_buffers(bool use_alternate_screen_buffer, bool use_alternate_audio_buffer) {
 	use_alternate_screen_buffer_ = use_alternate_screen_buffer;
 	use_alternate_audio_buffer_ = use_alternate_audio_buffer;
 }
 
-void Video::set_ram_mask(uint32_t mask) {
+void Video::set_ram(uint16_t *ram, uint32_t mask) {
+	ram_ = ram;
 	ram_mask_ = mask;
 }
