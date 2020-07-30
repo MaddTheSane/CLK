@@ -12,7 +12,7 @@
 
 - (std::vector<uint8_t>)stdVector8
 {
-	uint8_t *bytes8 = (uint8_t *)self.bytes;
+	const uint8_t *bytes8 = (const uint8_t *)self.bytes;
 	return std::vector<uint8_t>(bytes8, bytes8 + self.length);
 }
 
