@@ -27,7 +27,7 @@ void CRT::set_new_timing(int cycles_per_line, int height_of_display, Outputs::Di
 															//	7 microseconds for horizontal retrace and 500 to 750 microseconds for vertical retrace
 															//  in NTSC and PAL TV."
 
-	time_multiplier_ = 65535 / cycles_per_line;
+	time_multiplier_ = 63487 / cycles_per_line;	// 63475 = 65535 * 31/32, i.e. the same 1/32 error as below is permitted.
 	phase_denominator_ = int64_t(cycles_per_line) * int64_t(colour_cycle_denominator) * int64_t(time_multiplier_);
 	phase_numerator_ = 0;
 	colour_cycle_numerator_ = int64_t(colour_cycle_numerator);
@@ -194,8 +194,8 @@ Outputs::Display::ScanTarget::Scan::EndPoint CRT::end_point(uint16_t data_offset
 	end_point.y = uint16_t(vertical_flywheel_->get_current_output_position() / vertical_flywheel_output_divider_);
 	end_point.data_offset = data_offset;
 
-	// TODO: this is a workaround for the limited precision that can be posted onwards;
-	// it'd be better to make time_multiplier_ an explicit modal and just not divide by it.
+	// Ensure .composite_angle is sampled at the location indicated by .cycles_since_end_of_horizontal_retrace.
+	// TODO: I could supply time_multiplier_ as a modal and just not round .cycles_since_end_of_horizontal_retrace. Would that be better?
 	const auto lost_precision = cycles_since_horizontal_sync_ % time_multiplier_;
 	end_point.composite_angle = int16_t(((phase_numerator_ - lost_precision * colour_cycle_numerator_) << 6) / phase_denominator_) * (is_alernate_line_ ? -1 : 1);
 	end_point.cycles_since_end_of_horizontal_retrace = uint16_t(cycles_since_horizontal_sync_ / time_multiplier_);
@@ -427,7 +427,8 @@ void CRT::set_immediate_default_phase(float phase) {
 
 void CRT::output_data(int number_of_cycles, size_t number_of_samples) {
 #ifndef NDEBUG
-	assert(number_of_samples > 0 && number_of_samples <= allocated_data_length_);
+	assert(number_of_samples > 0);
+	assert(number_of_samples <= allocated_data_length_);
 	allocated_data_length_ = std::numeric_limits<size_t>::min();
 #endif
 	scan_target_->end_data(number_of_samples);

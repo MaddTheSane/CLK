@@ -9,9 +9,9 @@
 #import <Foundation/Foundation.h>
 
 #import "CSAudioQueue.h"
-#import "CSOpenGLView.h"
-#import "CSStaticAnalyser.h"
 #import "CSJoystickManager.h"
+#import "CSScanTargetView.h"
+#import "CSStaticAnalyser.h"
 
 @class CSMachine;
 @protocol CSMachineDelegate <NSObject>
@@ -64,13 +64,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)isStereo;
 - (void)setAudioSamplingRate:(float)samplingRate bufferSize:(NSUInteger)bufferSize stereo:(BOOL)stereo;
 
-- (void)setView:(nullable CSOpenGLView *)view aspectRatio:(float)aspectRatio;
+- (void)setView:(nullable CSScanTargetView *)view aspectRatio:(float)aspectRatio;
 
 - (void)start;
 - (void)stop;
-
-- (void)updateViewForPixelSize:(CGSize)pixelSize;
-- (void)drawViewForPixelSize:(CGSize)pixelSize;
 
 - (void)setKey:(uint16_t)key characters:(nullable NSString *)characters isPressed:(BOOL)isPressed;
 - (void)clearAllKeys;
@@ -79,7 +76,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)addMouseMotionX:(CGFloat)deltaX y:(CGFloat)deltaY;
 
 @property (atomic, strong, nullable) CSAudioQueue *audioQueue;
-@property (nonatomic, readonly, nonnull) CSOpenGLView *view;
+@property (nonatomic, readonly, nonnull) CSScanTargetView *view;
 @property (nonatomic, weak, nullable) id<CSMachineDelegate> delegate;
 
 @property (nonatomic, readonly, nonnull) NSString *userDefaultsPrefix;
