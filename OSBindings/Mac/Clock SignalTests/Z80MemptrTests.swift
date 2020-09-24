@@ -188,7 +188,7 @@ class Z80MemptrTester: XCTestCase {
 		for addr in UInt16(0) ..< 256 {
 			machine.setValue(addr, for: .BC)
 			machine.setValue(addr, for: .DE)
-			insert16(program: &nnProgram, address: addr, offset: 1)
+			insert16(program: &nnProgram, address: Int(addr), offset: 1)
 
 			for a in UInt16(0) ..< 256 {
 				machine.setValue(a, for: .A)
@@ -249,11 +249,11 @@ class Z80MemptrTester: XCTestCase {
 		]
 
 		for addr in UInt16(0) ... 65535 {
-			insert16(program: &ldnnhlBaseProgram, address: addr, offset: 1)
-			insert16(program: &ldnnbcEDProgram, address: addr, offset: 2)
-			insert16(program: &ldnndeEDProgram, address: addr, offset: 2)
-			insert16(program: &ldnnhlEDProgram, address: addr, offset: 2)
-			insert16(program: &ldnnspEDProgram, address: addr, offset: 2)
+			insert16(program: &ldnnhlBaseProgram, address: Int(addr), offset: 1)
+			insert16(program: &ldnnbcEDProgram, address: Int(addr), offset: 2)
+			insert16(program: &ldnndeEDProgram, address: Int(addr), offset: 2)
+			insert16(program: &ldnnhlEDProgram, address: Int(addr), offset: 2)
+			insert16(program: &ldnnspEDProgram, address: Int(addr), offset: 2)
 
 			let expectedResult = UInt16((Int(addr) + 1) & 0xffff)
 

@@ -1760,7 +1760,7 @@
 		4BE76CF822641ED300ACD6FA /* QLTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = QLTests.mm; sourceTree = "<group>"; };
 		4BE845201F2FF7F100A5EA22 /* CRTC6845.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = CRTC6845.hpp; sourceTree = "<group>"; };
 		4BE90FFC22D5864800FB464D /* MacintoshVideoTests.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = MacintoshVideoTests.mm; sourceTree = "<group>"; };
-		4BE9A6B01EDE293000CBCB47 /* zexdoc.com */ = {isa = PBXFileReference; lastKnownFileType = file; name = zexdoc.com; path = Zexall/zexdoc.com; sourceTree = "<group>"; };
+		4BE9A6B01EDE293000CBCB47 /* zexdoc.com */ = {isa = PBXFileReference; lastKnownFileType = file; path = zexdoc.com; sourceTree = "<group>"; };
 		4BEA525D1DF33323007E74F2 /* Tape.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Tape.cpp; sourceTree = "<group>"; };
 		4BEA525F1DF333D8007E74F2 /* Tape.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Tape.hpp; sourceTree = "<group>"; };
 		4BEA52601DF3343A007E74F2 /* Interrupts.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Interrupts.hpp; sourceTree = "<group>"; };

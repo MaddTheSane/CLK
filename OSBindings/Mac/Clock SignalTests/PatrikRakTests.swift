@@ -60,7 +60,7 @@ class PatrikRakTests: XCTestCase, CSTestMachineTrapHandler {
 				// run!
 				let cyclesPerIteration: Int32 = 400_000_000
 				while !done {
-					machine.runForNumber(ofCycles: cyclesPerIteration)
+					machine.runForNumberOfCycles(cyclesPerIteration)
 				}
 
 				let successRange = output.range(of: "Result: all tests passed.")
