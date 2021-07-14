@@ -228,7 +228,7 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 		switch machineSelector.selectedTabViewItem!.identifier as! String {
 
 			case "appleii":
-				var model: CSMachineAppleIIModel = .appleII
+				var model: CSMachine.AppleIIModel = .appleII
 				switch appleIIModelButton.selectedTag() {
 					case 1:		model = .appleIIPlus
 					case 2:		model = .appleIIe
@@ -237,7 +237,7 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 					default:	model = .appleII
 				}
 
-				var diskController: CSMachineAppleIIDiskController = .none
+				var diskController: CSMachine.AppleIIDiskController = .none
 				switch appleIIDiskControllerButton.selectedTag() {
 					case 13:	diskController = .thirteenSector
 					case 16:	diskController = .sixteenSector
@@ -248,7 +248,7 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 				return CSStaticAnalyser(appleIIModel: model, diskController: diskController)
 
 			case "appleiigs":
-				var model: CSMachineAppleIIgsModel = .ROM00
+				var model: CSMachine.AppleIIgsModel = .ROM00
 				switch appleIIgsModelButton.selectedTag() {
 					case 1:		model = .ROM01
 					case 2:		model = .ROM03
@@ -341,8 +341,8 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 				}
 
 			case "oric":
-				var diskInterface: CSMachineOricDiskInterface = .none
-				switch oricDiskInterfaceButton.selectedTag() {
+				var diskInterface: CSMachine.OricDiskInterface = .none
+				switch oricDiskInterfaceButton!.selectedTag() {
 					case 1:		diskInterface = .microdisc
 					case 2:		diskInterface = .pravetz
 					case 3:		diskInterface = .jasmin
@@ -350,7 +350,7 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 					default:	break
 
 				}
-				var model: CSMachineOricModel = .oric1
+				var model: CSMachine.OricModel = .oric1
 				switch oricModelTypeButton.selectedTag() {
 					case 1:		model = .oricAtmos
 					case 2:		model = .pravetz
@@ -360,7 +360,7 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 				return CSStaticAnalyser(oricModel: model, diskInterface: diskInterface)
 
 			case "spectrum":
-				var model: CSMachineSpectrumModel = .plus2a
+				var model: CSMachine.SpectrumModel = .plus2a
 				switch spectrumModelTypeButton.selectedTag() {
 					case 16:	model = .sixteenK
 					case 48:	model = .fortyEightK

@@ -22,7 +22,7 @@ typedef NS_ENUM(NSInteger, CSJoystickAxisType) {
 	CSJoystickAxisTypeX,
 	CSJoystickAxisTypeY,
 	CSJoystickAxisTypeZ,
-};
+} NS_SWIFT_NAME(CSJoystickAxis.AxisType);
 
 /*!
 	Models a joystick axis.
@@ -34,12 +34,12 @@ typedef NS_ENUM(NSInteger, CSJoystickAxisType) {
 @property(nonatomic, readonly) float position;
 @end
 
-typedef NS_OPTIONS(NSInteger, CSJoystickHatDirection) {
+typedef NS_OPTIONS(uint8_t, CSJoystickHatDirection) {
 	CSJoystickHatDirectionUp = 1 << 0,
 	CSJoystickHatDirectionDown = 1 << 1,
 	CSJoystickHatDirectionLeft = 1 << 2,
 	CSJoystickHatDirectionRight = 1 << 3,
-};
+} NS_SWIFT_NAME(CSJoystickHat.Direction);
 
 /*!
 	Models a joystick hat.

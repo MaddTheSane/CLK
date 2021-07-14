@@ -48,6 +48,17 @@
                BlueprintName = "Clock SignalTests"
                ReferencedContainer = "container:Clock Signal.xcodeproj">
             </BuildableReference>
+            <SkippedTests>
+               <Test
+                  Identifier = "M68000ComparativeTests">
+               </Test>
+               <Test
+                  Identifier = "M68000Tests/testABCDLong">
+               </Test>
+               <Test
+                  Identifier = "ZexallTests">
+               </Test>
+            </SkippedTests>
          </TestableReference>
          <TestableReference
             skipped = "YES">

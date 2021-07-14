@@ -13,7 +13,7 @@
 				<string>bin</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cartridge.png</string>
+			<string>cartridge</string>
 			<key>CFBundleTypeName</key>
 			<string>Atari 2600 Cartridge</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -35,7 +35,7 @@
 				<string>rom</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>chip.png</string>
+			<string>chip</string>
 			<key>CFBundleTypeName</key>
 			<string>ROM Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -58,7 +58,7 @@
 				<string>uef.gz</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Electron/BBC UEF Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -80,7 +80,7 @@
 				<string>prg</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy525.png</string>
+			<string>floppy525</string>
 			<key>CFBundleTypeName</key>
 			<string>Commodore Program</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -102,7 +102,7 @@
 				<string>tap</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Tape Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -124,7 +124,7 @@
 				<string>g64</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy525.png</string>
+			<string>floppy525</string>
 			<key>CFBundleTypeName</key>
 			<string>Commodore Disk</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -146,7 +146,7 @@
 				<string>d64</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy525.png</string>
+			<string>floppy525</string>
 			<key>CFBundleTypeName</key>
 			<string>Commodore 1540/1 Disk</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -172,7 +172,7 @@
 				<string>adm</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>Electron/BBC Disk Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -194,7 +194,7 @@
 				<string>dsk</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>Disk Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -217,7 +217,7 @@
 				<string>80</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>ZX80 Tape Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -241,7 +241,7 @@
 				<string>p81</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>ZX81 Tape Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -263,7 +263,7 @@
 				<string>csw</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Tape Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -285,7 +285,7 @@
 				<string>tzx</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Tape Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -307,7 +307,7 @@
 				<string>cdt</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>Amstrad CPC Tape Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -329,7 +329,7 @@
 				<string>hfe</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>HxC Disk Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -351,7 +351,7 @@
 				<string>cas</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>MSX Tape Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -373,7 +373,7 @@
 				<string>dmk</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>Disk Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -397,7 +397,7 @@
 				<string>stx</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy35.png</string>
+			<string>floppy35</string>
 			<key>CFBundleTypeName</key>
 			<string>Atari ST Disk Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -419,7 +419,7 @@
 				<string>tsx</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cassette.png</string>
+			<string>cassette</string>
 			<key>CFBundleTypeName</key>
 			<string>MSX Tape Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -441,7 +441,7 @@
 				<string>col</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cartridge.png</string>
+			<string>cartridge</string>
 			<key>CFBundleTypeName</key>
 			<string>ColecoVision Cartridge</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -463,7 +463,7 @@
 				<string>sms</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cartridge.png</string>
+			<string>cartridge</string>
 			<key>CFBundleTypeName</key>
 			<string>Master System Cartridge</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -485,7 +485,7 @@
 				<string>sg</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>cartridge.png</string>
+			<string>cartridge</string>
 			<key>CFBundleTypeName</key>
 			<string>SG1000 Cartridge</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -510,7 +510,7 @@
 				<string>po</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>floppy525.png</string>
+			<string>floppy525</string>
 			<key>CFBundleTypeName</key>
 			<string>Apple II Disk Image</string>
 			<key>CFBundleTypeOSTypes</key>
@@ -547,8 +547,14 @@
 			</array>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Default</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.apple.disk-image-udif</string>
+			</array>
 			<key>LSTypeIsPackage</key>
-			<integer>0</integer>
+			<false/>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).MachineDocument</string>
 		</dict>

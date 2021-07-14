@@ -98,7 +98,7 @@ typedef NS_ENUM(NSInteger, CSMachineKeyboardInputMode) {
 @property (nonatomic, assign) CSMachineKeyboardInputMode inputMode;
 @property (nonatomic, nullable) CSJoystickManager *joystickManager;
 
-// LED list.
+//! LED list.
 @property (nonatomic, readonly, nonnull) NSArray<NSString *> *leds;
 
 // Special-case accessors; undefined behaviour if accessed for a machine not of the corresponding type.

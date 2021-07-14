@@ -17,29 +17,29 @@ typedef NS_ENUM(NSInteger, CSMachineAppleIIModel) {
 	CSMachineAppleIIModelAppleIIPlus,
 	CSMachineAppleIIModelAppleIIe,
 	CSMachineAppleIIModelAppleEnhancedIIe
-};
+} NS_SWIFT_NAME(CSMachine.AppleIIModel);
 
 typedef NS_ENUM(NSInteger, CSMachineAppleIIDiskController) {
 	CSMachineAppleIIDiskControllerNone,
 	CSMachineAppleIIDiskControllerSixteenSector,
 	CSMachineAppleIIDiskControllerThirteenSector
-};
+} NS_SWIFT_NAME(CSMachine.AppleIIDiskController);
 
 typedef NS_ENUM(NSInteger, CSMachineAppleIIgsModel) {
 	CSMachineAppleIIgsModelROM00,
 	CSMachineAppleIIgsModelROM01,
 	CSMachineAppleIIgsModelROM03,
-};
+} NS_SWIFT_NAME(CSMachine.AppleIIgsModel);
 
 typedef NS_ENUM(NSInteger, CSMachineAtariSTModel) {
 	CSMachineAtariSTModel512k,
-};
+} NS_SWIFT_NAME(CSMachine.AtariSTModel);
 
 typedef NS_ENUM(NSInteger, CSMachineCPCModel) {
 	CSMachineCPCModel464,
 	CSMachineCPCModel664,
 	CSMachineCPCModel6128
-};
+} NS_SWIFT_NAME(CSMachine.CPCModel);
 
 typedef NS_ENUM(NSInteger, CSMachineEnterpriseModel) {
 	CSMachineEnterpriseModel64,
@@ -75,13 +75,13 @@ typedef NS_ENUM(NSInteger, CSMachineMacintoshModel) {
 	CSMachineMacintoshModel512k,
 	CSMachineMacintoshModel512ke,
 	CSMachineMacintoshModelPlus,
-};
+} NS_SWIFT_NAME(CSMachine.MacintoshModel);
 
 typedef NS_ENUM(NSInteger, CSMachineOricModel) {
 	CSMachineOricModelOric1,
 	CSMachineOricModelOricAtmos,
 	CSMachineOricModelPravetz
-};
+} NS_SWIFT_NAME(CSMachine.OricModel);
 
 typedef NS_ENUM(NSInteger, CSMachineOricDiskInterface) {
 	CSMachineOricDiskInterfaceNone,
@@ -89,7 +89,7 @@ typedef NS_ENUM(NSInteger, CSMachineOricDiskInterface) {
 	CSMachineOricDiskInterfacePravetz,
 	CSMachineOricDiskInterfaceJasmin,
 	CSMachineOricDiskInterfaceBD500
-};
+} NS_SWIFT_NAME(CSMachine.OricDiskInterface);
 
 typedef NS_ENUM(NSInteger, CSMachineSpectrumModel) {
 	CSMachineSpectrumModelSixteenK,
@@ -98,7 +98,7 @@ typedef NS_ENUM(NSInteger, CSMachineSpectrumModel) {
 	CSMachineSpectrumModelPlus2,
 	CSMachineSpectrumModelPlus2a,
 	CSMachineSpectrumModelPlus3,
-};
+} NS_SWIFT_NAME(CSMachine.SpectrumModel);
 
 typedef NS_ENUM(NSInteger, CSMachineVic20Region) {
 	CSMachineVic20RegionAmerican,
@@ -106,13 +106,13 @@ typedef NS_ENUM(NSInteger, CSMachineVic20Region) {
 	CSMachineVic20RegionDanish,
 	CSMachineVic20RegionSwedish,
 	CSMachineVic20RegionJapanese,
-};
+} NS_SWIFT_NAME(CSMachine.Vic20Region);
 
 typedef NS_ENUM(NSInteger, CSMachineMSXRegion) {
 	CSMachineMSXRegionAmerican,
 	CSMachineMSXRegionEuropean,
 	CSMachineMSXRegionJapanese,
-};
+} NS_SWIFT_NAME(CSMachine.MSXRegion);
 
 typedef int Kilobytes;
 
