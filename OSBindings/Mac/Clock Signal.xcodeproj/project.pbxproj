@@ -2662,8 +2662,8 @@
 			isa = PBXGroup;
 			children = (
 				4B3FE75C1F3CF68B00448EE4 /* CPM.cpp */,
-				4B477709268FBE4D005C2340 /* FAT.cpp */,
 				4B3FE75D1F3CF68B00448EE4 /* CPM.hpp */,
+				4B477709268FBE4D005C2340 /* FAT.cpp */,
 				4B47770A268FBE4D005C2340 /* FAT.hpp */,
 			);
 			path = Parsers;

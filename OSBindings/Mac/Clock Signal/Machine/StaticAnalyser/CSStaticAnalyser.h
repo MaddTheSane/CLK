@@ -45,30 +45,30 @@ typedef NS_ENUM(NSInteger, CSMachineEnterpriseModel) {
 	CSMachineEnterpriseModel64,
 	CSMachineEnterpriseModel128,
 	CSMachineEnterpriseModel256,
-};
+} NS_SWIFT_NAME(CSMachine.EnterpriseModel);
 
 typedef NS_ENUM(NSInteger, CSMachineEnterpriseSpeed) {
 	CSMachineEnterpriseSpeed4MHz,
 	CSMachineEnterpriseSpeed6MHz
-};
+} NS_SWIFT_NAME(CSMachine.EnterpriseSpeed);
 
 typedef NS_ENUM(NSInteger, CSMachineEnterpriseEXOS) {
 	CSMachineEnterpriseEXOSVersion21,
 	CSMachineEnterpriseEXOSVersion20,
 	CSMachineEnterpriseEXOSVersion10,
-};
+} NS_SWIFT_NAME(CSMachine.EnterpriseEXOS);
 
 typedef NS_ENUM(NSInteger, CSMachineEnterpriseBASIC) {
 	CSMachineEnterpriseBASICVersion21,
 	CSMachineEnterpriseBASICVersion11,
 	CSMachineEnterpriseBASICVersion10,
 	CSMachineEnterpriseBASICNone,
-};
+} NS_SWIFT_NAME(CSMachine.EnterpriseBASIC);
 
 typedef NS_ENUM(NSInteger, CSMachineEnterpriseDOS) {
 	CSMachineEnterpriseDOSEXDOS,
 	CSMachineEnterpriseDOSNone,
-};
+} NS_SWIFT_NAME(CSMachine.EnterpriseDOS);
 
 typedef NS_ENUM(NSInteger, CSMachineMacintoshModel) {
 	CSMachineMacintoshModel128k,

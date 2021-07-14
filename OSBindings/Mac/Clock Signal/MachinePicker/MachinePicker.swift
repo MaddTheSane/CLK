@@ -278,7 +278,7 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 					sidewaysRAM: electronSidewaysRAMButton.state == .on)
 
 			case "enterprise":
-				var model: CSMachineEnterpriseModel = .model128
+				var model: CSMachine.EnterpriseModel = .model128
 				switch enterpriseModelButton.selectedTag() {
 					case 64:	model = .model64
 					case 256:	model = .model256
@@ -286,14 +286,14 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 					default:	model = .model128
 				}
 
-				var speed: CSMachineEnterpriseSpeed = .speed4MHz
+				var speed: CSMachine.EnterpriseSpeed = .speed4MHz
 				switch enterpriseSpeedButton.selectedTag() {
 					case 6:		speed = .speed6MHz
 					case 4:		fallthrough
 					default:	speed = .speed4MHz
 				}
 
-				var exos: CSMachineEnterpriseEXOS = .version21
+				var exos: CSMachine.EnterpriseEXOS = .version21
 				switch enterpriseEXOSButton.selectedTag() {
 					case 10:	exos = .version10
 					case 20:	exos = .version20
@@ -301,7 +301,7 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 					default:	exos = .version21
 				}
 
-				var basic: CSMachineEnterpriseBASIC = .version21
+				var basic: CSMachine.EnterpriseBASIC = .version21
 				switch enterpriseBASICButton.selectedTag() {
 					case 0:		basic = .none
 					case 10:	basic = .version10
@@ -310,7 +310,7 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 					default:	basic = .version21
 				}
 
-				var dos: CSMachineEnterpriseDOS = .dosNone
+				var dos: CSMachine.EnterpriseDOS = .dosNone
 				switch enterpriseDOSButton.selectedTag() {
 					case 1:		dos = .DOSEXDOS
 					case 0:		fallthrough
