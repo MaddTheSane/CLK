@@ -17,7 +17,7 @@
 
 namespace {
 
-NSString *directoryFor(const ROM::Description &description) {
+static NSString *directoryFor(const ROM::Description &description) {
 	return [@"ROMImages/" stringByAppendingString:[NSString stringWithUTF8String:description.machine_name.c_str()]];
 }
 
