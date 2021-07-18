@@ -29,7 +29,7 @@
 @end
 
 @interface CSIOJoystickButton: CSJoystickButton
-
+@property (readonly) IOHIDElementRef element;
 @end
 
 @implementation CSIOJoystickButton {
@@ -52,9 +52,7 @@
 	return [NSString stringWithFormat:@"<CSIOJoystickButton: %p>; button %ld, %@", self, (long)self.index, self.isPressed ? @"pressed" : @"released"];
 }
 
-- (IOHIDElementRef)element {
-	return _element;
-}
+@synthesize element=_element;
 
 - (void)setIsPressed:(bool)isPressed {
 	_isPressed = isPressed;
@@ -81,6 +79,7 @@
 
 @interface CSIOJoystickAxis: CSJoystickAxis
 
+@property (readonly) IOHIDElementRef element;
 
 @end
 
@@ -105,9 +104,7 @@
 	return [NSString stringWithFormat:@"<CSIOJoystickAxis: %p>; type %d, value %0.2f", self, (int)self.type, self.position];
 }
 
-- (IOHIDElementRef)element {
-	return _element;
-}
+@synthesize element=_element;
 
 - (void)setPosition:(float)position {
 	_position = position;
@@ -125,7 +122,7 @@
 @end
 
 @interface CSIOJoystickHat: CSJoystickHat
-
+@property (readonly) IOHIDElementRef element;
 @end
 
 
@@ -149,9 +146,7 @@
 	return [NSString stringWithFormat:@"<CSIOJoystickHat: %p>; direction %ld", self, (long)self.direction];
 }
 
-- (IOHIDElementRef)element {
-	return _element;
-}
+@synthesize element=_element;
 
 - (void)setDirection:(CSJoystickHatDirection)direction {
 	_direction = direction;
@@ -176,7 +171,7 @@
 @end
 
 @interface CSIOJoystick: CSJoystick
-
+@property (readonly) IOHIDDeviceRef device;
 @end
 
 @implementation CSIOJoystick {
@@ -258,9 +253,7 @@
 	}
 }
 
-- (IOHIDDeviceRef)device {
-	return _device;
-}
+@synthesize device=_device;
 
 @end
 

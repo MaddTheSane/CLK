@@ -284,8 +284,8 @@ class WolfgangLorenzTests: XCTestCase, CSTestMachineTrapHandler {
 	fileprivate func runTest(_ name: String, processor: CSTestMachine6502Processor) {
 		var machine: CSTestMachine6502!
 
-		if let filename = Bundle(for: type(of: self)).path(forResource: name, ofType: nil) {
-			if let testData = try? Data(contentsOf: URL(fileURLWithPath: filename)) {
+		if let filename = Bundle(for: type(of: self)).url(forResource: name, withExtension: nil) {
+			if let testData = try? Data(contentsOf: filename) {
 
 				machine = CSTestMachine6502(processor: processor)
 				machine.trapHandler = self
@@ -293,7 +293,7 @@ class WolfgangLorenzTests: XCTestCase, CSTestMachineTrapHandler {
 
 				let dataPointer = (testData as NSData).bytes.bindMemory(to: UInt8.self, capacity: testData.count)
 				let loadAddress = UInt32(dataPointer[0]) | (UInt32(dataPointer[1]) << 8)
-				let contents = testData.subdata(in: 2 ..< testData.count)
+				let contents = testData.subdata(in: 2 ..< testData.endIndex)
 
 				machine.setData(contents, atAddress: loadAddress)
 

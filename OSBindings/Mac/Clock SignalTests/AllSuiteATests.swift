@@ -11,8 +11,8 @@ import XCTest
 class AllSuiteATests: XCTestCase {
 
 	func testAllSuiteA() {
-		if let filename = Bundle(for: type(of: self)).path(forResource: "AllSuiteA", ofType: "bin") {
-			if let allSuiteA = try? Data(contentsOf: URL(fileURLWithPath: filename)) {
+		if let filename = Bundle(for: type(of: self)).url(forResource: "AllSuiteA", withExtension: "bin") {
+			if let allSuiteA = try? Data(contentsOf: filename) {
 				let machine = CSTestMachine6502(processor: .processor6502)
 
 				machine.setData(allSuiteA, atAddress: 0x4000)

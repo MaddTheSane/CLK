@@ -105,7 +105,7 @@ class EmuTOS: public ComparativeBusHandler {
 
 - (void)testImage:(ROM::Name)name trace:(NSString *)trace length:(int)length {
 	const auto roms = CSROMFetcher()(ROM::Request(name));
-	NSString *const traceLocation = [[NSBundle bundleForClass:[self class]] pathForResource:trace ofType:@"trace.txt.gz"];
+	NSURL *const traceLocation = [[NSBundle bundleForClass:[self class]] URLForResource:trace withExtension:@"trace.txt.gz"];
 	_machine = std::make_unique<EmuTOS>(roms.find(name)->second, traceLocation.fileSystemRepresentation);
 	_machine->run_for(HalfCycles(length));
 }
