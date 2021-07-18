@@ -15,8 +15,8 @@ class PatrikRakTests: XCTestCase, CSTestMachineTrapHandler {
 	private var output = ""
 
 	private func runTest(_ name: String) {
-		if let filename = Bundle(for: type(of: self)).path(forResource: name, ofType: "tap") {
-			if let testData = try? Data(contentsOf: URL(fileURLWithPath: filename)) {
+		if let filename = Bundle(for: type(of: self)).url(forResource: name, withExtension: "tap") {
+			if let testData = try? Data(contentsOf: filename) {
 
 				// Do a minor parsing of the TAP file to find the final file.
 				var dataPointer = 0

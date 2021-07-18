@@ -2629,20 +2629,20 @@
 			isa = PBXGroup;
 			children = (
 				4B3BA0C51D318B44005DD7A7 /* C1540Bridge.h */,
+				4B3BA0C61D318B44005DD7A7 /* C1540Bridge.mm */,
 				4B3BA0C71D318B44005DD7A7 /* Clock SignalTests-Bridging-Header.h */,
 				4BEF6AA81D35CE9E00E73575 /* DigitalPhaseLockedLoopBridge.h */,
+				4BEF6AA91D35CE9E00E73575 /* DigitalPhaseLockedLoopBridge.mm */,
 				4B3BA0C81D318B44005DD7A7 /* MOS6522Bridge.h */,
+				4B3BA0C91D318B44005DD7A7 /* MOS6522Bridge.mm */,
 				4B3BA0CA1D318B44005DD7A7 /* MOS6532Bridge.h */,
+				4B3BA0CB1D318B44005DD7A7 /* MOS6532Bridge.mm */,
 				4B08A2761EE39306008B7065 /* TestMachine.h */,
+				4B08A2771EE39306008B7065 /* TestMachine.mm */,
 				4B08A2791EE3957B008B7065 /* TestMachine+ForSubclassEyesOnly.h */,
 				4B3BA0CC1D318B44005DD7A7 /* TestMachine6502.h */,
-				4BFCA1251ECBE33200AC40C1 /* TestMachineZ80.h */,
-				4B3BA0C61D318B44005DD7A7 /* C1540Bridge.mm */,
-				4BEF6AA91D35CE9E00E73575 /* DigitalPhaseLockedLoopBridge.mm */,
-				4B3BA0C91D318B44005DD7A7 /* MOS6522Bridge.mm */,
-				4B3BA0CB1D318B44005DD7A7 /* MOS6532Bridge.mm */,
-				4B08A2771EE39306008B7065 /* TestMachine.mm */,
 				4B3BA0CD1D318B44005DD7A7 /* TestMachine6502.mm */,
+				4BFCA1251ECBE33200AC40C1 /* TestMachineZ80.h */,
 				4BFCA1261ECBE33200AC40C1 /* TestMachineZ80.mm */,
 			);
 			path = Bridges;
