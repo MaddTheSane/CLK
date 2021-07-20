@@ -10,7 +10,7 @@
 
 @class CSAudioQueue;
 
-@protocol CSAudioQueueDelegate
+@protocol CSAudioQueueDelegate <NSObject>
 - (void)audioQueueIsRunningDry:(nonnull CSAudioQueue *)audioQueue;
 @end
 

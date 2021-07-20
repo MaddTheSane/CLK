@@ -38,7 +38,7 @@ class AsyncTaskQueue {
 
 			@discussion Functions will be performed serially and asynchronously. This method is safe to
 			call from multiple threads.
-			@parameter function The function to enqueue.
+			@param function The function to enqueue.
 		*/
 		void enqueue(std::function<void(void)> function);
 

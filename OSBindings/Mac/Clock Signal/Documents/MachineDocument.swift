@@ -281,7 +281,7 @@ class MachineDocument:
 		}
 	}
 
-	/// Responds to the CSAudioQueueDelegate dry-queue warning message by requesting a machine update.
+	/// Responds to the `CSAudioQueueDelegate` dry-queue warning message by requesting a machine update.
 	final func audioQueueIsRunningDry(_ audioQueue: CSAudioQueue) {
 	}
 
