@@ -952,6 +952,7 @@ void MainWindow::setButtonPressed(int index, bool isPressed) {
 // MARK: - New Machine Creation
 
 #include "../../Analyser/Static/Acorn/Target.hpp"
+#include "../../Analyser/Static/Amiga/Target.hpp"
 #include "../../Analyser/Static/AmstradCPC/Target.hpp"
 #include "../../Analyser/Static/AppleII/Target.hpp"
 #include "../../Analyser/Static/AppleIIgs/Target.hpp"
@@ -973,6 +974,7 @@ void MainWindow::startMachine() {
 		return;							\
 	}
 
+	TEST(amiga);
 	TEST(appleII);
 	TEST(appleIIgs);
 	TEST(amstradCPC);
@@ -1005,6 +1007,27 @@ void MainWindow::start_appleII() {
 		default:	target->disk_controller = Target::DiskController::SixteenSector;	break;
 		case 1:		target->disk_controller = Target::DiskController::ThirteenSector;	break;
 		case 2:		target->disk_controller = Target::DiskController::None;				break;
+	}
+
+	launchTarget(std::move(target));
+}
+
+void MainWindow::start_amiga() {
+	using Target = Analyser::Static::Amiga::Target;
+	auto target = std::make_unique<Target>();
+
+	switch(ui->amigaChipRAMComboBox->currentIndex()) {
+		default:	target->chip_ram = Target::ChipRAM::FiveHundredAndTwelveKilobytes;	break;
+		case 1:		target->chip_ram = Target::ChipRAM::OneMegabyte;					break;
+		case 2:		target->chip_ram = Target::ChipRAM::TwoMegabytes;					break;
+	}
+
+	switch(ui->amigaFastRAMComboBox->currentIndex()) {
+		default:	target->fast_ram = Target::FastRAM::None;			break;
+		case 1:		target->fast_ram = Target::FastRAM::OneMegabyte;	break;
+		case 2:		target->fast_ram = Target::FastRAM::TwoMegabytes;	break;
+		case 3:		target->fast_ram = Target::FastRAM::FourMegabytes;	break;
+		case 4:		target->fast_ram = Target::FastRAM::EightMegabytes;	break;
 	}
 
 	launchTarget(std::move(target));
@@ -1235,6 +1258,10 @@ void MainWindow::launchTarget(std::unique_ptr<Analyser::Static::Target> &&target
 #define AllSettings()													\
 	/* Machine selection. */											\
 	Tabs(machineSelectionTabs, "machineSelection");						\
+																		\
+	/* Amiga. */														\
+	ComboBox(amigaChipRAMComboBox, "amiga.chipRAM");					\
+	ComboBox(amigaFastRAMComboBox, "amiga.fastRAM");					\
 																		\
 	/* Apple II. */														\
 	ComboBox(appleIIModelComboBox, "appleII.model");					\

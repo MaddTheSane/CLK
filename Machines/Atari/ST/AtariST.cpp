@@ -176,7 +176,7 @@ class ConcreteMachine:
 
 			// An interrupt acknowledge, perhaps?
 			if(cycle.operation & Microcycle::InterruptAcknowledge) {
-				// Current implementation: everything other than 6 (i.e. the MFP is autovectored.
+				// Current implementation: everything other than 6 (i.e. the MFP) is autovectored.
 				const int interrupt_level = cycle.word_address()&7;
 				if(interrupt_level != 6) {
 					video_interrupts_pending_ &= ~interrupt_level;
@@ -483,7 +483,7 @@ class ConcreteMachine:
 
 		Concurrency::DeferringAsyncTaskQueue audio_queue_;
 		GI::AY38910::AY38910<false> ay_;
-		Outputs::Speaker::LowpassSpeaker<GI::AY38910::AY38910<false>> speaker_;
+		Outputs::Speaker::PullLowpass<GI::AY38910::AY38910<false>> speaker_;
 		HalfCycles cycles_since_audio_update_;
 
 		JustInTimeActor<DMAController> dma_;
