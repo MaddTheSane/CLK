@@ -18,7 +18,7 @@
 namespace {
 
 NSString *directoryFor(const ROM::Description &description) {
-	return [@"ROMImages/" stringByAppendingString:[NSString stringWithUTF8String:description.machine_name.c_str()]];
+	return [@"ROMImages" stringByAppendingPathComponent:[NSString stringWithUTF8String:description.machine_name.c_str()]];
 }
 
 NSArray<NSURL *> *urlsFor(const ROM::Description &description, const std::string &file_name) {
@@ -65,7 +65,7 @@ BOOL CSInstallROM(NSURL *url) {
 
 	// Copy the data to its destination and report success.
 	NSURL *const targetURL = [urlsFor(*target_description, target_description->file_names[0]) firstObject];
-	[[NSFileManager defaultManager] createDirectoryAtPath:targetURL.URLByDeletingLastPathComponent.path withIntermediateDirectories:YES attributes:nil error:nil];
+	[[NSFileManager defaultManager] createDirectoryAtURL:targetURL.URLByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
 	[data writeToURL:targetURL atomically:NO];
 
 	return YES;

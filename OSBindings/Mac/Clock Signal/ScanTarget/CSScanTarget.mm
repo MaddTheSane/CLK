@@ -93,7 +93,7 @@
 
 namespace {
 
-/// Provides a container for __fp16 versions of tightly-packed single-precision plain old data with a copy assignment constructor.
+/// Provides a container for @c __fp16 versions of tightly-packed single-precision plain old data with a copy assignment constructor.
 template <typename NaturalType> struct HalfConverter {
 	__fp16 elements[sizeof(NaturalType) / sizeof(float)];
 

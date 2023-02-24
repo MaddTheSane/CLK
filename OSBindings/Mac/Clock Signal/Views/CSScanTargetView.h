@@ -104,7 +104,7 @@
 	messages because I haven't yet found a way to track that other than polling, in which case I might as well put
 	that into the display link callback.
 */
-@protocol CSScanTargetViewDisplayLinkDelegate
+@protocol CSScanTargetViewDisplayLinkDelegate <NSObject>
 
 /*!
 	Informs the delegate that the display link has fired.

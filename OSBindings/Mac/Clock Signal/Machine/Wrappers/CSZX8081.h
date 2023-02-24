@@ -6,8 +6,8 @@
 //  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
-@class CSZX8081;
-#import "CSMachine.h"
+#import <Foundation/Foundation.h>
+@class CSMachine;
 
 @interface CSZX8081 : NSObject
 

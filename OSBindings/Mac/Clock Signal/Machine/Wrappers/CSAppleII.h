@@ -6,8 +6,8 @@
 //  Copyright © 2021 Thomas Harte. All rights reserved.
 //
 
-@class CSAppleII;
-#import "CSMachine.h"
+#import <Foundation/Foundation.h>
+@class CSMachine;
 
 @interface CSAppleII : NSObject
 

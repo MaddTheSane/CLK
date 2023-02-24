@@ -10,14 +10,14 @@
 #import <MetalKit/MetalKit.h>
 
 /*!
-	Provides a ScanTarget that uses Metal as its back-end.
-*/
+ * Provides a @c ScanTarget that uses Metal as its back-end.
+ */
 @interface CSScanTarget : NSObject <MTKViewDelegate>
 
 - (nonnull instancetype)initWithView:(nonnull MTKView *)view;
 
-// Draws all scans currently residing at the scan target to the backing store,
-// ready for output when next requested.
+/// Draws all scans currently residing at the scan target to the backing store,
+/// ready for output when next requested.
 - (void)updateFrameBuffer;
 
 - (nonnull NSBitmapImageRep *)imageRepresentation;

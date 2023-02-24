@@ -6,8 +6,8 @@
 //  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
-@class CSAtari2600;
-#import "CSMachine.h"
+#import <Foundation/Foundation.h>
+@class CSMachine;
 
 @interface CSAtari2600 : NSObject
 

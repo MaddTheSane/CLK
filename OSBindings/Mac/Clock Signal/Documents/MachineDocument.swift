@@ -32,8 +32,8 @@ class MachineDocument:
 	/// The active machine, following its successful creation.
 	private var machine: CSMachine!
 
-	/// @returns the appropriate window content aspect ratio for this @c self.machine.
-	private func aspectRatio() -> NSSize {
+	/// The appropriate window content aspect ratio for this `self.machine`.
+	private var aspectRatio: NSSize {
 		return NSSize(width: 4.0, height: 3.0)
 	}
 
@@ -112,7 +112,7 @@ class MachineDocument:
 
 	override func windowControllerDidLoadNib(_ aController: NSWindowController) {
 		super.windowControllerDidLoadNib(aController)
-		aController.window?.contentAspectRatio = self.aspectRatio()
+		aController.window?.contentAspectRatio = self.aspectRatio
 		volumeSlider.floatValue = pow(2.0, userDefaultsVolume())
 
 		volumeView.layer!.cornerRadius = 5.0
@@ -191,7 +191,7 @@ class MachineDocument:
 	private func setupMachineOutput() {
 		if let machine = self.machine, let scanTargetView = self.scanTargetView, machine.view != scanTargetView {
 			// Establish the output aspect ratio and audio.
-			let aspectRatio = self.aspectRatio()
+			let aspectRatio = self.aspectRatio
 			machine.setView(scanTargetView, aspectRatio: Float(aspectRatio.width / aspectRatio.height))
 
 			// Attach an options panel if one is available.
@@ -265,7 +265,7 @@ class MachineDocument:
 		// Establish and provide the audio queue, taking advice as to an appropriate sampling rate.
 		//
 		// TODO: this needs to be threadsafe. FIX!
-		let maximumSamplingRate = CSAudioQueue.preferredSamplingRate()
+		let maximumSamplingRate = CSAudioQueue.preferredSamplingRate
 		let selectedSamplingRate = Float64(self.machine.idealSamplingRate(from: NSRange(location: 0, length: NSInteger(maximumSamplingRate))))
 		let isStereo = self.machine.isStereo
 		if selectedSamplingRate > 0 {

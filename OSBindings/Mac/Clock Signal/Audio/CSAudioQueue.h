@@ -15,31 +15,31 @@
 @end
 
 /*!
-	CSAudioQueue provides an audio queue to which packets of arbitrary size may be appended;
-	it can notify a delegate each time a buffer is completed and offer advice as to the preferred
-	output sampling rate and a manageable buffer size for this machine.
-*/
+ * CSAudioQueue provides an audio queue to which packets of arbitrary size may be appended;
+ * it can notify a delegate each time a buffer is completed and offer advice as to the preferred
+ * output sampling rate and a manageable buffer size for this machine.
+ */
 @interface CSAudioQueue : NSObject
 
 /*!
-	Creates an instance of CSAudioQueue.
-
-	@param samplingRate The output audio rate.
-	@param isStereo @c YES if audio buffers will contain stereo audio, @c NO otherwise.
-
-	@returns An instance of CSAudioQueue if successful; @c nil otherwise.
-*/
+ * Creates an instance of CSAudioQueue.
+ *
+ * @param samplingRate The output audio rate.
+ * @param isStereo @c YES if audio buffers will contain stereo audio, @c NO otherwise.
+ *
+ * @returns An instance of CSAudioQueue if successful; @c nil otherwise.
+ */
 - (nullable instancetype)initWithSamplingRate:(Float64)samplingRate isStereo:(BOOL)isStereo NS_DESIGNATED_INITIALIZER;
 - (nonnull instancetype)init __attribute((unavailable));
 
 /*!
-	Enqueues a buffer for playback.
-
-	@param buffer A pointer to the data that comprises the buffer.
-*/
+ * Enqueues a buffer for playback.
+ *
+ * @param buffer A pointer to the data that comprises the buffer.
+ */
 - (void)enqueueAudioBuffer:(nonnull const int16_t *)buffer;
 
-/// @returns The sampling rate at which this queue is playing audio.
+/// The sampling rate at which this queue is playing audio.
 @property (nonatomic, readonly) Float64 samplingRate;
 
 /// A delegate, if set, will receive notification upon the completion of each enqueue buffer.
@@ -52,19 +52,27 @@
 + (Float64)preferredSamplingRate;
 
 /*!
-	@returns A selected preferred buffer size (in samples). If an owner cannot otherwise
-	decide in what size to enqueue audio, this is a helpful suggestion.
-*/
+ * The ideal output sampling rate for this computer.
+ *
+ * Likely to be 44.1Khz or
+ * 48Khz or 96Khz or one of the other comon numbers, but not guaranteed to be.
+ */
+@property (class, nonatomic, readonly) Float64 preferredSamplingRate;
+
+/*!
+ * A selected preferred buffer size (in samples). If an owner cannot otherwise
+ * decide in what size to enqueue audio, this is a helpful suggestion.
+ */
 @property (nonatomic, readonly) NSUInteger preferredBufferSize;
 
 /*!
-	Sets the size of buffers to be posted, in samplrs.
-*/
+ * Sets the size of buffers to be posted, in samplrs.
+ */
 @property (nonatomic) NSUInteger bufferSize;
 
 /*!
-	@returns @C YES if this queue is running low or is completely exhausted of new audio buffers.
-*/
-@property (atomic, readonly) BOOL isRunningDry;
+ * @brief @C YES if this queue is running low or is completely exhausted of new audio buffers.
+ */
+@property (atomic, readonly, getter=isRunningDry) BOOL runningDry;
 
 @end
