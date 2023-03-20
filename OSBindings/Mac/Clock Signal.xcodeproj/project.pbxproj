@@ -2572,10 +2572,10 @@
 		4B228CD324D773B30077EF25 /* ScanTarget */ = {
 			isa = PBXGroup;
 			children = (
-				4B228CDA24DA41880077EF25 /* ScanTarget.metal */,
-				4B228CD424D773B30077EF25 /* CSScanTarget.mm */,
 				4B228CD624D773CA0077EF25 /* CSScanTarget.h */,
+				4B228CD424D773B30077EF25 /* CSScanTarget.mm */,
 				4B4F2B7024DF99D4000DA6B0 /* CSScanTarget+CppScanTarget.h */,
+				4B228CDA24DA41880077EF25 /* ScanTarget.metal */,
 			);
 			path = ScanTarget;
 			sourceTree = "<group>";
@@ -2612,16 +2612,16 @@
 			isa = PBXGroup;
 			children = (
 				4B2A53951D117D36003C6002 /* CSMachine.h */,
+				4B2A53961D117D36003C6002 /* CSMachine.mm */,
 				4B643F3C1D77AE5C00D431D6 /* CSMachine+Target.h */,
+				4B98A05C1FFAD3F600ADF63B /* CSROMFetcher.hpp */,
+				4B98A05D1FFAD3F600ADF63B /* CSROMFetcher.mm */,
 				4B2A53971D117D36003C6002 /* KeyCodes.h */,
 				4B8FE2251DA1DE2D0090D3CE /* NSBundle+DataResource.h */,
-				4BDA00E322E663B900AC3CD0 /* NSData+CRC32.h */,
-				4BA61EAE1D91515900B3C876 /* NSData+StdVector.h */,
-				4B98A05C1FFAD3F600ADF63B /* CSROMFetcher.hpp */,
 				4B8FE2261DA1DE2D0090D3CE /* NSBundle+DataResource.m */,
+				4BDA00E322E663B900AC3CD0 /* NSData+CRC32.h */,
 				4BDA00E222E663B900AC3CD0 /* NSData+CRC32.m */,
-				4B2A53961D117D36003C6002 /* CSMachine.mm */,
-				4B98A05D1FFAD3F600ADF63B /* CSROMFetcher.mm */,
+				4BA61EAE1D91515900B3C876 /* NSData+StdVector.h */,
 				4BA61EAF1D91515900B3C876 /* NSData+StdVector.mm */,
 				4B643F3B1D77AD6D00D431D6 /* StaticAnalyser */,
 				4B2A53981D117D36003C6002 /* Wrappers */,
@@ -4445,8 +4445,8 @@
 		4BBFE83B21015D9C00BF1C40 /* Joystick Manager */ = {
 			isa = PBXGroup;
 			children = (
-				4BBFE83C21015D9C00BF1C40 /* CSJoystickManager.m */,
 				4BBFE83E21015DAE00BF1C40 /* CSJoystickManager.h */,
+				4BBFE83C21015D9C00BF1C40 /* CSJoystickManager.m */,
 			);
 			path = "Joystick Manager";
 			sourceTree = "<group>";

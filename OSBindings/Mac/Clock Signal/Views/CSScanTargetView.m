@@ -10,7 +10,6 @@
 #import "CSApplication.h"
 #import "CSScanTarget.h"
 @import CoreVideo;
-@import GLKit;
 
 #include <stdatomic.h>
 
