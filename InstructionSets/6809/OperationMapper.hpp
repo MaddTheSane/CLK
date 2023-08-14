@@ -14,8 +14,7 @@
 // Subject to corrections:
 //
 //	* CWAI and the pushes and pulls at 0x3x are immediate, not inherent.
-namespace InstructionSet {
-namespace M6809 {
+namespace InstructionSet::M6809 {
 
 enum class AddressingMode {
 	Illegal,
@@ -101,7 +100,7 @@ template <int i, typename SchedulerT> void OperationMapper<Page::Page0>::dispatc
 				AM::Variant,	AM::Variant,	AM::Inherent,	AM::Inherent,
 				AM::Illegal,	AM::Illegal,	AM::Relative,	AM::Relative,
 				AM::Illegal,	AM::Inherent,	AM::Immediate,	AM::Illegal,
-				AM::Immediate, 	AM::Inherent,	AM::Inherent,	AM::Inherent,
+				AM::Immediate,	AM::Inherent,	AM::Inherent,	AM::Inherent,
 			};
 			s.template schedule<operations[lower], modes[lower]>();
 		} break;
@@ -163,7 +162,7 @@ template <int i, typename SchedulerT> void OperationMapper<Page::Page0>::dispatc
 				O::EORA,	O::ADCA,	O::ORA,		O::ADDA,	O::CMPX,	O::JSR,		O::LDX,		O::STX,
 			};
 			if(i == 0x8d)	s.template schedule<O::BSR, AM::Relative>();
-			else 			s.template schedule<operations[lower], mode>();
+			else			s.template schedule<operations[lower], mode>();
 		} break;
 		case 0xc:	case 0xd:	case 0xe:	case 0xf: {
 			constexpr Operation operations[] = {
@@ -239,7 +238,6 @@ template <int i, typename SchedulerT> void OperationMapper<Page::Page2>::dispatc
 	}
 }
 
-}
 }
 
 #endif /* InstructionSets_M6809_OperationMapper_hpp */

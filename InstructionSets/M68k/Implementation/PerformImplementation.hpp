@@ -15,8 +15,7 @@
 #include <cassert>
 #include <cmath>
 
-namespace InstructionSet {
-namespace M68k {
+namespace InstructionSet::M68k {
 
 /// Sign-extend @c x to 32 bits and return as an unsigned 32-bit int.
 inline uint32_t u_extend16(uint16_t x)	{	return uint32_t(int16_t(x));	}
@@ -466,7 +465,7 @@ template <Operation operation, typename IntT, typename FlowController> void rox(
 		// When shift is zero, extend is unaffected but is copied to carry.
 		status.carry_flag = status.extend_flag;
 	} else {
- 		switch(operation) {
+		switch(operation) {
 			case Operation::ROXLb:	case Operation::ROXLw:	case Operation::ROXLl:
 				status.carry_flag = Status::FlagT((destination >> (size - shift)) & 1);
 
@@ -1030,7 +1029,6 @@ template <
 
 }
 
-}
 }
 
 #endif /* InstructionSets_M68k_PerformImplementation_h */

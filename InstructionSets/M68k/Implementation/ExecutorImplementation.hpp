@@ -15,8 +15,7 @@
 
 #include <cassert>
 
-namespace InstructionSet {
-namespace M68k {
+namespace InstructionSet::M68k {
 
 #define An(x)	state_.registers[8 + x]
 #define Dn(x)	state_.registers[x]
@@ -239,7 +238,7 @@ uint32_t Executor<model, BusHandler>::State::index_8bitdisplacement(uint32_t bas
 	// Fetch base displacement.
 	uint32_t base_displacement = 0;
 	switch((extension >> 4) & 3) {
-		default: 	break;
+		default:	break;
 		case 2:		base_displacement = read_pc<uint16_t>();	break;
 		case 3:		base_displacement = read_pc<uint32_t>();	break;
 	}
@@ -749,7 +748,6 @@ void Executor<model, BusHandler>::State::movem_toR(Preinstruction instruction, u
 #undef An
 #undef AccessException
 
-}
 }
 
 #endif /* InstructionSets_M68k_ExecutorImplementation_hpp */

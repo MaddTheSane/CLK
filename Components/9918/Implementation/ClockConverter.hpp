@@ -11,15 +11,22 @@
 
 #include "../9918.hpp"
 #include "PersonalityTraits.hpp"
+#include "LineLayout.hpp"
 
-namespace TI {
-namespace TMS {
+namespace TI::TMS {
 
 enum class Clock {
+	/// Whatever rate this VDP runs at, with location 0 being "the start" of the line per internal preference.
 	Internal,
+	/// A 342-cycle/line clock with the same start position as ::Internal.
 	TMSPixel,
+	/// A 171-cycle/line clock that begins at the memory window which starts straight after ::Internal = 0.
 	TMSMemoryWindow,
-	CRT
+	/// A fixed 1368-cycle/line clock that is used to count output to the CRT.
+	CRT,
+	/// Provides the same clock rate as ::Internal but is relocated so that 0 is the start of horizontal sync — very not coincidentally,
+	/// where Grauw puts 0 on his detailed TMS and Yamaha timing diagrams.
+	FromStartOfSync,
 };
 
 template <Personality personality, Clock clk> constexpr int clock_rate() {
@@ -34,6 +41,7 @@ template <Personality personality, Clock clk> constexpr int clock_rate() {
 		case Clock::TMSMemoryWindow:	return 171;
 		case Clock::CRT:				return 1368;
 		case Clock::Internal:
+		case Clock::FromStartOfSync:
 			if constexpr (is_classic_vdp(personality)) {
 				return 342;
 			} else if constexpr (is_yamaha_vdp(personality)) {
@@ -44,60 +52,41 @@ template <Personality personality, Clock clk> constexpr int clock_rate() {
 	}
 }
 
-template <Personality personality, Clock clock> constexpr int to_internal(int length) {
-	return length * clock_rate<personality, Clock::Internal>() / clock_rate<personality, clock>();
+/// Statelessly converts @c length to the internal clock for @c personality; applies conversions per the list of clocks in left-to-right order.
+template <Personality personality, Clock head, Clock... tail> constexpr int to_internal(int length) {
+	if constexpr (head == Clock::FromStartOfSync) {
+		length = (length + LineLayout<personality>::StartOfSync) % LineLayout<personality>::CyclesPerLine;
+	} else {
+		length = length * clock_rate<personality, Clock::Internal>() / clock_rate<personality, head>();
+	}
+
+	if constexpr (!sizeof...(tail)) {
+		return length;
+	} else {
+		return to_internal<personality, tail...>(length);
+	}
 }
 
-template <Personality personality, Clock clock> constexpr int from_internal(int length) {
-	return length * clock_rate<personality, clock>() / clock_rate<personality, Clock::Internal>();
+/// Statelessly converts @c length to @c clock from the the internal clock used by VDPs of @c personality throwing away any remainder.
+template <Personality personality, Clock head, Clock... tail> constexpr int from_internal(int length) {
+	if constexpr (head == Clock::FromStartOfSync) {
+		length =
+			(length + LineLayout<personality>::CyclesPerLine - LineLayout<personality>::StartOfSync)
+				% LineLayout<personality>::CyclesPerLine;
+	} else {
+		length = length * clock_rate<personality, head>() / clock_rate<personality, Clock::Internal>();
+	}
+
+	if constexpr (!sizeof...(tail)) {
+		return length;
+	} else {
+		return to_internal<personality, tail...>(length);
+	}
 }
-
-/// Provides default timing measurements that duplicate the layout of a TMS9928's line,
-/// scaled to the clock rate specified.
-template <Personality personality> struct StandardTiming {
-	/// The total number of internal cycles per line of output.
-	constexpr static int CyclesPerLine = clock_rate<personality, Clock::Internal>();
-
-	/// The number of internal cycles that must elapse between a request to read or write and
-	/// it becoming a candidate for action.
-	constexpr static int VRAMAccessDelay = 6;
-
-	/// The first internal cycle at which pixels will be output in any mode other than text.
-	/// Pixels implicitly run from here to the end of the line.
-	constexpr static int FirstPixelCycle = 86 * CyclesPerLine / 342;
-
-	/// The first internal cycle at which pixels will be output text mode.
-	constexpr static int FirstTextCycle = 94 * CyclesPerLine / 342;
-
-	/// The final internal cycle at which pixels will be output text mode.
-	constexpr static int LastTextCycle = 334 * CyclesPerLine / 342;
-
-	// For the below, the fixed portion of line layout is:
-	//
-	//	[0, EndOfRightBorder):					right border colour
-	//	[EndOfRightBorder, StartOfSync):		blank
-	//	[StartOfSync, EndOfSync):				sync
-	//	[EndOfSync, StartOfColourBurst):		blank
-	//	[StartOfColourBurst, EndOfColourBurst):	the colour burst
-	//	[EndOfColourBurst, StartOfLeftBorder):	blank
-	//
-	// The region from StartOfLeftBorder until the end is then filled with
-	// some combination of pixels and more border, depending on the vertical
-	// position of this line and the current screen mode.
-	constexpr static int EndOfRightBorder	= 15 * CyclesPerLine / 342;
-	constexpr static int StartOfSync		= 23 * CyclesPerLine / 342;
-	constexpr static int EndOfSync			= 49 * CyclesPerLine / 342;
-	constexpr static int StartOfColourBurst	= 51 * CyclesPerLine / 342;
-	constexpr static int EndOfColourBurst	= 65 * CyclesPerLine / 342;
-	constexpr static int StartOfLeftBorder	= 73 * CyclesPerLine / 342;
-};
-
-/// Provides concrete, specific timing for the nominated personality.
-template <Personality personality> struct Timing: public StandardTiming<personality> {};
 
 /*!
 	Provides a [potentially-]stateful conversion between the external and internal clocks.
-	Unlike the other clock conversions, this one may be non-integral, requiring that
+	Unlike the other clock conversions, this may be non-integral, requiring that
 	an error term be tracked.
 */
 template <Personality personality> class ClockConverter {
@@ -174,7 +163,6 @@ template <Personality personality> class ClockConverter {
 		int cycles_error_ = 0;
 };
 
-}
 }
 
 #endif /* ClockConverter_hpp */

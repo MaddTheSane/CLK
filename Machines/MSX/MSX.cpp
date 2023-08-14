@@ -27,8 +27,9 @@
 #include "../../Components/9918/9918.hpp"
 #include "../../Components/AudioToggle/AudioToggle.hpp"
 #include "../../Components/AY38910/AY38910.hpp"
-#include "../../Components/RP5C01/RP5C01.hpp"
 #include "../../Components/KonamiSCC/KonamiSCC.hpp"
+#include "../../Components/OPx/OPLL.hpp"
+#include "../../Components/RP5C01/RP5C01.hpp"
 
 #include "../../Storage/Tape/Parsers/MSX.hpp"
 #include "../../Storage/Tape/Tape.hpp"
@@ -129,9 +130,49 @@ class AYPortHandler: public GI::AY38910::PortHandler {
 		};
 };
 
+template <bool has_opll> struct Speaker;
+
+template <> struct Speaker<false> {
+	Speaker() :
+		ay(GI::AY38910::Personality::AY38910, audio_queue),
+		audio_toggle(audio_queue),
+		scc(audio_queue),
+		mixer(ay, audio_toggle, scc),
+		speaker(mixer) {}
+
+	Concurrency::AsyncTaskQueue<false> audio_queue;
+	GI::AY38910::AY38910<false> ay;
+	Audio::Toggle audio_toggle;
+	Konami::SCC scc;
+
+	using CompundSource = Outputs::Speaker::CompoundSource<GI::AY38910::AY38910<false>, Audio::Toggle, Konami::SCC>;
+	CompundSource mixer;
+	Outputs::Speaker::PullLowpass<CompundSource> speaker;
+};
+
+template <> struct Speaker<true> {
+	Speaker() :
+		opll(audio_queue, 1),
+		ay(GI::AY38910::Personality::AY38910, audio_queue),
+		audio_toggle(audio_queue),
+		scc(audio_queue),
+		mixer(ay, audio_toggle, scc, opll),
+		speaker(mixer) {}
+
+	Concurrency::AsyncTaskQueue<false> audio_queue;
+	Yamaha::OPL::OPLL opll;
+	GI::AY38910::AY38910<false> ay;
+	Audio::Toggle audio_toggle;
+	Konami::SCC scc;
+
+	using CompundSource = Outputs::Speaker::CompoundSource<GI::AY38910::AY38910<false>, Audio::Toggle, Konami::SCC, Yamaha::OPL::OPLL>;
+	CompundSource mixer;
+	Outputs::Speaker::PullLowpass<CompundSource> speaker;
+};
+
 using Target = Analyser::Static::MSX::Target;
 
-template <Target::Model model>
+template <Target::Model model, bool has_opll>
 class ConcreteMachine:
 	public Machine,
 	public CPU::Z80::BusHandler,
@@ -148,32 +189,31 @@ class ConcreteMachine:
 	private:
 		// Provide 512kb of memory for an MSX 2; 64kb for an MSX 1. 'Slightly' arbitrary.
 		static constexpr size_t RAMSize = model == Target::Model::MSX2 ? 512 * 1024 : 64 * 1024;
-
 		static constexpr int ClockRate = 3579545;
 
 	public:
 		ConcreteMachine(const Target &target, const ROMMachine::ROMFetcher &rom_fetcher):
 			z80_(*this),
 			i8255_(i8255_port_handler_),
-			ay_(GI::AY38910::Personality::AY38910, audio_queue_),
-			audio_toggle_(audio_queue_),
-			scc_(audio_queue_),
-			mixer_(ay_, audio_toggle_, scc_),
-			speaker_(mixer_),
 			tape_player_(3579545 * 2),
-			i8255_port_handler_(*this, audio_toggle_, tape_player_),
+			i8255_port_handler_(*this, speaker_.audio_toggle, tape_player_),
 			ay_port_handler_(tape_player_),
 			memory_slots_{{*this}, {*this}, {*this}, {*this}},
 			clock_(ClockRate) {
 			set_clock_rate(ClockRate);
 			clear_all_keys();
 
-			ay_.set_port_handler(&ay_port_handler_);
-			speaker_.set_input_rate(3579545.0f / 2.0f);
+			speaker_.ay.set_port_handler(&ay_port_handler_);
+			speaker_.speaker.set_input_rate(3579545.0f / 2.0f);
 			tape_player_.set_clocking_hint_observer(this);
 
 			// Set the AY to 50% of available volume, the toggle to 10% and leave 40% for an SCC.
-			mixer_.set_relative_volumes({0.5f, 0.1f, 0.4f});
+			// If there is an OPLL, give it equal volume to the AY and expect some clipping.
+			if constexpr (has_opll) {
+				speaker_.mixer.set_relative_volumes({0.5f, 0.1f, 0.4f, 0.5f});
+			} else {
+				speaker_.mixer.set_relative_volumes({0.5f, 0.1f, 0.4f});
+			}
 
 			// Install the proper TV standard and select an ideal BIOS name.
 			const std::string machine_name = "MSX";
@@ -188,7 +228,7 @@ class ConcreteMachine:
 			uint8_t character_generator = 1;	/* 0 = Japan, 1 = USA, etc, 2 = USSR */
 			uint8_t date_format = 1;			/* 0 = Y/M/D, 1 = M/D/Y, 2 = D/M/Y */
 			uint8_t keyboard = 1;				/* 0 = Japan, 1 = USA, 2 = France, 3 = UK, 4 = Germany, 5 = USSR, 6 = Spain */
-			ROM::Name regional_bios_name;
+			[[maybe_unused]] ROM::Name regional_bios_name;
 
 			switch(target.region) {
 				default:
@@ -229,11 +269,12 @@ class ConcreteMachine:
 
 			// Fetch the necessary ROMs; try the region-specific ROM first,
 			// but failing that fall back on patching the main one.
-			ROM::Request request;
+			ROM::Request request = bios_request;
 			if(target.has_disk_drive) {
-				request = ROM::Request(ROM::Name::MSXDOS) && bios_request;
-			} else {
-				request = bios_request;
+				request = request && ROM::Request(ROM::Name::MSXDOS);
+			}
+			if(target.has_msx_music) {
+				request = request && ROM::Request(ROM::Name::MSXMusic);
 			}
 
 			auto roms = rom_fetcher(request);
@@ -294,6 +335,14 @@ class ConcreteMachine:
 				disk_slot().map_handler(0x6000, 0x2000);
 			}
 
+			// Grab the MSX-MUSIC ROM if applicable.
+			if(target.has_msx_music) {
+				std::vector<uint8_t> &msx_music = roms.find(ROM::Name::MSXMusic)->second;
+				msx_music.resize(65536);
+				msx_music_slot().set_source(msx_music);
+				msx_music_slot().map(0, 0, 0x10000);
+			}
+
 			// Insert the media.
 			insert_media(target.media);
 
@@ -307,7 +356,7 @@ class ConcreteMachine:
 		}
 
 		~ConcreteMachine() {
-			audio_queue_.flush();
+			speaker_.audio_queue.flush();
 		}
 
 		void set_scan_target(Outputs::Display::ScanTarget *scan_target) final {
@@ -319,15 +368,15 @@ class ConcreteMachine:
 		}
 
 		void set_display_type(Outputs::Display::DisplayType display_type) final {
-			vdp_->set_display_type(display_type);
+			vdp_.last_valid()->set_display_type(display_type);
 		}
 
 		Outputs::Display::DisplayType get_display_type() const final {
-			return vdp_->get_display_type();
+			return vdp_.last_valid()->get_display_type();
 		}
 
 		Outputs::Speaker::Speaker *get_speaker() final {
-			return &speaker_;
+			return &speaker_.speaker;
 		}
 
 		void run_for(const Cycles cycles) final {
@@ -365,7 +414,7 @@ class ConcreteMachine:
 							cartridge_primary().handler = std::make_unique<Cartridge::KonamiROMSlotHandler>(static_cast<MSX::MemorySlot &>(slot));
 						break;
 						case Analyser::Static::MSX::Cartridge::KonamiWithSCC:
-							cartridge_primary().handler = std::make_unique<Cartridge::KonamiWithSCCROMSlotHandler>(static_cast<MSX::MemorySlot &>(slot), scc_);
+							cartridge_primary().handler = std::make_unique<Cartridge::KonamiWithSCCROMSlotHandler>(static_cast<MSX::MemorySlot &>(slot), speaker_.scc);
 						break;
 						case Analyser::Static::MSX::Cartridge::ASCII8kb:
 							cartridge_primary().handler = std::make_unique<Cartridge::ASCII8kbROMSlotHandler>(static_cast<MSX::MemorySlot &>(slot));
@@ -472,8 +521,8 @@ class ConcreteMachine:
 								i8255_.write(0xab, 0x8);
 
 								// Disable interrupts.
-								z80_.set_value_of_register(CPU::Z80::Register::IFF1, 0);
-								z80_.set_value_of_register(CPU::Z80::Register::IFF2, 0);
+								z80_.set_value_of(CPU::Z80::Register::IFF1, 0);
+								z80_.set_value_of(CPU::Z80::Register::IFF2, 0);
 
 								// Use the parser to find a header, and if one is found then populate
 								// LOWLIM and WINWID, and reset carry. Otherwise set carry.
@@ -482,9 +531,9 @@ class ConcreteMachine:
 								if(new_speed) {
 									ram()[0xfca4] = new_speed->minimum_start_bit_duration;
 									ram()[0xfca5] = new_speed->low_high_disrimination_duration;
-									z80_.set_value_of_register(CPU::Z80::Register::Flags, 0);
+									z80_.set_value_of(CPU::Z80::Register::Flags, 0);
 								} else {
-									z80_.set_value_of_register(CPU::Z80::Register::Flags, 1);
+									z80_.set_value_of(CPU::Z80::Register::Flags, 1);
 								}
 
 								// RET.
@@ -507,10 +556,10 @@ class ConcreteMachine:
 								// If a byte was found, return it with carry unset. Otherwise set carry to
 								// indicate error.
 								if(next_byte >= 0) {
-									z80_.set_value_of_register(CPU::Z80::Register::A, uint16_t(next_byte));
-									z80_.set_value_of_register(CPU::Z80::Register::Flags, 0);
+									z80_.set_value_of(CPU::Z80::Register::A, uint16_t(next_byte));
+									z80_.set_value_of(CPU::Z80::Register::Flags, 0);
 								} else {
-									z80_.set_value_of_register(CPU::Z80::Register::Flags, 1);
+									z80_.set_value_of(CPU::Z80::Register::Flags, 1);
 								}
 
 								// RET.
@@ -568,6 +617,11 @@ class ConcreteMachine:
 
 					case CPU::Z80::PartialMachineCycle::Input:
 						switch(address & 0xff) {
+							case 0x9a:	case 0x9b:
+								if constexpr (vdp_model() == TI::TMS::TMS9918A) {
+									break;
+								}
+								[[fallthrough]];
 							case 0x98:	case 0x99:
 								*cycle.value = vdp_->read(address);
 								z80_.set_interrupt_line(vdp_->get_interrupt_line());
@@ -575,7 +629,7 @@ class ConcreteMachine:
 
 							case 0xa2:
 								update_audio();
-								*cycle.value = GI::AY38910::Utility::read(ay_);
+								*cycle.value = GI::AY38910::Utility::read(speaker_.ay);
 							break;
 
 							case 0xa8:	case 0xa9:
@@ -590,8 +644,15 @@ class ConcreteMachine:
 								*cycle.value = clock_.read(next_clock_register_);
 							break;
 
+							case 0xfc: case 0xfd: case 0xfe: case 0xff:
+								if constexpr (model != Target::Model::MSX1) {
+									*cycle.value = ram_mapper_[(address & 0xff) - 0xfc];
+									break;
+								}
+								[[fallthrough]];
+
 							default:
-								printf("Unhandled read %02x\n", address & 0xff);
+//								printf("Unhandled read %02x\n", address & 0xff);
 								*cycle.value = 0xff;
 							break;
 						}
@@ -600,6 +661,11 @@ class ConcreteMachine:
 					case CPU::Z80::PartialMachineCycle::Output: {
 						const int port = address & 0xff;
 						switch(port) {
+							case 0x9a:	case 0x9b:
+								if constexpr (vdp_model() == TI::TMS::TMS9918A) {
+									break;
+								}
+								[[fallthrough]];
 							case 0x98:	case 0x99:
 								vdp_->write(address, *cycle.value);
 								z80_.set_interrupt_line(vdp_->get_interrupt_line());
@@ -607,7 +673,7 @@ class ConcreteMachine:
 
 							case 0xa0:	case 0xa1:
 								update_audio();
-								GI::AY38910::Utility::write(ay_, port == 0xa1, *cycle.value);
+								GI::AY38910::Utility::write(speaker_.ay, port == 0xa1, *cycle.value);
 							break;
 
 							case 0xa8:	case 0xa9:
@@ -633,6 +699,8 @@ class ConcreteMachine:
 									break;
 								}
 
+								ram_mapper_[port - 0xfc] = *cycle.value;
+
 								// Apply to RAM.
 								//
 								// On a real MSX this may also affect other slots.
@@ -648,6 +716,13 @@ class ConcreteMachine:
 
 								update_paging();
 							} break;
+
+							case 0x7c:	case 0x7d:
+								if constexpr (has_opll) {
+									speaker_.opll.write(address, *cycle.value);
+									break;
+								}
+								[[fallthrough]];
 
 							default:
 								printf("Unhandled write %02x of %02x\n", address & 0xff, *cycle.value);
@@ -706,7 +781,7 @@ class ConcreteMachine:
 			}
 			if(outputs & Output::Audio) {
 				update_audio();
-				audio_queue_.perform();
+				speaker_.audio_queue.perform();
 			}
 		}
 
@@ -723,8 +798,8 @@ class ConcreteMachine:
 		}
 
 		void set_key_state(uint16_t key, bool is_pressed) final {
-			int mask = 1 << (key & 7);
-			int line = key >> 4;
+			const int mask = 1 << (key & 7);
+			const int line = key >> 4;
 			if(is_pressed) key_states_[line] &= ~mask; else key_states_[line] |= mask;
 		}
 
@@ -755,7 +830,7 @@ class ConcreteMachine:
 
 		// MARK: - Activity::Source
 		void set_activity_observer(Activity::Observer *observer) final {
-			DiskROM *handler = disk_handler();
+			DiskROM *const handler = disk_handler();
 			if(handler) {
 				handler->set_activity_observer(observer);
 			}
@@ -769,7 +844,7 @@ class ConcreteMachine:
 
 	private:
 		void update_audio() {
-			speaker_.run_for(audio_queue_, time_since_ay_update_.divide_cycles(Cycles(2)));
+			speaker_.speaker.run_for(speaker_.audio_queue, time_since_ay_update_.divide_cycles(Cycles(2)));
 		}
 
 		class i8255PortHandler: public Intel::i8255::PortHandler {
@@ -836,13 +911,6 @@ class ConcreteMachine:
 		JustInTimeActor<TI::TMS::TMS9918<vdp_model()>> vdp_;
 		Intel::i8255::i8255<i8255PortHandler> i8255_;
 
-		Concurrency::AsyncTaskQueue<false> audio_queue_;
-		GI::AY38910::AY38910<false> ay_;
-		Audio::Toggle audio_toggle_;
-		Konami::SCC scc_;
-		Outputs::Speaker::CompoundSource<GI::AY38910::AY38910<false>, Audio::Toggle, Konami::SCC> mixer_;
-		Outputs::Speaker::PullLowpass<Outputs::Speaker::CompoundSource<GI::AY38910::AY38910<false>, Audio::Toggle, Konami::SCC>> speaker_;
-
 		Storage::Tape::BinaryTapePlayer tape_player_;
 		bool tape_player_is_sleeping_ = false;
 		bool allow_fast_tape_ = false;
@@ -857,6 +925,7 @@ class ConcreteMachine:
 		}
 
 		i8255PortHandler i8255_port_handler_;
+		Speaker<has_opll> speaker_;
 		AYPortHandler ay_port_handler_;
 
 		/// The current primary and secondary slot selections; the former retains whatever was written
@@ -867,6 +936,7 @@ class ConcreteMachine:
 		// 8kb resolution is used by some cartride titles.
 		const uint8_t *read_pointers_[8];
 		uint8_t *write_pointers_[8];
+		uint8_t ram_mapper_[4]{};
 
 		/// Optionally attaches non-default logic to any of the four things selectable
 		/// via the primary slot register.
@@ -919,7 +989,7 @@ class ConcreteMachine:
 		//
 		//	Slot 3-1 holds the BIOS extension ROM.
 		//
-		//	[Slot 3-2 will likely hold MSX-MUSIC, but that's TODO]
+		//	Slot 3-2 holds the MSX-MUSIC.
 		//
 		MemorySlot &bios_slot() {
 			return memory_slots_[0].subslot(0);
@@ -929,6 +999,9 @@ class ConcreteMachine:
 		}
 		MemorySlot &extension_rom_slot() {
 			return memory_slots_[3].subslot(1);
+		}
+		MemorySlot &msx_music_slot() {
+			return memory_slots_[3].subslot(2);
 		}
 
 		MemorySlot &cartridge_slot() {
@@ -950,7 +1023,8 @@ class ConcreteMachine:
 		}
 		DiskROM *disk_handler() {
 			return dynamic_cast<DiskROM *>(disk_primary().handler.get());
-		}};
+		}
+};
 
 }
 
@@ -958,10 +1032,18 @@ using namespace MSX;
 
 Machine *Machine::MSX(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
 	const auto msx_target = dynamic_cast<const Target *>(target);
-	switch(msx_target->model) {
-		default:					return nullptr;
-		case Target::Model::MSX1:	return new ConcreteMachine<Target::Model::MSX1>(*msx_target, rom_fetcher);
-		case Target::Model::MSX2:	return new ConcreteMachine<Target::Model::MSX2>(*msx_target, rom_fetcher);
+	if(msx_target->has_msx_music) {
+		switch(msx_target->model) {
+			default: 					return nullptr;
+			case Target::Model::MSX1:	return new ConcreteMachine<Target::Model::MSX1, true>(*msx_target, rom_fetcher);
+			case Target::Model::MSX2:	return new ConcreteMachine<Target::Model::MSX2, true>(*msx_target, rom_fetcher);
+		}
+	} else {
+		switch(msx_target->model) {
+			default: 					return nullptr;
+			case Target::Model::MSX1:	return new ConcreteMachine<Target::Model::MSX1, false>(*msx_target, rom_fetcher);
+			case Target::Model::MSX2:	return new ConcreteMachine<Target::Model::MSX2, false>(*msx_target, rom_fetcher);
+		}
 	}
 }
 

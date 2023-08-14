@@ -14,19 +14,18 @@
 #include "../StaticAnalyser.hpp"
 #include <string>
 
-namespace Analyser {
-namespace Static {
-namespace MSX {
+namespace Analyser::Static::MSX {
 
 struct Target: public ::Analyser::Static::Target, public Reflection::StructImpl<Target> {
 	bool has_disk_drive = false;
+	bool has_msx_music = true;
 	std::string loading_command;
 
 	ReflectableEnum(Model,
 		MSX1,
 		MSX2
 	);
-	Model model = Model::MSX1;
+	Model model = Model::MSX2;
 
 	ReflectableEnum(Region,
 		Japan,
@@ -38,6 +37,7 @@ struct Target: public ::Analyser::Static::Target, public Reflection::StructImpl<
 	Target(): Analyser::Static::Target(Machine::MSX) {
 		if(needs_declare()) {
 			DeclareField(has_disk_drive);
+			DeclareField(has_msx_music);
 			DeclareField(region);
 			AnnounceEnum(Region);
 			DeclareField(model);
@@ -46,8 +46,6 @@ struct Target: public ::Analyser::Static::Target, public Reflection::StructImpl<
 	}
 };
 
-}
-}
 }
 
 #endif /* Analyser_Static_MSX_Target_h */

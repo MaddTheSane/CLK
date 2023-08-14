@@ -10,6 +10,7 @@
 #define ROMCatalogue_hpp
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <optional>
@@ -119,6 +120,7 @@ enum Name {
 
 	MSX2GenericBIOS,
 	MSX2Extension,
+	MSXMusic,
 
 	// Oric.
 	OricColourROM,
