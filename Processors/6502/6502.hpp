@@ -15,6 +15,7 @@
 
 #include "../6502Esque/6502Esque.hpp"
 #include "../6502Esque/Implementation/LazyFlags.hpp"
+#include "../../Numeric/Carry.hpp"
 #include "../../Numeric/RegisterSizes.hpp"
 #include "../../ClockReceiver/ClockReceiver.hpp"
 
@@ -124,6 +125,12 @@ class ProcessorBase: public ProcessorStorage {
 			@returns @c true if the 6502 is jammed; @c false otherwise.
 		*/
 		inline bool is_jammed() const;
+
+		/*!
+			FOR TESTING PURPOSES ONLY: forces the processor into a state where
+			the next thing it intends to do is fetch a new opcode.
+		*/
+		inline void restart_operation_fetch();
 };
 
 /*!
