@@ -63,6 +63,10 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 	@IBOutlet var oricModelTypeButton: NSPopUpButton!
 	@IBOutlet var oricDiskInterfaceButton: NSPopUpButton!
 
+	// MARK: - PC compatible properties
+	@IBOutlet var pcVideoAdaptorButton: NSPopUpButton!
+	@IBOutlet var pcSpeedButton: NSPopUpButton!
+
 	// MARK: - Spectrum properties
 	@IBOutlet var spectrumModelTypeButton: NSPopUpButton!
 
@@ -84,10 +88,15 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 
 		// Set up data soure.
 
-		// TEMPORARY: remove the Apple IIgs option. It's not yet a fully-working machine; no need to publicise it.
-		let appleIIgsTabIndex = machineSelector.indexOfTabViewItem(withIdentifier: "appleiigs")
-		machineSelector.removeTabViewItem(machineSelector.tabViewItem(at: appleIIgsTabIndex))
+		// TEMPORARY: remove the Apple IIgs and PC compatible options.
+		// Neither is yet a fully-working machine.
+		#if !DEBUG
+		for hidden in ["appleiigs"] {
+			let tabIndex = machineSelector.indexOfTabViewItem(withIdentifier: hidden)
+			machineSelector.removeTabViewItem(machineSelector.tabViewItem(at: tabIndex))
+		}
 		machineNameTable.reloadData()
+		#endif
 
 		// Machine type
 		if let machineIdentifier = standardUserDefaults.string(forKey: "new.machine") {
@@ -144,6 +153,10 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 		// Oric settings
 		oricDiskInterfaceButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.oricDiskInterface"))
 		oricModelTypeButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.oricModel"))
+
+		// PC settings
+		pcVideoAdaptorButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.pcVideoAdaptor"))
+		pcSpeedButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.pcSpeed"))
 
 		// Spectrum settings
 		spectrumModelTypeButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.spectrumModel"))
@@ -210,6 +223,10 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 		// Oric settings
 		standardUserDefaults.set(oricDiskInterfaceButton.selectedTag(), forKey: "new.oricDiskInterface")
 		standardUserDefaults.set(oricModelTypeButton.selectedTag(), forKey: "new.oricModel")
+
+		// PC settings
+		standardUserDefaults.set(pcVideoAdaptorButton.selectedTag(), forKey: "new.pcVideoAdaptor")
+		standardUserDefaults.set(pcSpeedButton.selectedTag(), forKey: "new.pcSpeed")
 
 		// Spectrum settings
 		standardUserDefaults.set(spectrumModelTypeButton.selectedTag(), forKey: "new.spectrumModel")
@@ -395,6 +412,19 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 				}
 
 				return CSStaticAnalyser(oricModel: model, diskInterface: diskInterface)
+
+			case "pc":
+				var videoAdaptor: CSPCCompatibleVideoAdaptor = .MDA
+				switch pcVideoAdaptorButton.selectedTag() {
+					case 1:		videoAdaptor = .CGA
+					default:	break
+				}
+				var speed: CSPCCompatibleSpeed = .original
+				switch pcSpeedButton.selectedTag() {
+					case 80286:	speed = .turbo
+					default:	break
+				}
+				return CSStaticAnalyser(pcCompatibleSpeed: speed, videoAdaptor: videoAdaptor)
 
 			case "spectrum":
 				var model: CSMachineSpectrumModel = .plus2a

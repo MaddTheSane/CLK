@@ -512,7 +512,6 @@ Description::Description(Name name) {
 
 		case Name::AtariSTTOS100:		*this = Description(name, "AtariST", "the UK TOS 1.00 ROM", "tos100.img", 192*1024, 0x1a586c64u);		break;
 		case Name::AtariSTTOS104:		*this = Description(name, "AtariST", "the UK TOS 1.04 ROM", "tos104.img", 192*1024, 0xa50d1d43u);		break;
-		case Name::AtariSTEmuTOS192:	*this = Description(name, "AtariST", "the UK EmuTOS 1.92 ROM", "etos192uk.img", 192*1024, 0xfc3b9e61u);	break;
 
 		case Name::ColecoVisionBIOS:
 			*this = Description(name, "ColecoVision", "the ColecoVision BIOS", "coleco.rom", 8*1024, 0x3aa93ef3u);
@@ -566,6 +565,29 @@ Description::Description(Name name) {
 		case Name::OricJasmin:			*this = Description(name, "Oric", "the Oric Jasmin ROM", "jasmin.rom", 2*1024, 0x37220e89u);		break;
 		case Name::OricMicrodisc:		*this = Description(name, "Oric", "the Oric Microdisc ROM", "microdisc.rom", 8*1024, 0xa9664a9cu);	break;
 		case Name::Oric8DOSBoot:		*this = Description(name, "Oric", "the 8DOS boot ROM", "8dos.rom", 512, 0x49a74c06u);				break;
+
+		case Name::PCCompatibleGLaBIOS:
+			*this = Description(name, "PCCompatible", "8088 GLaBIOS 0.2.5", "GLABIOS_0.2.5_8T.ROM", 8 * 1024, 0x9576944cu);
+		break;
+		case Name::PCCompatibleGLaTICK:
+			*this = Description(name, "PCCompatible", "AT GLaTICK 0.8.5", "GLaTICK_0.8.5_AT.ROM", 2 * 1024, 0x371ea3f1u);
+		break;
+		case Name::PCCompatiblePhoenix80286BIOS:
+			*this = Description(name, "PCCompatible", "Phoenix 80286 BIOS 3.05", "Phoenix 80286 ROM BIOS Version 3.05.bin", 32 * 1024, 0x8d0d318au);
+		break;
+		case Name::PCCompatibleCGAFont:
+			*this = Description(name, "PCCompatible", "IBM's CGA font", "CGA.F08", 8 * 256, 0xa362ffe6u);
+		break;
+		case Name::PCCompatibleMDAFont:
+			*this = Description(name, "PCCompatible", "IBM's MDA font", "EUMDA9.F14", 14 * 256, 0x7754882au);
+		break;
+		case Name::PCCompatibleEGABIOS:
+			*this = Description(name, "PCCompatible", "IBM's EGA BIOS", "ibm_6277356_ega_card_u44_27128.bin", 16 * 1024, 0x2f2fbc40u);
+		break;
+		case Name::PCCompatibleVGABIOS:
+			*this = Description(name, "PCCompatible", "IBM's VGA BIOS", "ibm_vga.bin", 32 * 1024, 0x03b3f90du);
+		break;
+
 
 		// TODO: CRCs below are incomplete, at best.
 		case Name::MSXGenericBIOS:	*this = Description(name, "MSX", "a generix MSX BIOS", "msx.rom", 32*1024, 0x94ee12f3u);			break;

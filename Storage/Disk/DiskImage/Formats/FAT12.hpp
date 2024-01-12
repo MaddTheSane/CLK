@@ -6,8 +6,8 @@
 //  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
-#ifndef MSXDSK_hpp
-#define MSXDSK_hpp
+#ifndef FAT12_hpp
+#define FAT12_hpp
 
 #include "MFMSectorDump.hpp"
 
@@ -36,4 +36,4 @@ class FAT12: public MFMSectorDump {
 
 }
 
-#endif /* MSXDSK_hpp */
+#endif /* FAT12_hpp */

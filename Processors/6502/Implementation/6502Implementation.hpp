@@ -223,10 +223,45 @@ template <Personality personality, typename T, bool uses_ready_line> void Proces
 					case OperationSTY:	operand_ = y_;											continue;
 					case OperationSTZ:	operand_ = 0;											continue;
 					case OperationSAX:	operand_ = a_ & x_;										continue;
-					case OperationSHA:	operand_ = a_ & x_ & (address_.halves.high+1);			continue;
-					case OperationSHX:	operand_ = x_ & (address_.halves.high+1);				continue;
-					case OperationSHY:	operand_ = y_ & (address_.halves.high+1);				continue;
-					case OperationSHS:	s_ = a_ & x_; operand_ = s_ & (address_.halves.high+1);	continue;
+
+					// For the next four, intended effect is:
+					//
+					//	CPU calculates what address would be if a page boundary is crossed. The high byte of that
+					//	takes part in the AND. If the page boundary is actually crossed then the total AND takes
+					//	the place of the intended high byte.
+					//
+					// Within this implementation, there's a bit of after-the-effect judgment on whether a page
+					// boundary was crossed.
+					case OperationSHA:
+						if(address_.full != next_address_.full) {
+							address_.halves.high = operand_ = a_ & x_ & address_.halves.high;
+						} else {
+							operand_ = a_ & x_ & (address_.halves.high + 1);
+						}
+					continue;
+					case OperationSHX:
+						if(address_.full != next_address_.full) {
+							address_.halves.high = operand_ = x_ & address_.halves.high;
+						} else {
+							operand_ = x_ & (address_.halves.high + 1);
+						}
+					continue;
+					case OperationSHY:
+						if(address_.full != next_address_.full) {
+							address_.halves.high = operand_ = y_ & address_.halves.high;
+						} else {
+							operand_ = y_ & (address_.halves.high + 1);
+						}
+					continue;
+					case OperationSHS:
+						if(address_.full != next_address_.full) {
+							s_ = a_ & x_;
+							address_.halves.high = operand_ = s_ & address_.halves.high;
+						} else {
+							s_ = a_ & x_;
+							operand_ = s_ & (address_.halves.high + 1);
+						}
+					continue;
 
 					case OperationLXA:
 						a_ = x_ = (a_ | 0xee) & operand_;
@@ -292,7 +327,7 @@ template <Personality personality, typename T, bool uses_ready_line> void Proces
 
 							// All flags are set based only on the decimal result.
 							flags_.zero_result = result;
-							flags_.carry = Numeric::carried_out<7>(a_, operand_, result);
+							flags_.carry = Numeric::carried_out<true, 7>(a_, operand_, result);
 							flags_.negative_result = result;
 							flags_.overflow = (( (result ^ a_) & (result ^ operand_) ) & 0x80) >> 1;
 
@@ -342,7 +377,7 @@ template <Personality personality, typename T, bool uses_ready_line> void Proces
 						if(flags_.decimal && has_decimal_mode(personality)) {
 							uint8_t result = a_ + operand_ + flags_.carry;
 							flags_.zero_result = result;
-							flags_.carry = Numeric::carried_out<7>(a_, operand_, result);
+							flags_.carry = Numeric::carried_out<true, 7>(a_, operand_, result);
 
 							// General ADC logic:
 							//
@@ -509,11 +544,6 @@ template <Personality personality, typename T, bool uses_ready_line> void Proces
 							break;
 						}
 					continue;
-					case CycleAddXToAddressLowRead:
-						next_address_.full = address_.full + x_;
-						address_.halves.low = next_address_.halves.low;
-						page_crossing_stall_read();
-					break;
 					case CycleAddYToAddressLow:
 						next_address_.full = address_.full + y_;
 						address_.halves.low = next_address_.halves.low;
@@ -522,16 +552,43 @@ template <Personality personality, typename T, bool uses_ready_line> void Proces
 							break;
 						}
 					continue;
-					case CycleAddYToAddressLowRead:
-						next_address_.full = address_.full + y_;
-						address_.halves.low = next_address_.halves.low;
-						page_crossing_stall_read();
-					break;
 
 #undef page_crossing_stall_read
 
+					case CycleAddXToAddressLowRead:
+						next_address_.full = address_.full + x_;
+						address_.halves.low = next_address_.halves.low;
+
+						// Cf. https://groups.google.com/g/comp.sys.apple2/c/RuTGaRxu5Iw/m/uyFLEsF8ceIJ
+						//
+						// STA abs,X has been fixed for the PX (page-crossing) case by adding a dummy read of the
+						// program counter, so the change was rW -> W. In the non-PX case it still reads the destination
+						// address, so there is no change: RW -> RW.
+						if(!is_65c02(personality) || next_address_.full == address_.full) {
+							throwaway_read(address_.full);
+						} else {
+							throwaway_read(pc_.full - 1);
+						}
+					break;
+					case CycleAddYToAddressLowRead:
+						next_address_.full = address_.full + y_;
+						address_.halves.low = next_address_.halves.low;
+
+						// A similar rule as for above applies; this one adjusts (abs, y) addressing.
+
+						if(!is_65c02(personality) || next_address_.full == address_.full) {
+							throwaway_read(address_.full);
+						} else {
+							throwaway_read(pc_.full - 1);
+						}
+					break;
+
 					case OperationCorrectAddressHigh:
-						address_.full = next_address_.full;
+						// Preserve the uncorrected address in next_address_ (albeit that it's
+						// now a misnomer) as some of the more obscure illegal operations end
+						// up acting differently if an adjustment was necessary and therefore need
+						// a crumb trail to test for that.
+						std::swap(address_.full, next_address_.full);
 					continue;
 					case CycleIncrementPCFetchAddressLowFromOperand:
 						pc_.full++;
@@ -656,7 +713,7 @@ template <Personality personality, typename T, bool uses_ready_line> void Proces
 					case OperationTSX: flags_.set_nz(x_ = s_);	continue;
 
 					case OperationARR:
-						if(flags_.decimal) {
+						if(flags_.decimal && has_decimal_mode(personality)) {
 							a_ &= operand_;
 							uint8_t unshiftedA = a_;
 							a_ = uint8_t((a_ >> 1) | (flags_.carry << 7));

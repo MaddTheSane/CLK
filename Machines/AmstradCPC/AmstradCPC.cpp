@@ -389,9 +389,7 @@ class CRTCBusHandler {
 			// A black border can be output via crt_.output_blank for a minor performance
 			// win; otherwise paint whatever the border colour really is.
 			if(border_) {
-				uint8_t *const colour_pointer = static_cast<uint8_t *>(crt_.begin_data(1));
-				if(colour_pointer) *colour_pointer = border_;
-				crt_.output_level(length * 16);
+				crt_.output_level<uint8_t>(length * 16, border_);
 			} else {
 				crt_.output_blank(length * 16);
 			}
@@ -585,6 +583,10 @@ class CRTCBusHandler {
 
 		InterruptTimer &interrupt_timer_;
 };
+using CRTC = Motorola::CRTC::CRTC6845<
+	CRTCBusHandler,
+	Motorola::CRTC::Personality::HD6845S,
+	Motorola::CRTC::CursorType::None>;
 
 /*!
 	Holds and vends the current keyboard state, acting as the AY's port handler.
@@ -683,7 +685,7 @@ class i8255PortHandler : public Intel::i8255::PortHandler {
 	public:
 		i8255PortHandler(
 			KeyboardState &key_state,
-			const Motorola::CRTC::CRTC6845<CRTCBusHandler> &crtc,
+			const CRTC &crtc,
 			AYDeferrer &ay,
 			Storage::Tape::BinaryTapePlayer &tape_player) :
 				ay_(ay),
@@ -742,7 +744,7 @@ class i8255PortHandler : public Intel::i8255::PortHandler {
 
 	private:
 		AYDeferrer &ay_;
-		const Motorola::CRTC::CRTC6845<CRTCBusHandler> &crtc_;
+		const CRTC &crtc_;
 		KeyboardState &key_state_;
 		Storage::Tape::BinaryTapePlayer &tape_player_;
 };
@@ -767,7 +769,7 @@ template <bool has_fdc> class ConcreteMachine:
 		ConcreteMachine(const Analyser::Static::AmstradCPC::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
 			z80_(*this),
 			crtc_bus_handler_(ram_, interrupt_timer_),
-			crtc_(Motorola::CRTC::HD6845S, crtc_bus_handler_),
+			crtc_(crtc_bus_handler_),
 			i8255_port_handler_(key_state_, crtc_, ay_, tape_player_),
 			i8255_(i8255_port_handler_),
 			tape_player_(8000000),
@@ -1219,7 +1221,7 @@ template <bool has_fdc> class ConcreteMachine:
 		CPU::Z80::Processor<ConcreteMachine, false, true> z80_;
 
 		CRTCBusHandler crtc_bus_handler_;
-		Motorola::CRTC::CRTC6845<CRTCBusHandler> crtc_;
+		CRTC crtc_;
 
 		AYDeferrer ay_;
 		i8255PortHandler i8255_port_handler_;

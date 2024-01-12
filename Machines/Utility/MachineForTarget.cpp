@@ -25,6 +25,7 @@
 #include "../MasterSystem/MasterSystem.hpp"
 #include "../MSX/MSX.hpp"
 #include "../Oric/Oric.hpp"
+#include "../PCCompatible/PCCompatible.hpp"
 #include "../Sinclair/ZX8081/ZX8081.hpp"
 #include "../Sinclair/ZXSpectrum/ZXSpectrum.hpp"
 
@@ -41,6 +42,7 @@
 #include "../../Analyser/Static/Macintosh/Target.hpp"
 #include "../../Analyser/Static/MSX/Target.hpp"
 #include "../../Analyser/Static/Oric/Target.hpp"
+#include "../../Analyser/Static/PCCompatible/Target.hpp"
 #include "../../Analyser/Static/Sega/Target.hpp"
 #include "../../Analyser/Static/ZX8081/Target.hpp"
 #include "../../Analyser/Static/ZXSpectrum/Target.hpp"
@@ -69,6 +71,7 @@ Machine::DynamicMachine *Machine::MachineForTarget(const Analyser::Static::Targe
 			Bind(Enterprise)
 			Bind(MSX)
 			Bind(Oric)
+			Bind(PCCompatible)
 			BindD(Sega::MasterSystem, MasterSystem)
 			BindD(Sinclair::ZX8081, ZX8081)
 			BindD(Sinclair::ZXSpectrum, ZXSpectrum)
@@ -139,6 +142,7 @@ std::string Machine::ShortNameForTargetMachine(const Analyser::Machine machine) 
 		case Analyser::Machine::MasterSystem:	return "MasterSystem";
 		case Analyser::Machine::MSX:			return "MSX";
 		case Analyser::Machine::Oric:			return "Oric";
+		case Analyser::Machine::PCCompatible:	return "PCCompatible";
 		case Analyser::Machine::Vic20:			return "Vic20";
 		case Analyser::Machine::ZX8081:			return "ZX8081";
 		case Analyser::Machine::ZXSpectrum:		return "ZXSpectrum";
@@ -162,6 +166,7 @@ std::string Machine::LongNameForTargetMachine(Analyser::Machine machine) {
 		case Analyser::Machine::MasterSystem:	return "Sega Master System";
 		case Analyser::Machine::MSX:			return "MSX";
 		case Analyser::Machine::Oric:			return "Oric";
+		case Analyser::Machine::PCCompatible:	return "PC Compatible";
 		case Analyser::Machine::Vic20:			return "Vic 20";
 		case Analyser::Machine::ZX8081:			return "ZX80/81";
 		case Analyser::Machine::ZXSpectrum:		return "ZX Spectrum";
@@ -192,6 +197,7 @@ std::vector<std::string> Machine::AllMachines(Type type, bool long_names) {
 		AddName(Macintosh);
 		AddName(MSX);
 		AddName(Oric);
+		AddName(PCCompatible);
 		AddName(Vic20);
 		AddName(ZX8081);
 		AddName(ZXSpectrum);
@@ -218,6 +224,7 @@ std::map<std::string, std::unique_ptr<Reflection::Struct>> Machine::AllOptionsBy
 	Emplace(MasterSystem, Sega::MasterSystem::Machine);
 	Emplace(MSX, MSX::Machine);
 	Emplace(Oric, Oric::Machine);
+	Emplace(PCCompatible, PCCompatible::Machine);
 	Emplace(Vic20, Commodore::Vic20::Machine);
 	Emplace(ZX8081, Sinclair::ZX8081::Machine);
 	Emplace(ZXSpectrum, Sinclair::ZXSpectrum::Machine);
@@ -244,6 +251,7 @@ std::map<std::string, std::unique_ptr<Analyser::Static::Target>> Machine::Target
 	Add(Macintosh);
 	Add(MSX);
 	Add(Oric);
+	Add(PCCompatible);
 	AddMapped(Vic20, Commodore);
 	Add(ZX8081);
 	Add(ZXSpectrum);

@@ -123,6 +123,16 @@ typedef NS_ENUM(NSInteger, CSMachineMSXRegion) {
 	CSMachineMSXRegionJapanese,
 };
 
+typedef NS_ENUM(NSInteger, CSPCCompatibleSpeed) {
+	CSPCCompatibleSpeedOriginal,
+	CSPCCompatibleSpeedTurbo,
+};
+
+typedef NS_ENUM(NSInteger, CSPCCompatibleVideoAdaptor) {
+	CSPCCompatibleVideoAdaptorMDA,
+	CSPCCompatibleVideoAdaptorCGA,
+};
+
 typedef int Kilobytes;
 
 @interface CSStaticAnalyser : NSObject
@@ -143,6 +153,7 @@ typedef int Kilobytes;
 - (instancetype)initWithVic20Region:(CSMachineVic20Region)region memorySize:(Kilobytes)memorySize hasC1540:(BOOL)hasC1540;
 - (instancetype)initWithZX80MemorySize:(Kilobytes)memorySize useZX81ROM:(BOOL)useZX81ROM;
 - (instancetype)initWithZX81MemorySize:(Kilobytes)memorySize;
+- (instancetype)initWithPCCompatibleSpeed:(CSPCCompatibleSpeed)speed videoAdaptor:(CSPCCompatibleVideoAdaptor)adaptor;
 
 @property(nonatomic, readonly, nullable) NSString *optionsNibName;
 @property(nonatomic, readonly) NSString *displayName;

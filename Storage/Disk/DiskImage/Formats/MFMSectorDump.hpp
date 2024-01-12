@@ -11,6 +11,7 @@
 
 #include "../DiskImage.hpp"
 #include "../../../FileHolder.hpp"
+#include "../../Encodings/MFM/Constants.hpp"
 
 #include <string>
 
@@ -22,7 +23,6 @@ namespace Storage::Disk {
 class MFMSectorDump: public DiskImage {
 	public:
 		MFMSectorDump(const std::string &file_name);
-		void set_geometry(int sectors_per_track, uint8_t sector_size, uint8_t first_sector, bool is_double_density);
 
 		bool get_is_read_only() final;
 		void set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) final;
@@ -30,13 +30,14 @@ class MFMSectorDump: public DiskImage {
 
 	protected:
 		Storage::FileHolder file_;
+		void set_geometry(int sectors_per_track, uint8_t sector_size, uint8_t first_sector, Encodings::MFM::Density density);
 
 	private:
 		virtual long get_file_offset_for_position(Track::Address address) = 0;
 
 		int sectors_per_track_ = 0;
 		uint8_t sector_size_ = 0;
-		bool is_double_density_ = true;
+		Encodings::MFM::Density density_ = Encodings::MFM::Density::Single;
 		uint8_t first_sector_ = 0;
 };
 

@@ -1,4 +1,5 @@
 QT += core gui multimedia widgets
+greaterThan(5, QT_MAJOR_VERSION) QT += openglwidgets
 
 # Be specific about C++17 but also try the vaguer C++1z for older
 # versions of Qt.
@@ -24,10 +25,10 @@ DEFINES += TARGET_QT
 DEFINES += IGNORE_APPLE
 QMAKE_CXXFLAGS_RELEASE += -DNDEBUG
 
-# Generate warnings for any use of APIs deprecated prior to Qt 6.0.0.
-# Development was performed against Qt 5.14.
+# Generate warnings for any use of APIs deprecated prior to Qt 7.0.0.
+# Development was performed against Qt 6.6.1 and Qt 5.15.2
 DEFINES += QT_DEPRECATED_WARNINGS
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000
+DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x070000
 
 SRC = $$PWD/../..
 
@@ -49,9 +50,11 @@ SOURCES += \
 	$$SRC/Analyser/Static/Disassembler/*.cpp \
 	$$SRC/Analyser/Static/DiskII/*.cpp \
 	$$SRC/Analyser/Static/Enterprise/*.cpp \
+	$$SRC/Analyser/Static/FAT12/*.cpp \
 	$$SRC/Analyser/Static/Macintosh/*.cpp \
 	$$SRC/Analyser/Static/MSX/*.cpp \
 	$$SRC/Analyser/Static/Oric/*.cpp \
+	$$SRC/Analyser/Static/PCCompatible/*.cpp \
 	$$SRC/Analyser/Static/Sega/*.cpp \
 	$$SRC/Analyser/Static/ZX8081/*.cpp \
 	$$SRC/Analyser/Static/ZXSpectrum/*.cpp \
@@ -99,6 +102,7 @@ SOURCES += \
 	$$SRC/Machines/MasterSystem/*.cpp \
 	$$SRC/Machines/MSX/*.cpp \
 	$$SRC/Machines/Oric/*.cpp \
+	$$SRC/Machines/PCCompatible/*.cpp \
 	$$SRC/Machines/Utility/*.cpp \
 	$$SRC/Machines/Sinclair/Keyboard/*.cpp \
 	$$SRC/Machines/Sinclair/ZX8081/*.cpp \
@@ -170,9 +174,11 @@ HEADERS += \
 	$$SRC/Analyser/Static/Disassembler/*.hpp \
 	$$SRC/Analyser/Static/DiskII/*.hpp \
 	$$SRC/Analyser/Static/Enterprise/*.hpp \
+	$$SRC/Analyser/Static/FAT12/*.hpp \
 	$$SRC/Analyser/Static/Macintosh/*.hpp \
 	$$SRC/Analyser/Static/MSX/*.hpp \
 	$$SRC/Analyser/Static/Oric/*.hpp \
+	$$SRC/Analyser/Static/PCCompatible/*.hpp \
 	$$SRC/Analyser/Static/Sega/*.hpp \
 	$$SRC/Analyser/Static/ZX8081/*.hpp \
 \
@@ -232,6 +238,7 @@ HEADERS += \
 	$$SRC/Machines/MasterSystem/*.hpp \
 	$$SRC/Machines/MSX/*.hpp \
 	$$SRC/Machines/Oric/*.hpp \
+	$$SRC/Machines/PCCompatible/*.hpp \
 	$$SRC/Machines/Utility/*.hpp \
 	$$SRC/Machines/Sinclair/Keyboard/*.hpp \
 	$$SRC/Machines/Sinclair/ZX8081/*.hpp \

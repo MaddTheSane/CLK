@@ -71,7 +71,6 @@ enum Name {
 	// Atari ST.
 	AtariSTTOS100,
 	AtariSTTOS104,
-	AtariSTEmuTOS192,
 
 	// ColecoVision.
 	ColecoVisionBIOS,
@@ -131,6 +130,16 @@ enum Name {
 	OricJasmin,
 	OricMicrodisc,
 	Oric8DOSBoot,
+
+	// PCCompatible.
+	PCCompatibleGLaBIOS,
+	PCCompatibleGLaTICK,
+	PCCompatiblePhoenix80286BIOS,
+
+	PCCompatibleMDAFont,
+	PCCompatibleCGAFont,
+	PCCompatibleEGABIOS,
+	PCCompatibleVGABIOS,
 
 	// Sinclair QL.
 	SinclairQLJS,

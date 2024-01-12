@@ -60,7 +60,7 @@ class CRT {
 		int64_t phase_denominator_ = 1;
 		int64_t phase_numerator_ = 0;
 		int64_t colour_cycle_numerator_ = 1;
-		bool is_alernate_line_ = false, phase_alternates_ = false, should_be_alternate_line_ = false;
+		bool is_alternate_line_ = false, phase_alternates_ = false, should_be_alternate_line_ = false;
 
 		void advance_cycles(int number_of_cycles, bool hsync_requested, bool vsync_requested, const Scan::Type type, int number_of_samples);
 		Flywheel::SyncEvent get_next_vertical_sync_event(bool vsync_is_requested, int cycles_to_run_for, int *cycles_advanced);
@@ -179,6 +179,18 @@ class CRT {
 			@param number_of_cycles The number of cycles to repeat the output for.
 		*/
 		void output_level(int number_of_cycles);
+
+		/*!	Outputs @c value for @c number_of_cycles .
+
+			@param value The value to output.
+			@param number_of_cycles The number of cycles to repeat the output for.
+		*/
+		template <typename IntT>
+		void output_level(int number_of_cycles, IntT value) {
+			auto colour_pointer = reinterpret_cast<IntT *>(begin_data(1));
+			if(colour_pointer) *colour_pointer = value;
+			output_level(number_of_cycles);
+		}
 
 		/*!	Declares that the caller has created a run of data via @c begin_data that is at least @c number_of_samples
 			long, and that the first @c number_of_samples should be spread over @c number_of_cycles.

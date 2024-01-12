@@ -25,9 +25,11 @@
 #include "Commodore/StaticAnalyser.hpp"
 #include "DiskII/StaticAnalyser.hpp"
 #include "Enterprise/StaticAnalyser.hpp"
+#include "FAT12/StaticAnalyser.hpp"
 #include "Macintosh/StaticAnalyser.hpp"
 #include "MSX/StaticAnalyser.hpp"
 #include "Oric/StaticAnalyser.hpp"
+#include "PCCompatible/StaticAnalyser.hpp"
 #include "Sega/StaticAnalyser.hpp"
 #include "ZX8081/StaticAnalyser.hpp"
 #include "ZXSpectrum/StaticAnalyser.hpp"
@@ -48,10 +50,12 @@
 #include "../../Storage/Disk/DiskImage/Formats/FAT12.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/HFE.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/IPF.hpp"
+#include "../../Storage/Disk/DiskImage/Formats/IMD.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/MacintoshIMG.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/MSA.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/NIB.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/OricMFMDSK.hpp"
+#include "../../Storage/Disk/DiskImage/Formats/PCBooter.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/SSD.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/STX.hpp"
 #include "../../Storage/Disk/DiskImage/Formats/WOZ.hpp"
@@ -177,9 +181,20 @@ static Media GetMediaAndPlatforms(const std::string &file_name, TargetPlatform::
 			Disk::DiskImageHolder<Storage::Disk::HFE>,
 			TargetPlatform::Acorn | TargetPlatform::AmstradCPC | TargetPlatform::Commodore | TargetPlatform::Oric | TargetPlatform::ZXSpectrum)
 			// HFE (TODO: switch to AllDisk once the MSX stops being so greedy)
-	Format("img", result.disks, Disk::DiskImageHolder<Storage::Disk::MacintoshIMG>, TargetPlatform::Macintosh)		// IMG (DiskCopy 4.2)
+	Format("ima", result.disks, Disk::DiskImageHolder<Storage::Disk::FAT12>, TargetPlatform::PCCompatible)			// IMG (MS-DOS style)
 	Format("image", result.disks, Disk::DiskImageHolder<Storage::Disk::MacintoshIMG>, TargetPlatform::Macintosh)	// IMG (DiskCopy 4.2)
-	Format("img", result.disks, Disk::DiskImageHolder<Storage::Disk::FAT12>, TargetPlatform::Enterprise)			// IMG (Enterprise/MS-DOS style)
+	Format("imd", result.disks, Disk::DiskImageHolder<Storage::Disk::IMD>, TargetPlatform::PCCompatible)			// IMD
+	Format("img", result.disks, Disk::DiskImageHolder<Storage::Disk::MacintoshIMG>, TargetPlatform::Macintosh)		// IMG (DiskCopy 4.2)
+
+	// Treat PC booter as a potential backup only if this doesn't parse as a FAT12.
+	if(extension == "img") {
+		try {
+			Insert(result.disks, Disk::DiskImageHolder<Storage::Disk::FAT12>, TargetPlatform::FAT12, file_name)				// IMG (Enterprise or MS-DOS style)
+		} catch(...) {
+			Format("img", result.disks, Disk::DiskImageHolder<Storage::Disk::PCBooter>, TargetPlatform::PCCompatible)		// IMG (PC raw booter)
+		}
+	}
+
 	Format(	"ipf",
 			result.disks,
 			Disk::DiskImageHolder<Storage::Disk::IPF>,
@@ -286,9 +301,11 @@ TargetList Analyser::Static::GetTargets(const std::string &file_name) {
 	Append(Commodore);
 	Append(DiskII);
 	Append(Enterprise);
+	Append(FAT12);
 	Append(Macintosh);
 	Append(MSX);
 	Append(Oric);
+	Append(PCCompatible);
 	Append(Sega);
 	Append(ZX8081);
 	Append(ZXSpectrum);
