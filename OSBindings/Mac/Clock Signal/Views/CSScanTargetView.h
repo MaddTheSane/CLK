@@ -6,8 +6,7 @@
 //  Copyright 2015 Thomas Harte. All rights reserved.
 //
 
-#import <Foundation/Foundation.h>
-#import <AppKit/AppKit.h>
+#import <Cocoa/Cocoa.h>
 #import <MetalKit/MetalKit.h>
 
 @class CSScanTargetView;

@@ -16,6 +16,8 @@
 static const NSTimeInterval standardMouseHideInterval = 3.0;
 static const NSTimeInterval quickMouseHideInterval = 0.1;
 
+static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeStamp *now, const CVTimeStamp *outputTime, CVOptionFlags flagsIn, CVOptionFlags *flagsOut, void *displayLinkContext);
+
 @interface CSScanTargetView () <NSDraggingDestination, CSApplicationEventDelegate>
 @end
 
@@ -52,7 +54,7 @@ static const NSTimeInterval quickMouseHideInterval = 0.1;
 	CVDisplayLinkStart(_displayLink);
 }
 
-static CVReturn DisplayLinkCallback(__unused CVDisplayLinkRef displayLink, const CVTimeStamp *now, const CVTimeStamp *outputTime, __unused CVOptionFlags flagsIn, __unused CVOptionFlags *flagsOut, void *displayLinkContext) {
+CVReturn DisplayLinkCallback(__unused CVDisplayLinkRef displayLink, const CVTimeStamp *now, const CVTimeStamp *outputTime, __unused CVOptionFlags flagsIn, __unused CVOptionFlags *flagsOut, void *displayLinkContext) {
 	CSScanTargetView *const view = (__bridge CSScanTargetView *)displayLinkContext;
 
 	// Schedule an opportunity to check that the display link is still linked to the correct display.
