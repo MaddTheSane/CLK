@@ -6,8 +6,7 @@
 //  Copyright 2018 Thomas Harte. All rights reserved.
 //
 
-#ifndef AppleII_hpp
-#define AppleII_hpp
+#pragma once
 
 #include "../../../Configurable/Configurable.hpp"
 #include "../../../Configurable/StandardOptions.hpp"
@@ -23,7 +22,7 @@ class Machine {
 		virtual ~Machine();
 
 		/// Creates and returns an AppleII.
-		static Machine *AppleII(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
+		static std::unique_ptr<Machine> AppleII(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
 
 		/// Defines the runtime options available for an Apple II.
 		class Options: public Reflection::StructImpl<Options>, public Configurable::DisplayOption<Options> {
@@ -42,5 +41,3 @@ class Machine {
 };
 
 }
-
-#endif /* AppleII_hpp */

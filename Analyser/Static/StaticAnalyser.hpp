@@ -6,8 +6,7 @@
 //  Copyright 2016 Thomas Harte. All rights reserved.
 //
 
-#ifndef StaticAnalyser_hpp
-#define StaticAnalyser_hpp
+#pragma once
 
 #include "../Machines.hpp"
 
@@ -39,12 +38,15 @@ struct Media {
 	}
 
 	Media &operator +=(const Media &rhs) {
-#define append(name)	name.insert(name.end(), rhs.name.begin(), rhs.name.end());
-		append(disks);
-		append(tapes);
-		append(cartridges);
-		append(mass_storage_devices);
-#undef append
+		const auto append = [&](auto &destination, auto &source) {
+			destination.insert(destination.end(), source.begin(), source.end());
+		};
+
+		append(disks, rhs.disks);
+		append(tapes, rhs.tapes);
+		append(cartridges, rhs.cartridges);
+		append(mass_storage_devices, rhs.mass_storage_devices);
+
 		return *this;
 	}
 };
@@ -79,5 +81,3 @@ TargetList GetTargets(const std::string &file_name);
 Media GetMedia(const std::string &file_name);
 
 }
-
-#endif /* StaticAnalyser_hpp */

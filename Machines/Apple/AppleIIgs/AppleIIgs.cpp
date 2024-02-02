@@ -8,15 +8,17 @@
 
 #include "AppleIIgs.hpp"
 
-#include "../../../Activity/Source.hpp"
-#include "../../MachineTypes.hpp"
-
-#include "../../../Analyser/Static/AppleIIgs/Target.hpp"
-
 #include "ADB.hpp"
 #include "MemoryMap.hpp"
 #include "Video.hpp"
 #include "Sound.hpp"
+
+#include "../AppleII/Joystick.hpp"
+
+#include "../../../Activity/Source.hpp"
+#include "../../MachineTypes.hpp"
+
+#include "../../../Analyser/Static/AppleIIgs/Target.hpp"
 
 #include "../../../Processors/65816/65816.hpp"
 #include "../../../Components/8530/z8530.hpp"
@@ -25,8 +27,6 @@
 #include "../../../Components/DiskII/IWM.hpp"
 #include "../../../Components/DiskII/MacintoshDoubleDensityDrive.hpp"
 #include "../../../Components/DiskII/DiskIIDrive.hpp"
-
-#include "../AppleII/Joystick.hpp"
 
 #include "../../../Outputs/Speaker/Implementation/CompoundSource.hpp"
 #include "../../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
@@ -1010,8 +1010,8 @@ class ConcreteMachine:
 
 using namespace Apple::IIgs;
 
-Machine *Machine::AppleIIgs(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	return new ConcreteMachine(*dynamic_cast<const Analyser::Static::AppleIIgs::Target *>(target), rom_fetcher);
+std::unique_ptr<Machine> Machine::AppleIIgs(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
+	return std::make_unique<ConcreteMachine>(*dynamic_cast<const Analyser::Static::AppleIIgs::Target *>(target), rom_fetcher);
 }
 
 Machine::~Machine() {}

@@ -6,16 +6,17 @@
 //  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
-#ifndef TypedDynamicMachine_h
-#define TypedDynamicMachine_h
+#pragma once
 
 #include "MachineForTarget.hpp"
+
+#include <memory>
 
 namespace Machine {
 
 template<typename T> class TypedDynamicMachine: public ::Machine::DynamicMachine {
 	public:
-		TypedDynamicMachine(T *machine) : machine_(machine) {}
+		TypedDynamicMachine(std::unique_ptr<T> &&machine) : machine_(std::move(machine)) {}
 		T *get() { return machine_.get(); }
 
 		TypedDynamicMachine() : TypedDynamicMachine(nullptr) {}
@@ -66,5 +67,3 @@ template<typename T> class TypedDynamicMachine: public ::Machine::DynamicMachine
 };
 
 }
-
-#endif /* TypedDynamicMachine_h */

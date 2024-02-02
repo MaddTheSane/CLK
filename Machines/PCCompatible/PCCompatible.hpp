@@ -6,8 +6,7 @@
 //  Copyright © 2023 Thomas Harte. All rights reserved.
 //
 
-#ifndef PCCompatible_hpp
-#define PCCompatible_hpp
+#pragma once
 
 #include "../../Configurable/Configurable.hpp"
 #include "../../Configurable/StandardOptions.hpp"
@@ -24,7 +23,7 @@ class Machine {
 		virtual ~Machine();
 
 		/// Creates and returns a PC Compatible.
-		static Machine *PCCompatible(
+		static std::unique_ptr<Machine> PCCompatible(
 			const Analyser::Static::Target *target,
 			const ROMMachine::ROMFetcher &rom_fetcher
 		);
@@ -48,5 +47,3 @@ class Machine {
 };
 
 }
-
-#endif /* PCCompatible_hpp */

@@ -6,8 +6,7 @@
 //  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
-#ifndef ZX8081_hpp
-#define ZX8081_hpp
+#pragma once
 
 #include "../../../Configurable/Configurable.hpp"
 #include "../../../Configurable/StandardOptions.hpp"
@@ -22,7 +21,7 @@ namespace Sinclair::ZX8081 {
 class Machine {
 	public:
 		virtual ~Machine();
-		static Machine *ZX8081(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
+		static std::unique_ptr<Machine> ZX8081(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
 
 		virtual void set_tape_is_playing(bool is_playing) = 0;
 		virtual bool get_tape_is_playing() = 0;
@@ -47,5 +46,3 @@ class Machine {
 };
 
 }
-
-#endif /* ZX8081_hpp */

@@ -6,6 +6,8 @@
 //  Copyright © 2019 Thomas Harte. All rights reserved.
 //
 
+#pragma once
+
 template <typename Executor> Target<Executor>::Target(Bus &bus, int scsi_id) :
 	bus_(bus),
 	scsi_id_mask_(BusState(1 << scsi_id)),
@@ -168,15 +170,17 @@ template <typename Executor> void Target<Executor>::begin_command(uint8_t first_
 	}
 }
 
+namespace {
+
+constexpr uint8_t G0(uint8_t opcode) {	return 0x00 | opcode;	}
+constexpr uint8_t G1(uint8_t opcode) {	return 0x20 | opcode;	}
+constexpr uint8_t G5(uint8_t opcode) {	return 0xa0 | opcode;	}
+
+}
+
 template <typename Executor> bool Target<Executor>::dispatch_command() {
-
 	CommandState arguments(command_, data_);
-
-#define G0(x)	x
-#define G1(x)	(0x20|x)
-#define G5(x)	(0xa0|x)
-
-	LOG("---Command " << PADHEX(2) << int(command_[0]) << "---");
+	log_.info().append("---Command %02x---", command_[0]);
 
 	switch(command_[0]) {
 		default:		return false;
@@ -207,13 +211,8 @@ template <typename Executor> bool Target<Executor>::dispatch_command() {
 		case G1(0x1c):	return executor_.read_buffer(arguments, *this);
 		case G1(0x15):	return executor_.mode_select(arguments, *this);
 
-
 		case G5(0x09):	return executor_.set_block_limits(arguments, *this);
 	}
-
-#undef G0
-#undef G1
-#undef G5
 
 	return false;
 }
@@ -276,5 +275,5 @@ template <typename Executor> void Target<Executor>::end_command() {
 	bus_state_ = DefaultBusState;
 	set_device_output(bus_state_);
 
-	LOG("---Done---");
+	log_.info().append("---Done---");
 }

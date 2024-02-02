@@ -6,8 +6,7 @@
 //  Copyright 2020 Thomas Harte. All rights reserved.
 //
 
-#ifndef Machines_Apple_AppleIIgs_hpp
-#define Machines_Apple_AppleIIgs_hpp
+#pragma once
 
 #include "../../../Configurable/Configurable.hpp"
 #include "../../../Configurable/StandardOptions.hpp"
@@ -23,9 +22,7 @@ class Machine {
 		virtual ~Machine();
 
 		/// Creates and returns an AppleIIgs.
-		static Machine *AppleIIgs(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
+		static std::unique_ptr<Machine> AppleIIgs(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
 };
 
 }
-
-#endif /* Machines_Apple_AppleIIgs_hpp */

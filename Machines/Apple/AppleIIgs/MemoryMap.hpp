@@ -6,12 +6,12 @@
 //  Copyright © 2020 Thomas Harte. All rights reserved.
 //
 
-#ifndef Machines_Apple_AppleIIgs_MemoryMap_hpp
-#define Machines_Apple_AppleIIgs_MemoryMap_hpp
+#pragma once
 
 #include <array>
 #include <bitset>
 #include <cassert>
+#include <cstdint>
 #include <vector>
 
 #include "../AppleII/LanguageCardSwitches.hpp"
@@ -161,5 +161,3 @@ class MemoryMap {
 };
 
 }
-
-#endif /* MemoryMap_h */
