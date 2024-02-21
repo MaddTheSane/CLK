@@ -28,7 +28,7 @@
 
 #include "../../../Outputs/Speaker/Implementation/CompoundSource.hpp"
 #include "../../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
-#include "../../../Outputs/Speaker/Implementation/SampleSource.hpp"
+#include "../../../Outputs/Speaker/Implementation/BufferSource.hpp"
 
 #include "../../../Storage/Tape/Tape.hpp"
 #include "../../../Storage/Tape/Parsers/Spectrum.hpp"
@@ -1008,5 +1008,3 @@ std::unique_ptr<Machine> Machine::ZXSpectrum(const Analyser::Static::Target *tar
 
 	return nullptr;
 }
-
-Machine::~Machine() {}

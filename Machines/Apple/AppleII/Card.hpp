@@ -41,12 +41,12 @@ class Card {
 		virtual ~Card() {}
 		enum Select: int {
 			None		= 0,		// No select line is active.
-			IO			= 1 << 0,	// IO select is active; i.e. access is in range $C0x0 to $C0xf.
-			Device		= 1 << 1,	// Device select is active; i.e. access is in range $Cx00 to $Cxff.
+			Device		= 1 << 0,	// Device select ('DEVSEL') is active; i.e. access is in range $C0x0 to $C0xf.
+			IO			= 1 << 1,	// IO select ('IOSEL') is active; i.e. access is in range $Cx00 to $Cxff.
 
 			C8Region	= 1 << 2,	// Access is to the region $c800 to $cfff, was preceded by at least
 									// one Device access to this card, and has not yet been followed up
-									// by an access to $cfff.
+									// by an access to $cfff. IOSTRB on original hardware.
 		};
 
 		/*!
@@ -54,7 +54,7 @@ class Card {
 
 			This is posted only to cards that announced a select constraint. Cards with
 			no constraints, that want to be informed of every machine cycle, will receive
-			a call to perform_bus_operation every cycle and should use that for time keeping.
+			a call to @c perform_bus_operation every cycle and should use that for time keeping.
 		*/
 		virtual void run_for([[maybe_unused]] Cycles cycles, [[maybe_unused]] int stretches) {}
 
@@ -93,15 +93,22 @@ class Card {
 		/*! Cards may supply a target for activity observation if desired. */
 		virtual void set_activity_observer([[maybe_unused]] Activity::Observer *observer) {}
 
+		/// @returns The current semantic NMI line output of this card.
+		virtual bool nmi() { return false; }
+
+		/// @returns The current semantic IRQ line output of this card.
+		virtual bool irq() { return false; }
+
 		struct Delegate {
 			virtual void card_did_change_select_constraints(Card *card) = 0;
+			virtual void card_did_change_interrupt_flags(Card *card) = 0;
 		};
 		void set_delegate(Delegate *delegate) {
 			delegate_ = delegate;
 		}
 
 	protected:
-		int select_constraints_ = IO | Device;
+		int select_constraints_ = Device | IO;
 		Delegate *delegate_ = nullptr;
 		void set_select_constraints(int constraints) {
 			if(constraints == select_constraints_) return;

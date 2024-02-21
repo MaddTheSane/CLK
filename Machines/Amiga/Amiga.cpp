@@ -221,7 +221,7 @@ class ConcreteMachine:
 		// MARK: - MachineTypes::MouseMachine.
 
 		Inputs::Mouse &get_mouse() final {
-			return chipset_.get_mouse();;
+			return chipset_.get_mouse();
 		}
 
 		// MARK: - MachineTypes::JoystickMachine.
@@ -256,5 +256,3 @@ std::unique_ptr<Machine> Machine::Amiga(const Analyser::Static::Target *target, 
 	const Target *const amiga_target = dynamic_cast<const Target *>(target);
 	return std::make_unique<Amiga::ConcreteMachine>(*amiga_target, rom_fetcher);
 }
-
-Machine::~Machine() {}
