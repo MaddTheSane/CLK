@@ -1,10 +1,12 @@
 {
   "images" : [
     {
+      "filename" : "floppy525@1x.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "floppy525@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
