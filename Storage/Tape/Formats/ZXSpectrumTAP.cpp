@@ -18,35 +18,42 @@ using namespace Storage::Tape;
 	https://sinclair.wiki.zxnet.co.uk/wiki/TAP_format
 */
 
-ZXSpectrumTAP::ZXSpectrumTAP(const std::string &file_name) :
-	file_(file_name)
-{
+ZXSpectrumTAP::ZXSpectrumTAP(const std::string &file_name) : file_name_(file_name) {
+	Storage::FileHolder file(file_name);
+
 	// Check for a continuous series of blocks through to
 	// exactly file end.
 	//
 	// To consider: could also check those blocks of type 0
 	// and type ff for valid checksums?
-	while(true) {
-		const uint16_t block_length = file_.get16le();
-		if(file_.eof()) throw ErrorNotZXSpectrumTAP;
+	while(file.tell() != file.stats().st_size) {
+		const uint16_t block_length = file.get_le<uint16_t>();
+		if(file.eof() || file.tell() + block_length > file.stats().st_size) {
+			throw ErrorNotZXSpectrumTAP;
+		}
 
-		file_.seek(block_length, SEEK_CUR);
-		if(file_.tell() == file_.stats().st_size) break;
+		file.seek(block_length, SEEK_CUR);
 	}
-
-	virtual_reset();
 }
 
-bool ZXSpectrumTAP::is_at_end() {
+std::unique_ptr<FormatSerialiser> ZXSpectrumTAP::format_serialiser() const {
+	return std::make_unique<Serialiser>(file_name_);
+}
+
+ZXSpectrumTAP::Serialiser::Serialiser(const std::string &file_name) : file_(file_name, FileHolder::FileMode::Read) {
+	read_next_block();
+}
+
+bool ZXSpectrumTAP::Serialiser::is_at_end() const {
 	return file_.tell() == file_.stats().st_size && phase_ == Phase::Gap;
 }
 
-void ZXSpectrumTAP::virtual_reset() {
+void ZXSpectrumTAP::Serialiser::reset() {
 	file_.seek(0, SEEK_SET);
 	read_next_block();
 }
 
-Tape::Pulse ZXSpectrumTAP::virtual_get_next_pulse() {
+Pulse ZXSpectrumTAP::Serialiser::next_pulse() {
 	// Adopt a general pattern of high then low.
 	Pulse pulse;
 	pulse.type = (distance_into_phase_ & 1) ? Pulse::Type::High : Pulse::Type::Low;
@@ -93,7 +100,7 @@ Tape::Pulse ZXSpectrumTAP::virtual_get_next_pulse() {
 						read_next_block();
 					}
 				} else {
-					data_byte_ = file_.get8();
+					data_byte_ = file_.get();
 				}
 			}
 		} break;
@@ -110,12 +117,12 @@ Tape::Pulse ZXSpectrumTAP::virtual_get_next_pulse() {
 	return pulse;
 }
 
-void ZXSpectrumTAP::read_next_block() {
+void ZXSpectrumTAP::Serialiser::read_next_block() {
 	if(file_.tell() == file_.stats().st_size) {
 		phase_ = Phase::Gap;
 	} else {
-		block_length_ = file_.get16le();
-		data_byte_ = block_type_ = file_.get8();
+		block_length_ = file_.get_le<uint16_t>();
+		data_byte_ = block_type_ = file_.get();
 		phase_ = Phase::PilotTone;
 	}
 	distance_into_phase_ = 0;

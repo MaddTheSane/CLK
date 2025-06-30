@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "../../../Storage/Tape/Tape.hpp"
+#include "Storage/Tape/Tape.hpp"
 
 #include <string>
 #include <vector>
@@ -32,6 +32,6 @@ struct File {
 	File();
 };
 
-std::vector<File> GetFiles(const std::shared_ptr<Storage::Tape::Tape> &tape);
+std::vector<File> GetFiles(const std::shared_ptr<Storage::Tape::Tape> &);
 
 }

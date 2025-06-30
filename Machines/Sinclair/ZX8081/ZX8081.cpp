@@ -8,23 +8,23 @@
 
 #include "ZX8081.hpp"
 
-#include "../../MachineTypes.hpp"
+#include "Machines/MachineTypes.hpp"
 
-#include "../../../Components/AY38910/AY38910.hpp"
-#include "../../../Processors/Z80/Z80.hpp"
-#include "../../../Storage/Tape/Tape.hpp"
-#include "../../../Storage/Tape/Parsers/ZX8081.hpp"
+#include "Components/AY38910/AY38910.hpp"
+#include "Processors/Z80/Z80.hpp"
+#include "Storage/Tape/Tape.hpp"
+#include "Storage/Tape/Parsers/ZX8081.hpp"
 
-#include "../../../ClockReceiver/ForceInline.hpp"
+#include "ClockReceiver/ForceInline.hpp"
 
-#include "../../Utility/MemoryFuzzer.hpp"
-#include "../../Utility/Typer.hpp"
+#include "Machines/Utility/MemoryFuzzer.hpp"
+#include "Machines/Utility/Typer.hpp"
 
-#include "../../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
+#include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
 
-#include "../../../Analyser/Static/ZX8081/Target.hpp"
+#include "Analyser/Static/ZX8081/Target.hpp"
 
-#include "../Keyboard/Keyboard.hpp"
+#include "Machines/Sinclair/Keyboard/Keyboard.hpp"
 #include "Video.hpp"
 
 #include <cstdint>
@@ -39,7 +39,7 @@ namespace {
 
 // TODO:
 //	Quiksilva sound support:
-// 	7FFFh.W		PSG index
+//	7FFFh.W		PSG index
 //	7FFEh.R/W	PSG data
 
 namespace Sinclair {
@@ -185,7 +185,7 @@ template<bool is_zx81> class ConcreteMachine:
 						if(!nmi_is_enabled_) set_vsync(true);
 
 						value &= keyboard_.read(address);
-						value &= ~(tape_player_.get_input() ? 0x00 : 0x80);
+						value &= ~(tape_player_.input() ? 0x00 : 0x80);
 					}
 
 					// The below emulates the ZonX AY expansion device.
@@ -232,8 +232,8 @@ template<bool is_zx81> class ConcreteMachine:
 				case CPU::Z80::PartialMachineCycle::ReadOpcode:
 					// Check for use of the fast tape hack.
 					if(use_fast_tape_hack_ && address == tape_trap_address_) {
-						const uint64_t prior_offset = tape_player_.get_tape()->get_offset();
-						const int next_byte = parser_.get_next_byte(tape_player_.get_tape());
+						const uint64_t prior_offset = tape_player_.serialiser()->offset();
+						const int next_byte = parser_.get_next_byte(*tape_player_.serialiser());
 						if(next_byte != -1) {
 							const uint16_t hl = z80_.value_of(CPU::Z80::Register::HL);
 							ram_[hl & ram_mask_] = uint8_t(next_byte);
@@ -246,7 +246,7 @@ template<bool is_zx81> class ConcreteMachine:
 							tape_advance_delay_ = 1000;
 							return 0;
 						} else {
-							tape_player_.get_tape()->set_offset(prior_offset);
+							tape_player_.serialiser()->set_offset(prior_offset);
 						}
 					}
 
@@ -323,7 +323,7 @@ template<bool is_zx81> class ConcreteMachine:
 
 		bool insert_media(const Analyser::Static::Media &media) final {
 			if(!media.tapes.empty()) {
-				tape_player_.set_tape(media.tapes.front());
+				tape_player_.set_tape(media.tapes.front(), is_zx81 ? TargetPlatform::ZX81 : TargetPlatform::ZX80);
 			}
 
 			set_use_fast_tape();
@@ -365,7 +365,7 @@ template<bool is_zx81> class ConcreteMachine:
 		}
 
 		bool get_tape_is_playing() final {
-			return tape_player_.get_motor_control();
+			return tape_player_.motor_control();
 		}
 
 		// MARK: - Typer timing
@@ -383,7 +383,7 @@ template<bool is_zx81> class ConcreteMachine:
 
 		// MARK: - Configuration options.
 
-		std::unique_ptr<Reflection::Struct> get_options() final {
+		std::unique_ptr<Reflection::Struct> get_options() const final {
 			auto options = std::make_unique<Options>(Configurable::OptionsType::UserFriendly);	// OptionsType is arbitrary, but not optional.
 			options->automatic_tape_motor_control = use_automatic_tape_motor_control_;
 			options->quickload = allow_fast_tape_hack_;

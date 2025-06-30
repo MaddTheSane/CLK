@@ -11,43 +11,45 @@
 #include <algorithm>
 
 // Sources for runtime options and machines.
-#include "../Amiga/Amiga.hpp"
-#include "../AmstradCPC/AmstradCPC.hpp"
-#include "../Acorn/Electron/Electron.hpp"
-#include "../Apple/AppleII/AppleII.hpp"
-#include "../Apple/AppleIIgs/AppleIIgs.hpp"
-#include "../Apple/Macintosh/Macintosh.hpp"
-#include "../Atari/2600/Atari2600.hpp"
-#include "../Atari/ST/AtariST.hpp"
-#include "../ColecoVision/ColecoVision.hpp"
-#include "../Commodore/Vic-20/Vic20.hpp"
-#include "../Enterprise/Enterprise.hpp"
-#include "../MasterSystem/MasterSystem.hpp"
-#include "../MSX/MSX.hpp"
-#include "../Oric/Oric.hpp"
-#include "../PCCompatible/PCCompatible.hpp"
-#include "../Sinclair/ZX8081/ZX8081.hpp"
-#include "../Sinclair/ZXSpectrum/ZXSpectrum.hpp"
+#include "Machines/Acorn/Archimedes/Archimedes.hpp"
+#include "Machines/Acorn/Electron/Electron.hpp"
+#include "Machines/Amiga/Amiga.hpp"
+#include "Machines/AmstradCPC/AmstradCPC.hpp"
+#include "Machines/Apple/AppleII/AppleII.hpp"
+#include "Machines/Apple/AppleIIgs/AppleIIgs.hpp"
+#include "Machines/Apple/Macintosh/Macintosh.hpp"
+#include "Machines/Atari/2600/Atari2600.hpp"
+#include "Machines/Atari/ST/AtariST.hpp"
+#include "Machines/ColecoVision/ColecoVision.hpp"
+#include "Machines/Commodore/Plus4/Plus4.hpp"
+#include "Machines/Commodore/Vic-20/Vic20.hpp"
+#include "Machines/Enterprise/Enterprise.hpp"
+#include "Machines/MasterSystem/MasterSystem.hpp"
+#include "Machines/MSX/MSX.hpp"
+#include "Machines/Oric/Oric.hpp"
+#include "Machines/PCCompatible/PCCompatible.hpp"
+#include "Machines/Sinclair/ZX8081/ZX8081.hpp"
+#include "Machines/Sinclair/ZXSpectrum/ZXSpectrum.hpp"
 
 // Sources for construction options.
-#include "../../Analyser/Static/Acorn/Target.hpp"
-#include "../../Analyser/Static/Amiga/Target.hpp"
-#include "../../Analyser/Static/AmstradCPC/Target.hpp"
-#include "../../Analyser/Static/AppleII/Target.hpp"
-#include "../../Analyser/Static/AppleIIgs/Target.hpp"
-#include "../../Analyser/Static/Atari2600/Target.hpp"
-#include "../../Analyser/Static/AtariST/Target.hpp"
-#include "../../Analyser/Static/Commodore/Target.hpp"
-#include "../../Analyser/Static/Enterprise/Target.hpp"
-#include "../../Analyser/Static/Macintosh/Target.hpp"
-#include "../../Analyser/Static/MSX/Target.hpp"
-#include "../../Analyser/Static/Oric/Target.hpp"
-#include "../../Analyser/Static/PCCompatible/Target.hpp"
-#include "../../Analyser/Static/Sega/Target.hpp"
-#include "../../Analyser/Static/ZX8081/Target.hpp"
-#include "../../Analyser/Static/ZXSpectrum/Target.hpp"
+#include "Analyser/Static/Acorn/Target.hpp"
+#include "Analyser/Static/Amiga/Target.hpp"
+#include "Analyser/Static/AmstradCPC/Target.hpp"
+#include "Analyser/Static/AppleII/Target.hpp"
+#include "Analyser/Static/AppleIIgs/Target.hpp"
+#include "Analyser/Static/Atari2600/Target.hpp"
+#include "Analyser/Static/AtariST/Target.hpp"
+#include "Analyser/Static/Commodore/Target.hpp"
+#include "Analyser/Static/Enterprise/Target.hpp"
+#include "Analyser/Static/Macintosh/Target.hpp"
+#include "Analyser/Static/MSX/Target.hpp"
+#include "Analyser/Static/Oric/Target.hpp"
+#include "Analyser/Static/PCCompatible/Target.hpp"
+#include "Analyser/Static/Sega/Target.hpp"
+#include "Analyser/Static/ZX8081/Target.hpp"
+#include "Analyser/Static/ZXSpectrum/Target.hpp"
 
-#include "../../Analyser/Dynamic/MultiMachine/MultiMachine.hpp"
+#include "Analyser/Dynamic/MultiMachine/MultiMachine.hpp"
 #include "TypedDynamicMachine.hpp"
 
 std::unique_ptr<Machine::DynamicMachine> Machine::MachineForTarget(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher, Machine::Error &error) {
@@ -55,18 +57,19 @@ std::unique_ptr<Machine::DynamicMachine> Machine::MachineForTarget(const Analyse
 
 	std::unique_ptr<Machine::DynamicMachine> machine;
 	try {
-		// TODO: add Archimedes below.
 #define BindD(name, m)	case Analyser::Machine::m: machine = std::make_unique<Machine::TypedDynamicMachine<::name::Machine>>(name::Machine::m(target, rom_fetcher));	break;
 #define Bind(m)	BindD(m, m)
 		switch(target->machine) {
 			Bind(Amiga)
 			Bind(AmstradCPC)
+			Bind(Archimedes)
 			BindD(Apple::II, AppleII)
 			BindD(Apple::IIgs, AppleIIgs)
 			BindD(Apple::Macintosh, Macintosh)
 			Bind(Atari2600)
 			BindD(Atari::ST, AtariST)
 			BindD(Coleco::Vision, ColecoVision)
+			BindD(Commodore::Plus4, Plus4)
 			BindD(Commodore::Vic20, Vic20)
 			Bind(Electron)
 			Bind(Enterprise)
@@ -144,6 +147,7 @@ std::string Machine::ShortNameForTargetMachine(const Analyser::Machine machine) 
 		case Analyser::Machine::MasterSystem:	return "MasterSystem";
 		case Analyser::Machine::MSX:			return "MSX";
 		case Analyser::Machine::Oric:			return "Oric";
+		case Analyser::Machine::Plus4:			return "Plus4";
 		case Analyser::Machine::PCCompatible:	return "PCCompatible";
 		case Analyser::Machine::Vic20:			return "Vic20";
 		case Analyser::Machine::ZX8081:			return "ZX8081";
@@ -169,6 +173,7 @@ std::string Machine::LongNameForTargetMachine(Analyser::Machine machine) {
 		case Analyser::Machine::MasterSystem:	return "Sega Master System";
 		case Analyser::Machine::MSX:			return "MSX";
 		case Analyser::Machine::Oric:			return "Oric";
+		case Analyser::Machine::Plus4:			return "Commodore C16+4";
 		case Analyser::Machine::PCCompatible:	return "PC Compatible";
 		case Analyser::Machine::Vic20:			return "Vic 20";
 		case Analyser::Machine::ZX8081:			return "ZX80/81";
@@ -201,6 +206,7 @@ std::vector<std::string> Machine::AllMachines(Type type, bool long_names) {
 		AddName(Macintosh);
 		AddName(MSX);
 		AddName(Oric);
+		AddName(Plus4);
 		AddName(PCCompatible);
 		AddName(Vic20);
 		AddName(ZX8081);
@@ -216,10 +222,11 @@ std::map<std::string, std::unique_ptr<Reflection::Struct>> Machine::AllOptionsBy
 	std::map<std::string, std::unique_ptr<Reflection::Struct>> options;
 
 #define Emplace(machine, class)	\
-	options.emplace(std::make_pair(LongNameForTargetMachine(Analyser::Machine::machine), std::make_unique<class::Options>(Configurable::OptionsType::UserFriendly)));
+	options.emplace(LongNameForTargetMachine(Analyser::Machine::machine), std::make_unique<class::Options>(Configurable::OptionsType::UserFriendly))
 
 	Emplace(AmstradCPC, AmstradCPC::Machine);
 	Emplace(AppleII, Apple::II::Machine);
+	Emplace(Archimedes, Archimedes::Machine);
 	Emplace(AtariST, Atari::ST::Machine);
 	Emplace(ColecoVision, Coleco::Vision::Machine);
 	Emplace(Electron, Electron::Machine);
@@ -228,6 +235,7 @@ std::map<std::string, std::unique_ptr<Reflection::Struct>> Machine::AllOptionsBy
 	Emplace(MasterSystem, Sega::MasterSystem::Machine);
 	Emplace(MSX, MSX::Machine);
 	Emplace(Oric, Oric::Machine);
+	Emplace(Plus4, Commodore::Plus4::Machine);
 	Emplace(PCCompatible, PCCompatible::Machine);
 	Emplace(Vic20, Commodore::Vic20::Machine);
 	Emplace(ZX8081, Sinclair::ZX8081::Machine);
@@ -242,28 +250,29 @@ std::map<std::string, std::unique_ptr<Analyser::Static::Target>> Machine::Target
 	std::map<std::string, std::unique_ptr<Analyser::Static::Target>> options;
 
 #define AddMapped(Name, TargetNamespace)	\
-	options.emplace(std::make_pair(LongNameForTargetMachine(Analyser::Machine::Name), new Analyser::Static::TargetNamespace::Target));
+	options.emplace(LongNameForTargetMachine(Analyser::Machine::Name), std::make_unique<Analyser::Static::TargetNamespace::Target>());
 #define Add(Name)	AddMapped(Name, Name)
 
 	Add(Amiga);
 	Add(AmstradCPC);
 	Add(AppleII);
 	Add(AppleIIgs);
-	options.emplace(std::make_pair(LongNameForTargetMachine(Analyser::Machine::Archimedes), new Analyser::Static::Target(Analyser::Machine::Archimedes)));
+	options.emplace(LongNameForTargetMachine(Analyser::Machine::Archimedes), std::make_unique<Analyser::Static::Acorn::ArchimedesTarget>());
 	Add(AtariST);
-	AddMapped(Electron, Acorn);
+	options.emplace(LongNameForTargetMachine(Analyser::Machine::Electron), std::make_unique<Analyser::Static::Acorn::ElectronTarget>());
 	Add(Enterprise);
 	Add(Macintosh);
 	Add(MSX);
 	Add(Oric);
+	options.emplace(LongNameForTargetMachine(Analyser::Machine::Plus4), std::make_unique<Analyser::Static::Commodore::Plus4Target>());
 	Add(PCCompatible);
-	AddMapped(Vic20, Commodore);
+	options.emplace(LongNameForTargetMachine(Analyser::Machine::Vic20), std::make_unique<Analyser::Static::Commodore::Vic20Target>());
 	Add(ZX8081);
 	Add(ZXSpectrum);
 
 	if(!meaningful_without_media_only) {
 		Add(Atari2600);
-		options.emplace(std::make_pair(LongNameForTargetMachine(Analyser::Machine::ColecoVision), new Analyser::Static::Target(Analyser::Machine::ColecoVision)));
+		options.emplace(LongNameForTargetMachine(Analyser::Machine::ColecoVision), std::make_unique<Analyser::Static::Target>(Analyser::Machine::ColecoVision));
 		AddMapped(MasterSystem, Sega);
 	}
 

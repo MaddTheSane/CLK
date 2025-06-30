@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "../DiskImage.hpp"
-#include "../../../FileHolder.hpp"
-#include "../../Track/PCMTrack.hpp"
+#include "Storage/Disk/DiskImage/DiskImage.hpp"
+#include "Storage/Disk/Track/PCMTrack.hpp"
+#include "Storage/FileHolder.hpp"
 
 #include <memory>
 
@@ -22,25 +22,21 @@ namespace Storage::Disk {
 	the means for full reconstruction.
 */
 class NIB: public DiskImage {
-	public:
-		NIB(const std::string &file_name);
+public:
+	NIB(const std::string &file_name);
 
-		// Implemented to satisfy @c DiskImage.
-		HeadPosition get_maximum_head_position() final;
-		std::shared_ptr<::Storage::Disk::Track> get_track_at_position(::Storage::Disk::Track::Address address) final;
-		void set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) final;
-		bool get_is_read_only() final;
+	// Implemented to satisfy @c DiskImage.
+	HeadPosition maximum_head_position() const;
+	Track::Address canonical_address(Track::Address) const;
+	std::unique_ptr<Track> track_at_position(Track::Address) const;
+	void set_tracks(const std::map<Track::Address, std::unique_ptr<Track>> &tracks);
+	bool is_read_only() const;
+	bool represents(const std::string &) const;
 
-	private:
-		FileHolder file_;
-		long get_file_offset_for_position(Track::Address address);
-		long file_offset(Track::Address address);
-
-		// Cache for the last-generated track, given that head steps on an Apple II
-		// occur in quarter-track increments, so there'll routinely be four gets in
-		// a row for the same data.
-		long cached_offset_ = 0;
-		std::shared_ptr<Storage::Disk::PCMTrack> cached_track_;
+private:
+	mutable FileHolder file_;
+	long get_file_offset_for_position(Track::Address address) const;
+	long file_offset(Track::Address address) const;
 };
 
 }

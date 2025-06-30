@@ -10,10 +10,10 @@
 
 #include <cstring>
 
-#include "../../Track/PCMTrack.hpp"
-#include "../../Track/TrackSerialiser.hpp"
-#include "../../Encodings/AppleGCR/Encoder.hpp"
-#include "../../Encodings/AppleGCR/SegmentParser.hpp"
+#include "Storage/Disk/Track/PCMTrack.hpp"
+#include "Storage/Disk/Track/TrackSerialiser.hpp"
+#include "Storage/Disk/Encodings/AppleGCR/Encoder.hpp"
+#include "Storage/Disk/Encodings/AppleGCR/SegmentParser.hpp"
 
 /*
 	File format specifications as referenced below are largely
@@ -45,9 +45,9 @@ MacintoshIMG::MacintoshIMG(const std::string &file_name) :
 	//
 	// Luckily, both 0x00 and 0x4c are invalid string length for the proper
 	// DiskCopy 4.2 format, so there's no ambiguity here.
-	const auto name_length = file_.get8();
+	const auto name_length = file_.get();
 	if(name_length == 0x4c || !name_length) {
-		uint32_t magic_word = file_.get8();
+		uint32_t magic_word = file_.get();
 		if(!((name_length == 0x4c && magic_word == 0x4b) || (name_length == 0x00 && magic_word == 0x00)))
 			throw Error::InvalidFormat;
 
@@ -67,17 +67,17 @@ MacintoshIMG::MacintoshIMG(const std::string &file_name) :
 
 		// Get the length of the data and tag blocks.
 		file_.seek(64, SEEK_SET);
-		const auto data_block_length = file_.get32be();
-		const auto tag_block_length = file_.get32be();
-		const auto data_checksum = file_.get32be();
-		const auto tag_checksum = file_.get32be();
+		const auto data_block_length = file_.get_be<uint32_t>();
+		const auto tag_block_length = file_.get_be<uint32_t>();
+		const auto data_checksum = file_.get_be<uint32_t>();
+		const auto tag_checksum = file_.get_be<uint32_t>();
 
 		// Don't continue with no data.
 		if(!data_block_length)
 			throw Error::InvalidFormat;
 
 		// Check that this is a comprehensible disk encoding.
-		const auto encoding = file_.get8();
+		const auto encoding = file_.get();
 		switch(encoding) {
 			default: throw Error::InvalidFormat;
 
@@ -86,10 +86,10 @@ MacintoshIMG::MacintoshIMG(const std::string &file_name) :
 			case 2:	encoding_ = Encoding::MFM720;	break;
 			case 3:	encoding_ = Encoding::MFM1440;	break;
 		}
-		format_ = file_.get8();
+		format_ = file_.get();
 
 		// Check the magic number.
-		const auto magic_number = file_.get16be();
+		const auto magic_number = file_.get_be<uint16_t>();
 		if(magic_number != 0x0100)
 			throw Error::InvalidFormat;
 
@@ -143,7 +143,7 @@ void MacintoshIMG::construct_raw_gcr(size_t offset, size_t size) {
 	}
 }
 
-uint32_t MacintoshIMG::checksum(const std::vector<uint8_t> &data, size_t bytes_to_skip) {
+uint32_t MacintoshIMG::checksum(const std::vector<uint8_t> &data, size_t bytes_to_skip) const {
 	uint32_t result = 0;
 
 	// Checksum algorithm is: take each two bytes as a big-endian word; add that to a
@@ -157,21 +157,26 @@ uint32_t MacintoshIMG::checksum(const std::vector<uint8_t> &data, size_t bytes_t
 	return result;
 }
 
-HeadPosition MacintoshIMG::get_maximum_head_position() {
+HeadPosition MacintoshIMG::maximum_head_position() const {
 	return HeadPosition(80);
 }
 
-int MacintoshIMG::get_head_count() {
+int MacintoshIMG::head_count() const {
 	// Bit 5 in the format field indicates whether this disk is double
 	// sided, regardless of whether it is GCR or MFM.
 	return 1 + ((format_ & 0x20) >> 5);
 }
 
-bool MacintoshIMG::get_is_read_only() {
-	return file_.get_is_known_read_only();
+bool MacintoshIMG::is_read_only() const {
+	return file_.is_known_read_only();
 }
 
-std::shared_ptr<::Storage::Disk::Track> MacintoshIMG::get_track_at_position(::Storage::Disk::Track::Address address) {
+bool MacintoshIMG::represents(const std::string &name) const {
+	return name == file_.name();
+}
+
+
+std::unique_ptr<Track> MacintoshIMG::track_at_position(Track::Address address) const {
 	/*
 		The format_ byte has the following meanings:
 
@@ -193,12 +198,12 @@ std::shared_ptr<::Storage::Disk::Track> MacintoshIMG::get_track_at_position(::St
 	if(encoding_ == Encoding::GCR400 || encoding_ == Encoding::GCR800) {
 		// Perform a GCR encoding.
 		const auto included_sectors = Storage::Encodings::AppleGCR::Macintosh::sectors_in_track(address.position.as_int());
-		const size_t start_sector = size_t(included_sectors.start * get_head_count() + included_sectors.length * address.head);
+		const size_t start_sector = size_t(included_sectors.start * head_count() + included_sectors.length * address.head);
 
 		if(start_sector*512 >= data_.size()) return nullptr;
 
-		uint8_t *const sector = &data_[512 * start_sector];
-		uint8_t *const tags = tags_.size() ? &tags_[12 * start_sector] : nullptr;
+		const uint8_t *const sector = &data_[512 * start_sector];
+		const uint8_t *const tags = tags_.size() ? &tags_[12 * start_sector] : nullptr;
 
 		Storage::Disk::PCMSegment segment;
 		segment += Encodings::AppleGCR::six_and_two_sync(24);
@@ -246,13 +251,13 @@ std::shared_ptr<::Storage::Disk::Track> MacintoshIMG::get_track_at_position(::St
 		// TODO: it seems some tracks are skewed respective to others; investigate further.
 
 //		segment.rotate_right(3000);	// Just a test, yo.
-		return std::make_shared<PCMTrack>(segment);
+		return std::make_unique<PCMTrack>(segment);
 	}
 
 	return nullptr;
 }
 
-void MacintoshIMG::set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) {
+void MacintoshIMG::set_tracks(const std::map<Track::Address, std::unique_ptr<Track>> &tracks) {
 	std::map<Track::Address, std::vector<uint8_t>> tracks_by_address;
 	for(const auto &pair: tracks) {
 		// Determine a data rate for the track.
@@ -282,7 +287,7 @@ void MacintoshIMG::set_tracks(const std::map<Track::Address, std::shared_ptr<Tra
 		std::lock_guard buffer_lock(buffer_mutex_);
 		for(const auto &pair: tracks_by_address) {
 			const auto included_sectors = Storage::Encodings::AppleGCR::Macintosh::sectors_in_track(pair.first.position.as_int());
-			size_t start_sector = size_t(included_sectors.start * get_head_count() + included_sectors.length * pair.first.head);
+			size_t start_sector = size_t(included_sectors.start * head_count() + included_sectors.length * pair.first.head);
 
 			for(int c = 0; c < included_sectors.length; ++c) {
 				const auto sector_plus_tags = &pair.second[size_t(c)*524];
@@ -303,7 +308,7 @@ void MacintoshIMG::set_tracks(const std::map<Track::Address, std::shared_ptr<Tra
 
 	// Grab the file lock and write out the new tracks.
 	{
-		std::lock_guard lock_guard(file_.get_file_access_mutex());
+		std::lock_guard lock_guard(file_.file_access_mutex());
 
 		if(!is_diskCopy_file_) {
 			// Just dump out the entire disk. Grossly lazy, possibly worth improving.

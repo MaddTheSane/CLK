@@ -59,10 +59,7 @@ void Processor<personality, T, uses_ready_line>::run_for(const Cycles cycles) {
 	};
 
 	const auto throwaway_read = [&](uint16_t address) {
-		next_bus_operation_ = BusOperation::Read;
-		bus_address_ = address;
-		bus_value_ = &bus_throwaway_;
-		bus_throwaway_ = 0xff;
+		read_mem(bus_throwaway_, address);
 	};
 
 	const auto write_mem = [&](uint8_t &val, uint16_t address) {
@@ -232,10 +229,13 @@ void Processor<personality, T, uses_ready_line>::run_for(const Cycles cycles) {
 
 // MARK: - JAM, WAI, STP
 
-					case OperationScheduleJam: {
+					case OperationSetJAMmed:
 						is_jammed_ = true;
-						scheduled_program_counter_ = operations_[CPU::MOS6502::JamOpcode];
-					} continue;
+						scheduled_program_counter_ -= 2;
+					continue;
+
+					case CycleFetchFFFE:	read_mem(bus_throwaway_, 0xfffe);	break;
+					case CycleFetchFFFF:	read_mem(bus_throwaway_, 0xffff);	break;
 
 					case OperationScheduleStop:
 						stop_is_active_ = true;
@@ -368,7 +368,7 @@ void Processor<personality, T, uses_ready_line>::run_for(const Cycles cycles) {
 
 							// All flags are set based only on the decimal result.
 							flags_.zero_result = result;
-							flags_.carry = Numeric::carried_out<true, 7>(a_, operand_, result);
+							flags_.carry = Numeric::carried_out<Numeric::Operation::Add, 7>(a_, operand_, result);
 							flags_.negative_result = result;
 							flags_.overflow = (( (result ^ a_) & (result ^ operand_) ) & 0x80) >> 1;
 
@@ -418,7 +418,7 @@ void Processor<personality, T, uses_ready_line>::run_for(const Cycles cycles) {
 						if(flags_.decimal && has_decimal_mode(personality)) {
 							uint8_t result = a_ + operand_ + flags_.carry;
 							flags_.zero_result = result;
-							flags_.carry = Numeric::carried_out<true, 7>(a_, operand_, result);
+							flags_.carry = Numeric::carried_out<Numeric::Operation::Add, 7>(a_, operand_, result);
 
 							// General ADC logic:
 							//
@@ -708,12 +708,23 @@ void Processor<personality, T, uses_ready_line>::run_for(const Cycles cycles) {
 					continue;
 
 					case CycleFetchFromHalfUpdatedPC: {
-						uint16_t halfUpdatedPc = uint16_t(((pc_.halves.low + int8_t(operand_)) & 0xff) | (pc_.halves.high << 8));
-						throwaway_read(halfUpdatedPc);
+						uint16_t half_updated_pc = uint16_t(((pc_.halves.low + int8_t(operand_)) & 0xff) | (pc_.halves.high << 8));
+						throwaway_read(half_updated_pc);
 					} break;
 
+					case CycleFetchFromNextAddress:
+						throwaway_read(next_address_.full);
+					break;
+
 					case OperationAddSignedOperandToPC16:
+						next_address_ = pc_.full;
 						pc_.full = uint16_t(pc_.full + int8_t(operand_));
+
+						// Skip a step if 8-bit arithmetic would have been sufficient;
+						// in practise this operation is used only by BBS/BBR.
+						if(pc_.halves.high == next_address_.halves.high) {
+							++scheduled_program_counter_;
+						}
 					continue;
 
 					case OperationBBRBBS: {
@@ -725,7 +736,7 @@ void Processor<personality, T, uses_ready_line>::run_for(const Cycles cycles) {
 						} else {
 							scheduled_program_counter_ = operations_[size_t(OperationsSlot::DoNotBBRBBS)];
 						}
-					} break;
+					} continue;
 
 // MARK: - Transfers
 
@@ -769,7 +780,7 @@ void Processor<personality, T, uses_ready_line>::run_for(const Cycles cycles) {
 				if(has_stpwai(personality) && (stop_is_active_ || wait_is_active_)) {
 					break;
 				}
-				if(uses_ready_line && ready_line_is_enabled_ && (is_65c02(personality) || isReadOperation(next_bus_operation_))) {
+				if(uses_ready_line && ready_line_is_enabled_ && (is_65c02(personality) || is_read(next_bus_operation_))) {
 					ready_is_active_ = true;
 					break;
 				}
@@ -793,6 +804,9 @@ template <Personality personality, typename T, bool uses_ready_line> void Proces
 
 void ProcessorBase::set_reset_line(bool active) {
 	interrupt_requests_ = (interrupt_requests_ & ~InterruptRequestFlags::Reset) | (active ? InterruptRequestFlags::Reset : 0);
+	if(is_jammed_) {
+		restart_operation_fetch();
+	}
 }
 
 bool ProcessorBase::get_is_resetting() const {
@@ -859,6 +873,7 @@ void ProcessorBase::set_value_of(Register r, uint16_t value) {
 }
 
 void ProcessorBase::restart_operation_fetch() {
+	is_jammed_ = false;
 	scheduled_program_counter_ = nullptr;
 	next_bus_operation_ = BusOperation::None;
 }

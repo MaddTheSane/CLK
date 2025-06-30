@@ -11,21 +11,60 @@
 #include "BarrelShifter.hpp"
 #include "OperationMapper.hpp"
 #include "Registers.hpp"
-#include "../../Numeric/Carry.hpp"
+#include "Numeric/Carry.hpp"
 
 namespace InstructionSet::ARM {
+
+/// Maps from a semantic ARM read of type @c SourceT to either the 8- or 32-bit value observed
+/// by watching the low 8 bits or all 32 bits of the data bus.
+template <typename DestinationT, typename SourceT>
+DestinationT read_bus(const SourceT value) {
+	if constexpr (std::is_same_v<DestinationT, SourceT>) {
+		return value;
+	}
+	if constexpr (std::is_same_v<DestinationT, uint8_t>) {
+		return uint8_t(value);
+	} else {
+		return value | (value << 8) | (value << 16) | (value << 24);
+	}
+}
+
+struct NullControlFlowHandler {
+	/// Indicates that a potential pipeline-affecting status flag change occurred,
+	/// i.e. a change to processor mode or interrupt flags.
+	void did_set_status() {}
+
+	/// Indicates that the PC was altered by the instruction.
+	void did_set_pc() {}
+
+	/// Provides notification that an SWI is about to happen along with the option of skipping it; this gives handlers the
+	/// chance to substitute a high-level reimplementation of the service call.
+	bool should_swi([[maybe_unused]] uint32_t comment) { return true; }
+};
 
 /// A class compatible with the @c OperationMapper definition of a scheduler which applies all actions
 /// immediately, updating either a set of @c Registers or using the templated @c MemoryT to access
 /// memory. No hooks are currently provided for applying realistic timing.
-template <Model model, typename MemoryT>
+///
+/// If a ControlFlowHandlerT is specified, it'll receive calls as defined in the NullControlFlowHandler above.
+template <Model model, typename MemoryT, typename ControlFlowHandlerT = NullControlFlowHandler>
 struct Executor {
-	bool should_schedule(Condition condition) {
-		return registers_.test(condition);
+	template <typename... Args>
+	Executor(ControlFlowHandlerT &handler, Args &&...args) : bus(std::forward<Args>(args)...), control_flow_handler_(handler) {}
+
+	template <typename... Args>
+	Executor(Args &&...args) : bus(std::forward<Args>(args)...) {}
+
+	/// @returns @c true if @c condition implies an appropriate perform call should be made for this instruction,
+	/// @c false otherwise.
+	bool should_schedule(const Condition condition) {
+		// This short-circuit of registers_.test provides the necessary compiler clue that
+		// Condition::AL is not only [[likely]] but [[exceedingly likely]].
+		return condition == Condition::AL ? true : registers_.test(condition);
 	}
 
-	template <bool allow_register, bool set_carry, typename FieldsT>
-	uint32_t decode_shift(FieldsT fields, uint32_t &rotate_carry, uint32_t pc_offset) {
+	template <bool set_carry, typename FieldsT>
+	uint32_t decode_shift(const FieldsT fields, uint32_t &rotate_carry, const uint32_t pc_offset) {
 		// "When R15 appears in the Rm position it will give the value of the PC together
 		// with the PSR flags to the barrel shifter. ...
 		//
@@ -39,9 +78,10 @@ struct Executor {
 			operand2 = registers_[fields.operand2()];
 		}
 
-		uint32_t shift_amount;
-		if constexpr (allow_register) {
+		if constexpr (requires {fields.shift_count_is_register();}) {
 			if(fields.shift_count_is_register()) {
+				uint32_t shift_amount;
+
 				// "When R15 appears in either of the Rn or Rs positions it will give the value
 				// of the PC alone, with the PSR bits replaced by zeroes. ...
 				//
@@ -52,23 +92,19 @@ struct Executor {
 						registers_.pc(4) :
 						registers_[fields.shift_register()];
 
-				// A register shift amount of 0 has a different meaning than an in-instruction
-				// shift amount of 0.
-				if(!shift_amount) {
-					return operand2;
-				}
-			} else {
-				shift_amount = fields.shift_amount();
+				// "The amount by which the register should be shifted may be contained in
+				// ... **the bottom byte** of another register".
+				shift_amount &= 0xff;
+				shift<set_carry, false>(fields.shift_type(), operand2, shift_amount, rotate_carry);
+				return operand2;
 			}
-		} else {
-			shift_amount = fields.shift_amount();
 		}
 
-		shift<set_carry>(fields.shift_type(), operand2, shift_amount, rotate_carry);
+		shift<set_carry, true>(fields.shift_type(), operand2, fields.shift_amount(), rotate_carry);
 		return operand2;
 	}
 
-	template <Flags f> void perform(DataProcessing fields) {
+	template <Flags f> void perform(const DataProcessing fields) {
 		constexpr DataProcessingFlags flags(f);
 		const bool shift_by_register = !flags.operand2_is_immediate() && fields.shift_count_is_register();
 
@@ -96,15 +132,36 @@ struct Executor {
 		// Get operand 2.
 		if constexpr (flags.operand2_is_immediate()) {
 			operand2 = fields.immediate();
-			if(fields.rotate()) {
-				shift<ShiftType::RotateRight, shift_sets_carry>(operand2, fields.rotate(), rotate_carry);
-			}
+			shift<ShiftType::RotateRight, shift_sets_carry, false>(operand2, fields.rotate(), rotate_carry);
 		} else {
-			operand2 = decode_shift<true, shift_sets_carry>(fields, rotate_carry, shift_by_register ? 8 : 4);
+			operand2 = decode_shift<shift_sets_carry>(fields, rotate_carry, shift_by_register ? 8 : 4);
 		}
 
-		// Perform the data processing operation.
 		uint32_t conditions = 0;
+		const auto sub = [&](uint32_t lhs, uint32_t rhs) {
+			conditions = lhs - rhs;
+
+			if constexpr (
+				flags.operation() == DataProcessingOperation::SBC ||
+				flags.operation() == DataProcessingOperation::RSC
+			) {
+				conditions += registers_.c() - 1;
+			}
+
+			if constexpr (flags.set_condition_codes()) {
+				// "For a subtraction, including the comparison instruction CMP, C is set to 0 if
+				// the subtraction produced a borrow (that is, an unsigned underflow), and to 1 otherwise."
+				using NumOp = Numeric::Operation;
+				registers_.set_c(!Numeric::carried_out<NumOp::Subtract, 31>(lhs, rhs, conditions));
+				registers_.set_v(Numeric::overflow<NumOp::Subtract>(lhs, rhs, conditions));
+			}
+
+			if constexpr (!is_comparison(flags.operation())) {
+				destination = conditions;
+			}
+		};
+
+		// Perform the data processing operation.
 		switch(flags.operation()) {
 			// Logical operations.
 			case DataProcessingOperation::AND:	conditions = destination = operand1 & operand2;		break;
@@ -128,8 +185,9 @@ struct Executor {
 				}
 
 				if constexpr (flags.set_condition_codes()) {
-					registers_.set_c(Numeric::carried_out<true, 31>(operand1, operand2, conditions));
-					registers_.set_v(Numeric::overflow<true>(operand1, operand2, conditions));
+					using NumOp = Numeric::Operation;
+					registers_.set_c(Numeric::carried_out<NumOp::Add, 31>(operand1, operand2, conditions));
+					registers_.set_v(Numeric::overflow<NumOp::Add>(operand1, operand2, conditions));
 				}
 
 				if constexpr (!is_comparison(flags.operation())) {
@@ -140,56 +198,25 @@ struct Executor {
 			case DataProcessingOperation::SUB:
 			case DataProcessingOperation::SBC:
 			case DataProcessingOperation::CMP:
-				conditions = operand1 - operand2;
-
-				if constexpr (flags.operation() == DataProcessingOperation::SBC) {
-					conditions -= registers_.c();
-				}
-
-				if constexpr (flags.set_condition_codes()) {
-					registers_.set_c(Numeric::carried_out<false, 31>(operand1, operand2, conditions));
-					registers_.set_v(Numeric::overflow<false>(operand1, operand2, conditions));
-				}
-
-				if constexpr (!is_comparison(flags.operation())) {
-					destination = conditions;
-				}
+				sub(operand1, operand2);
 			break;
 
 			case DataProcessingOperation::RSB:
 			case DataProcessingOperation::RSC:
-				conditions = operand2 - operand1;
-
-				if constexpr (flags.operation() == DataProcessingOperation::RSC) {
-					conditions -= registers_.c();
-				}
-
-				if constexpr (flags.set_condition_codes()) {
-					registers_.set_c(Numeric::carried_out<false, 31>(operand2, operand1, conditions));
-					registers_.set_v(Numeric::overflow<false>(operand2, operand1, conditions));
-				}
-
-				destination = conditions;
+				sub(operand2, operand1);
 			break;
 		}
 
+		if(!is_comparison(flags.operation()) && fields.destination() == 15) {
+			set_pc<true>(pc_proxy);
+		}
 		if constexpr (flags.set_condition_codes()) {
-			// "When Rd is a register other than R15, the condition code flags in the PSR may be
-			// updated from the ALU flags as described above. When Rd is R15 and the S flag in
-			// the instruction is set, the PSR is overwritten by the corresponding ALU result.
-			//
-			// ... if the instruction is of a type which does not normally produce a result
-			// (CMP, CMN, TST, TEQ) but Rd is R15 and the S bit is set, the result will be used in
-			// this case to update those PSR flags which are not protected by virtue of the
-			// processor mode."
-
+			// "When Rd is R15 and the S flag in the instruction is set, the PSR is overwritten by the
+			// corresponding bits in the ALU result... [even] if the instruction is of a type that does not
+			// normally produce a result (CMP, CMN, TST, TEQ) ... the result will be used to update those
+			// PSR flags which are not protected by virtue of the processor mode"
 			if(fields.destination() == 15) {
-				if constexpr (is_comparison(flags.operation())) {
-					registers_.set_status(pc_proxy);
-				} else {
-					registers_.set_status(pc_proxy);
-					registers_.set_pc(pc_proxy);
-				}
+				set_status(conditions);
 			} else {
 				// Set N and Z in a unified way.
 				registers_.set_nz(conditions);
@@ -199,15 +226,10 @@ struct Executor {
 					registers_.set_c(rotate_carry);
 				}
 			}
-		} else {
-			// "If the S flag is clear when Rd is R15, only the 24 PC bits of R15 will be written."
-			if(fields.destination() == 15) {
-				registers_.set_pc(pc_proxy);
-			}
 		}
 	}
 
-	template <Flags f> void perform(Multiply fields) {
+	template <Flags f> void perform(const Multiply fields) {
 		constexpr MultiplyFlags flags(f);
 
 		// R15 rules:
@@ -234,16 +256,16 @@ struct Executor {
 		}
 	}
 
-	template <Flags f> void perform(Branch branch) {
+	template <Flags f> void perform(const Branch branch) {
 		constexpr BranchFlags flags(f);
 
 		if constexpr (flags.operation() == BranchFlags::Operation::BL) {
-			registers_[14] = registers_.pc(0);
+			registers_[14] = registers_.pc_status(0);
 		}
-		registers_.set_pc(registers_.pc(4) + branch.offset());
+		set_pc<true>(registers_.pc(4) + branch.offset());
 	}
 
-	template <Flags f> void perform(SingleDataTransfer transfer) {
+	template <Flags f> void perform(const SingleDataTransfer transfer) {
 		constexpr SingleDataTransferFlags flags(f);
 
 		// Calculate offset.
@@ -253,7 +275,7 @@ struct Executor {
 			// the register specified shift amounts are not available
 			// in this instruction class.
 			uint32_t carry = registers_.c();
-			offset = decode_shift<false, false>(transfer, carry, 4);
+			offset = decode_shift<false>(transfer, carry, 4);
 		} else {
 			offset = transfer.immediate();
 		}
@@ -278,12 +300,26 @@ struct Executor {
 		}
 
 		// Check for an address exception.
-		if(address >= (1 << 26)) {
-			registers_.exception<Registers::Exception::Address>();
+		if(is_invalid_address(address)) {
+			exception<Registers::Exception::Address>();
 			return;
 		}
 
-		constexpr bool trans = !flags.pre_index() && flags.write_back_address();
+		// Decide whether to write back — when either postindexing or else write back is requested.
+		//
+		// Note to future self on write-back:
+		//
+		// It's currently unclear what to do in the case of e.g. `str r13, [r13, #0x10]!`. Is the value
+		// written r13 as modified or the original r13? If it's as modified, does that imply that
+		// write back has occurred regardless of a data abort?
+		//
+		// TODO: resolve uncertainty.
+		constexpr bool should_write_back = !flags.pre_index() || flags.write_back_address();
+
+		// "... post-indexed data transfers always write back the modified base. The only use of the [write-back address]
+		// bit in a post-indexed data transfer is in non-user mode code, where setting the W bit forces the /TRANS pin
+		// to go LOW for the transfer"
+		const bool trans = (registers_.mode() == Mode::User) || (!flags.pre_index() && flags.write_back_address());
 		if constexpr (flags.operation() == SingleDataTransferFlags::Operation::STR) {
 			const uint32_t source =
 				transfer.source() == 15 ?
@@ -299,132 +335,172 @@ struct Executor {
 			}
 
 			if(!did_write) {
-				registers_.exception<Registers::Exception::DataAbort>();
+				exception<Registers::Exception::DataAbort>();
 				return;
 			}
 		} else {
 			bool did_read;
-			uint32_t value;
+			uint32_t value = 0;
 
 			if constexpr (flags.transfer_byte()) {
-				uint8_t target;
+				uint8_t target = 0;	// Value should never be used; this avoids a spurious GCC warning.
 				did_read = bus.template read<uint8_t>(address, target, registers_.mode(), trans);
-				value = target;
+				if(did_read) {
+					value = target;
+				}
 			} else {
 				did_read = bus.template read<uint32_t>(address, value, registers_.mode(), trans);
 
-				// "An address offset from a word boundary will cause the data to be rotated into the
-				// register so that the addressed byte occuplies bits 0 to 7."
-				switch(address & 3) {
-					case 0:	break;
-					case 1:	value = (value >> 8) | (value << 24);	break;
-					case 2:	value = (value >> 16) | (value << 16);	break;
-					case 3:	value = (value >> 24) | (value << 8);	break;
+				if constexpr (model != Model::ARMv2with32bitAddressing) {
+					// "An address offset from a word boundary will cause the data to be rotated into the
+					// register so that the addressed byte occuplies bits 0 to 7."
+					//
+					// (though the test set that inspired 'ARMv2with32bitAddressing' appears not to honour this;
+					// test below assumes it went away by the version of ARM that set supports)
+					switch(address & 3) {
+						case 0:	break;
+						case 1:	value = (value >> 8) | (value << 24);	break;
+						case 2:	value = (value >> 16) | (value << 16);	break;
+						case 3:	value = (value >> 24) | (value << 8);	break;
+					}
 				}
 			}
 
 			if(!did_read) {
-				registers_.exception<Registers::Exception::DataAbort>();
+				exception<Registers::Exception::DataAbort>();
 				return;
 			}
 
 			if(transfer.destination() == 15) {
-				registers_.set_pc(value);
+				set_pc<true>(value);
 			} else {
 				registers_[transfer.destination()] = value;
 			}
 		}
 
-		// If either postindexing or else with writeback, update base.
-		if constexpr (!flags.pre_index() || flags.write_back_address()) {
-			if(transfer.base() == 15) {
-				registers_.set_pc(offsetted_address);
-			} else {
-				registers_[transfer.base()] = offsetted_address;
+		if constexpr (should_write_back) {
+			// Empirically: I think order of operations for a load is: (i) write back; (ii) store value from bus.
+			// So if this is a load, don't allow write back to overwrite what was loaded.
+			if(flags.operation() == SingleDataTransferFlags::Operation::STR || transfer.base() != transfer.destination()) {
+				if(transfer.base() == 15) {
+					set_pc<true>(offsetted_address);
+				} else {
+					registers_[transfer.base()] = offsetted_address;
+				}
 			}
 		}
 	}
-	template <Flags f> void perform(BlockDataTransfer transfer) {
+	template <Flags f> void perform(const BlockDataTransfer transfer) {
 		constexpr BlockDataTransferFlags flags(f);
+		constexpr bool is_ldm = flags.operation() == BlockDataTransferFlags::Operation::LDM;
 
-		// Grab a copy of the list of registers to transfer.
-		const uint16_t list = transfer.register_list();
+		// Ensure that *base points to the base register if it can be written back;
+		// also set address to the base.
+		uint32_t *base = nullptr;
+		uint32_t address;
+		if(transfer.base() == 15) {
+			address = registers_.pc_status(4);
+		} else {
+			base = &registers_[transfer.base()];
+			address = *base;
+		}
+
+		// For an LDM pc_proxy will receive any read R15 value;
+		// for an STM it'll hold the value to be written.
+		uint32_t pc_proxy = 0;
 
 		// Read the base address and take a copy in case a data abort means that
-		// it has to be restored later, and to write that value rather than
-		// the final address if the base register is first in the write-out list.
-		uint32_t address = transfer.base() == 15 ?
-			registers_.pc_status(4) :
-			registers_[transfer.base()];
-		const uint32_t initial_address = address;
+		// it has to be restored later.
+		uint32_t initial_address = address;
 
-		// Figure out what the final address will be, since that's what'll be
-		// in the output if the base register is second or beyond in the
-		// write-out list.
+		// Grab the register list and decide whether user registers are being used.
+		const uint16_t list = transfer.register_list();
+		const bool adopt_user_mode = flags.load_psr() && (!is_ldm || !(list & (1 << 15)));
+
+		// Write back will prima facie occur if:
+		//	(i) the instruction asks for it; and
+		//	(ii) the write-back register isn't R15.
+		bool write_back = base && flags.write_back_address();
+
+		// Collate a transfer list; this is a very long-winded way of implementing STM
+		// and LDM but right now the objective is merely correctness.
+		//
+		// If this is LDM and it turns out that base is also in the transfer list,
+		// disable write back.
+		uint32_t *transfer_sources[16];
+		uint32_t total = 0;
+		for(uint32_t c = 0; c < 15; c++) {
+			if(list & (1 << c)) {
+				uint32_t *const next = &registers_.reg(adopt_user_mode, c);
+				if(is_ldm && next == base) write_back = false;
+				transfer_sources[total++] = next;
+			}
+		}
+
+		// If the last thing in the list is R15, redirect it to the PC proxy,
+		// possibly populating with a meaningful value.
+		if(list & (1 << 15)) {
+			if(!is_ldm) {
+				pc_proxy = registers_.pc_status(8);
+			}
+			transfer_sources[total++] = &pc_proxy;
+		}
+
+		// If this is STM and the first thing in the list is the same as base,
+		// point it at initial_address instead.
+		if(!is_ldm && total && transfer_sources[0] == base) {
+			transfer_sources[0] = &initial_address;
+		}
+
+		// Calculate final_address, which is what will be written back if required;
+		// update address to point to the low end of the transfer block.
 		//
 		// Writes are always ordered from lowest address to highest; adjust the
 		// start address if this write is supposed to fill memory downward from
 		// the base.
-
-		// TODO: use std::popcount when adopting C++20.
-		uint32_t total = ((list & 0xa) >> 1) + (list & 0x5);
-		total = ((list & 0xc) >> 2) + (list & 0x3);
-
 		uint32_t final_address;
 		if constexpr (!flags.add_offset()) {
-			final_address = address + total * 4;
+			// Decrementing mode; final_address is the value the base register should
+			// have after this operation if writeback is enabled, so it's below
+			// the original address. But also writes always occur from lowest address
+			// to highest, so push the current address to the bottom.
+			final_address = address - total * 4;
 			address = final_address;
 		} else {
 			final_address = address + total * 4;
 		}
 
-		// For loads, keep a record of the value replaced by the last load and
-		// where it came from. A data abort cancels both the current load and
-		// the one before it, so this is used by this implementation to undo
-		// the previous load in that case.
-		struct {
-			uint32_t *target = nullptr;
-			uint32_t value;
-		} last_replacement;
-
-		// Check whether access is forced ot the user bank; if so then switch
-		// to it now. Also keep track of the original mode to switch back at
-		// the end.
-		const Mode original_mode = registers_.mode();
-		const bool adopt_user_mode =
-			(
-				flags.operation() == BlockDataTransferFlags::Operation::STM &&
-				flags.load_psr()
-			) ||
-			(
-				flags.operation() == BlockDataTransferFlags::Operation::LDM &&
-				!(list & (1 << 15))
-			);
-		if(adopt_user_mode) {
-			registers_.set_mode(Mode::User);
+		// Write back if enabled.
+		if(write_back) {
+			*base = final_address;
 		}
 
-		bool address_error = false;
+		// Update address in advance for:
+		//	* pre-indexed upward stores; and
+		//	* post-indxed downward stores.
+		if constexpr (flags.pre_index() == flags.add_offset()) {
+			address += 4;
+		}
 
-		// Keep track of whether all accesses succeeded in order potentially to
-		// throw a data abort later.
+		// Perform all memory accesses, tracking whether either kind of abort will be
+		// required.
+		const bool trans = registers_.mode() == Mode::User;
+		const bool address_error = is_invalid_address(address);
 		bool accesses_succeeded = true;
-		const auto access = [&](uint32_t &value) {
-			// Update address in advance for:
-			//	* pre-indexed upward stores; and
-			//	* post-indxed downward stores.
-			if constexpr (flags.pre_index() == flags.add_offset()) {
-				address += 4;
-			}
 
-			if constexpr (flags.operation() == BlockDataTransferFlags::Operation::STM) {
-				if(!address_error) {
-					// "If the abort occurs during a store multiple instruction, ARM takes little action until
-					// the instruction completes, whereupon it enters the data abort trap. The memory manager is
-					// responsible for preventing erroneous writes to the memory."
-					accesses_succeeded &= bus.template write<uint32_t>(address, value, registers_.mode(), false);
-				}
-			} else {
+		if constexpr (is_ldm) {
+			// Keep a record of the value replaced by the last load and
+			// where it came from. A data abort cancels both the current load and
+			// the one before it, so this might be used by this implementation to
+			// undo the previous load.
+			struct {
+				uint32_t *target = nullptr;
+				uint32_t value = 0;
+			} last_replacement;
+
+			for(uint32_t c = 0; c < total; c++) {
+				uint32_t &value = *transfer_sources[c];
+
 				// When ARM detects a data abort during a load multiple instruction, it modifies the operation of
 				// the instruction to ensure that recovery is possible.
 				//
@@ -433,115 +509,92 @@ struct Executor {
 				//	*	The base register is restored, to its modified value if write-back was requested.
 				if(accesses_succeeded) {
 					const uint32_t replaced = value;
-					accesses_succeeded &= bus.template read<uint32_t>(address, value, registers_.mode(), false);
+					accesses_succeeded &= bus.template read<uint32_t>(address, value, registers_.mode(), trans);
 
 					// Update the last-modified slot if the access succeeded; otherwise
 					// undo the last modification if there was one, and undo the base
 					// address change.
 					if(accesses_succeeded) {
 						last_replacement.value = replaced;
-						last_replacement.target = &value;
+						last_replacement.target = transfer_sources[c];
 					} else {
 						if(last_replacement.target) {
 							*last_replacement.target = last_replacement.value;
 						}
 
-						// Also restore the base register.
-						if(transfer.base() != 15) {
-							if constexpr (flags.write_back_address()) {
-								registers_[transfer.base()] = final_address;
+						// Also restore the base register, including to its original value
+						// if write back was disabled.
+						if(base) {
+							if(write_back) {
+								*base = final_address;
 							} else {
-								registers_[transfer.base()] = initial_address;
+								*base = initial_address;
 							}
 						}
 					}
 				} else {
 					// Implicitly: do the access anyway, but don't store the value. I think.
 					uint32_t throwaway;
-					bus.template read<uint32_t>(address, throwaway, registers_.mode(), false);
+					bus.template read<uint32_t>(address, throwaway, registers_.mode(), trans);
 				}
-			}
 
-			// Update address after the fact for:
-			//	* post-indexed upward stores; and
-			//	* pre-indxed downward stores.
-			if constexpr (flags.pre_index() != flags.add_offset()) {
+				// Advance.
 				address += 4;
 			}
-		};
+		} else {
+			for(uint32_t c = 0; c < total; c++) {
+				uint32_t &value = *transfer_sources[c];
 
-		// Check for an address exception.
-		address_error = address >= (1 << 26);
-
-		// Write out registers 1 to 14.
-		for(int c = 0; c < 15; c++) {
-			if(list & (1 << c)) {
-				access(registers_[c]);
-
-				// Modify base register after each write if writeback is enabled.
-				// This'll ensure the unmodified value goes out if it was the
-				// first-selected register only.
-				if constexpr (flags.write_back_address()) {
-					if(transfer.base() != 15) {
-						registers_[transfer.base()] = final_address;
-					}
+				if(!address_error) {
+					// "If the abort occurs during a store multiple instruction, ARM takes little action until
+					// the instruction completes, whereupon it enters the data abort trap. The memory manager is
+					// responsible for preventing erroneous writes to the memory."
+					accesses_succeeded &= bus.template write<uint32_t>(address, value, registers_.mode(), trans);
+				} else {
+					// Do a throwaway read.
+					uint32_t throwaway;
+					bus.template read<uint32_t>(address, throwaway, registers_.mode(), trans);
 				}
-			}
-		}
 
-		// Definitively write back, even if the earlier register list
-		// was empty.
-		if constexpr (flags.write_back_address()) {
-			if(transfer.base() != 15) {
-				registers_[transfer.base()] = final_address;
+				// Advance.
+				address += 4;
 			}
-		}
-
-		// Read or write the program counter as a special case if it was in the list.
-		if(list & (1 << 15)) {
-			uint32_t value;
-			if constexpr (flags.operation() == BlockDataTransferFlags::Operation::STM) {
-				value = registers_.pc_status(8);
-				access(value);
-			} else {
-				access(value);
-				registers_.set_pc(value);
-				if constexpr (flags.load_psr()) {
-					registers_.set_status(value);
-				}
-			}
-		}
-
-		// If user mode was unnaturally forced, switch back to the actual
-		// current operating mode.
-		if(adopt_user_mode) {
-			registers_.set_mode(original_mode);
 		}
 
 		// Finally throw an exception if necessary.
 		if(address_error) {
-			registers_.exception<Registers::Exception::Address>();
+			exception<Registers::Exception::Address>();
 		} else if(!accesses_succeeded) {
-			registers_.exception<Registers::Exception::DataAbort>();
+			exception<Registers::Exception::DataAbort>();
+		} else {
+			// If this was an LDM to R15 then apply it appropriately.
+			if(is_ldm && list & (1 << 15)) {
+				set_pc<true>(pc_proxy);
+				if constexpr (flags.load_psr()) {
+					set_status(pc_proxy);
+				}
+			}
 		}
 	}
 
-	void software_interrupt() {
-		registers_.exception<Registers::Exception::SoftwareInterrupt>();
+	void software_interrupt(const SoftwareInterrupt swi) {
+		if(control_flow_handler_.should_swi(swi.comment())) {
+			exception<Registers::Exception::SoftwareInterrupt>();
+		}
 	}
 	void unknown() {
-		registers_.exception<Registers::Exception::UndefinedInstruction>();
+		exception<Registers::Exception::UndefinedInstruction>();
 	}
 
 	// Act as if no coprocessors present.
 	template <Flags> void perform(CoprocessorRegisterTransfer) {
-		registers_.exception<Registers::Exception::UndefinedInstruction>();
+		exception<Registers::Exception::UndefinedInstruction>();
 	}
 	template <Flags> void perform(CoprocessorDataOperation) {
-		registers_.exception<Registers::Exception::UndefinedInstruction>();
+		exception<Registers::Exception::UndefinedInstruction>();
 	}
 	template <Flags> void perform(CoprocessorDataTransfer) {
-		registers_.exception<Registers::Exception::UndefinedInstruction>();
+		exception<Registers::Exception::UndefinedInstruction>();
 	}
 
 	/// @returns The current registers state.
@@ -549,10 +602,27 @@ struct Executor {
 		return registers_;
 	}
 
+	// Included primarily for testing; my full opinion on this is still
+	// incompletely-formed.
+	Registers &registers() {
+		return registers_;
+	}
+
+	/// Indicates a prefetch abort exception.
+	void prefetch_abort() {
+		exception<Registers::Exception::PrefetchAbort>();
+	}
+
 	/// Sets the expected address of the instruction after whichever  is about to be executed.
 	/// So it's PC+4 compared to most other systems.
-	void set_pc(uint32_t pc) {
+	///
+	/// By default this is not forwarded to the control-flow handler.
+	template <bool notify = false>
+	void set_pc(const uint32_t pc) {
 		registers_.set_pc(pc);
+		if constexpr (notify) {
+			control_flow_handler_.did_set_pc();
+		}
 	}
 
 	/// @returns The address of the instruction that should be fetched next. So as execution of each instruction
@@ -565,13 +635,37 @@ struct Executor {
 	MemoryT bus;
 
 private:
+	template <Registers::Exception type>
+	void exception() {
+		registers_.exception<type>();
+		control_flow_handler_.did_set_pc();
+	}
+
+	void set_status(const uint32_t status) {
+		registers_.set_status(status);
+		control_flow_handler_.did_set_status();
+	}
+
+	using ControlFlowHandlerTStorage =
+		typename std::conditional<
+			std::is_same_v<ControlFlowHandlerT, NullControlFlowHandler>,
+			ControlFlowHandlerT,
+			ControlFlowHandlerT &>::type;
+	ControlFlowHandlerTStorage control_flow_handler_;
 	Registers registers_;
+
+	static bool is_invalid_address(const uint32_t address) {
+		if constexpr (model == Model::ARMv2with32bitAddressing) {
+			return false;
+		}
+		return address >= 1 << 26;
+	}
 };
 
 /// Executes the instruction @c instruction which should have been fetched from @c executor.pc(),
 /// modifying @c executor.
-template <Model model, typename MemoryT>
-void execute(uint32_t instruction, Executor<model, MemoryT> &executor) {
+template <Model model, typename MemoryT, typename StatusObserverT>
+void execute(const uint32_t instruction, Executor<model, MemoryT, StatusObserverT> &executor) {
 	executor.set_pc(executor.pc() + 4);
 	dispatch<model>(instruction, executor);
 }

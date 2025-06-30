@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include <memory>
-
 #include "File.hpp"
-#include "../../../Storage/Tape/Tape.hpp"
+#include "Storage/Tape/Tape.hpp"
+
+#include <vector>
 
 namespace Analyser::Static::Acorn {
 
-std::vector<File> GetFiles(const std::shared_ptr<Storage::Tape::Tape> &tape);
+std::vector<File> GetFiles(Storage::Tape::TapeSerialiser &);
 
 }

@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "../../../Storage/Disk/Disk.hpp"
+#include "Storage/Disk/Disk.hpp"
 #include "File.hpp"
 
 #include <vector>
 
 namespace Analyser::Static::Commodore {
 
-std::vector<File> GetFiles(const std::shared_ptr<Storage::Disk::Disk> &disk);
+std::vector<File> GetFiles(const std::shared_ptr<Storage::Disk::Disk> &);
 
 }

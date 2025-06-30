@@ -20,8 +20,12 @@
 #include "ShiftRoll.hpp"
 #include "Stack.hpp"
 
-#include "../Interrupts.hpp"
-#include "../AccessType.hpp"
+#include "InstructionSets/x86/AccessType.hpp"
+#include "InstructionSets/x86/Descriptors.hpp"
+#include "InstructionSets/x86/Exceptions.hpp"
+#include "InstructionSets/x86/MachineStatus.hpp"
+
+#include <type_traits>
 
 //
 // Comments throughout headers above come from the 1997 edition of the
@@ -115,16 +119,25 @@ template <
 		}
 	};
 
+	// Currently a special case for descriptor loading; assumes an indirect operand and returns the
+	// address indicated. Unlike [source/destination]_r it doesn't read an IntT from that address,
+	// since those instructions load an atypical six bytes.
+	const auto source_indirect = [&]() -> AddressT {
+		return AddressT(
+			address<Source::Indirect, AddressT, AccessType::Read>(instruction, instruction.source(), context)
+		);
+	};
+
 	// Some instructions use a pair of registers as an extended accumulator — DX:AX or EDX:EAX.
 	// The two following return the high and low parts of that pair; they also work in Byte mode to return AH:AL,
 	// i.e. AX split into high and low parts.
 	const auto pair_high = [&]() -> IntT& {
-		if constexpr (data_size == DataSize::Byte) 			return context.registers.ah();
+		if constexpr (data_size == DataSize::Byte)			return context.registers.ah();
 		else if constexpr (data_size == DataSize::Word)		return context.registers.dx();
 		else if constexpr (data_size == DataSize::DWord)	return context.registers.edx();
 	};
 	const auto pair_low = [&]() -> IntT& {
-		if constexpr (data_size == DataSize::Byte) 			return context.registers.al();
+		if constexpr (data_size == DataSize::Byte)			return context.registers.al();
 		else if constexpr (data_size == DataSize::Word)		return context.registers.ax();
 		else if constexpr (data_size == DataSize::DWord)	return context.registers.eax();
 	};
@@ -169,15 +182,34 @@ template <
 	//	* break if there's a chance of writeback.
 	switch(instruction.operation()) {
 		default:
+			// If execution gets here then the decoder recognised an operation that I have yet to implement.
+			// This is definitely an oversight on my part. It cannot possibly be a problem with the underlying software.
 			assert(false);
+			[[fallthrough]];
 
-		case Operation::Invalid:
-			// TODO: throw on higher-order processors.
-		case Operation::ESC:
 		case Operation::NOP:	return;
 
-		case Operation::AAM:	Primitive::aam(context.registers.axp(), uint8_t(instruction.operand()), context);	return;
-		case Operation::AAD:	Primitive::aad(context.registers.axp(), uint8_t(instruction.operand()), context);	return;
+		case Operation::Invalid:
+			if constexpr (!uses_8086_exceptions(ContextT::model)) {
+				throw Exception::exception<Vector::InvalidOpcode>();
+			}
+		return;
+
+		case Operation::ESC:
+			if constexpr (!uses_8086_exceptions(ContextT::model)) {
+				const auto should_throw = context.registers.msw() & MachineStatus::EmulateProcessorExtension;
+				if(should_throw) {
+					throw Exception::exception<Vector::DeviceNotAvailable>();
+				}
+			}
+		return;
+
+		case Operation::AAM:
+			Primitive::aam(context.registers.axp(), uint8_t(instruction.operand()), context);
+		return;
+		case Operation::AAD:
+			Primitive::aad(context.registers.axp(), uint8_t(instruction.operand()), context);
+		return;
 		case Operation::AAA:	Primitive::aaas<true>(context.registers.axp(), context);					return;
 		case Operation::AAS:	Primitive::aaas<false>(context.registers.axp(), context);					return;
 		case Operation::DAA:	Primitive::daas<true>(context.registers.al(), context);						return;
@@ -219,7 +251,7 @@ template <
 			} else {
 				static_assert(int(Operation::IDIV_REP) == int(Operation::LEAVE));
 				if constexpr (std::is_same_v<IntT, uint16_t> || std::is_same_v<IntT, uint32_t>) {
-					Primitive::leave<IntT>();
+					Primitive::leave<IntT>(context);
 				}
 			}
 		return;
@@ -236,8 +268,8 @@ template <
 		case Operation::CALLrel:
 			Primitive::call_relative<AddressT>(instruction.displacement(), context);
 		return;
-		case Operation::CALLabs:	Primitive::call_absolute<IntT, AddressT>(destination_r(), context);					return;
-		case Operation::CALLfar:	Primitive::call_far<AddressT>(instruction, context);									return;
+		case Operation::CALLabs:	Primitive::call_absolute<IntT, AddressT>(destination_r(), context);			return;
+		case Operation::CALLfar:	Primitive::call_far<AddressT>(instruction, context);						return;
 
 		case Operation::JMPrel:	jcc(true);														return;
 		case Operation::JMPabs:	Primitive::jump_absolute<IntT>(destination_r(), context);		return;
@@ -252,8 +284,8 @@ template <
 		case Operation::RETnear:	Primitive::ret_near(instruction, context);	return;
 		case Operation::RETfar:		Primitive::ret_far(instruction, context);	return;
 
-		case Operation::INT:	interrupt(instruction.operand(), context);		return;
-		case Operation::INTO:	Primitive::into(context);						return;
+		case Operation::INT:	interrupt(Exception::interrupt(uint8_t(instruction.operand())), context);		return;
+		case Operation::INTO:	Primitive::into(context);														return;
 
 		case Operation::SAHF:	Primitive::sahf(context.registers.ah(), context);		return;
 		case Operation::LAHF:	Primitive::lahf(context.registers.ah(), context);		return;
@@ -261,21 +293,86 @@ template <
 		case Operation::LDS:
 			if constexpr (data_size == DataSize::Word) {
 				Primitive::ld<Source::DS>(instruction, destination_w(), context);
-				context.segments.did_update(Source::DS);
 			}
 		return;
 		case Operation::LES:
 			if constexpr (data_size == DataSize::Word) {
 				Primitive::ld<Source::ES>(instruction, destination_w(), context);
-				context.segments.did_update(Source::ES);
 			}
 		return;
 
 		case Operation::LEA:	Primitive::lea<IntT>(instruction, destination_w(), context);	return;
-		case Operation::MOV:
-			Primitive::mov<IntT>(destination_w(), source_r());
-			if constexpr (std::is_same_v<IntT, uint16_t>) {
-				context.segments.did_update(instruction.destination().source());
+		case Operation::MOV: {
+			const auto source = source_r();
+			const auto segment = instruction.destination().source();
+
+			if(is_segment_register(segment)) {
+				context.segments.preauthorise(segment, source);
+				Primitive::mov<IntT>(destination_w(), source);
+				context.segments.did_update(segment);
+			} else {
+				Primitive::mov<IntT>(destination_w(), source);
+			}
+		} break;
+
+		case Operation::SMSW:
+			if constexpr (ContextT::model >= Model::i80286 && std::is_same_v<IntT, uint16_t>) {
+				Primitive::smsw(destination_w(), context);
+			} else {
+				assert(false);
+			}
+		break;
+		case Operation::LMSW:
+			if constexpr (ContextT::model >= Model::i80286 && std::is_same_v<IntT, uint16_t>) {
+				Primitive::lmsw(source_r(), context);
+			} else {
+				assert(false);
+			}
+		return;
+		case Operation::LIDT:
+			if constexpr (ContextT::model >= Model::i80286) {
+				Primitive::ldt<DescriptorTable::Interrupt, AddressT>(source_indirect(), instruction, context);
+			} else {
+				assert(false);
+			}
+		return;
+		case Operation::LGDT:
+			if constexpr (ContextT::model >= Model::i80286) {
+				Primitive::ldt<DescriptorTable::Global, AddressT>(source_indirect(), instruction, context);
+			} else {
+				assert(false);
+			}
+		return;
+		case Operation::LLDT:
+			if constexpr (ContextT::model >= Model::i80286) {
+				Primitive::lldt<AddressT>(source_r(), context);
+			} else {
+				assert(false);
+			}
+		return;
+
+		case Operation::SIDT:
+			if constexpr (ContextT::model >= Model::i80286) {
+				Primitive::sdt<DescriptorTable::Interrupt, AddressT>(source_indirect(), instruction, context);
+			} else {
+				assert(false);
+			}
+		break;
+		case Operation::SGDT:
+			if constexpr (ContextT::model >= Model::i80286) {
+				Primitive::sdt<DescriptorTable::Global, AddressT>(source_indirect(), instruction, context);
+			} else {
+				assert(false);
+			}
+		break;
+		case Operation::SLDT:
+			// TODO:
+			//	"When the destination operand is a memory location, the segment selector is written to memory as a
+			//	16-bit quantity, regardless of the operand size."
+			if constexpr (ContextT::model >= Model::i80286) {
+				Primitive::sldt<IntT>(destination_w(), context);
+			} else {
+				assert(false);
 			}
 		break;
 
@@ -334,7 +431,7 @@ template <
 				break;
 			} else {
 				static_assert(int(Operation::SETMOC) == int(Operation::BOUND));
-				Primitive::bound<IntT>(instruction, destination_r(), source_r(), context);
+				Primitive::bound<IntT, AddressT>(instruction, destination_r(), source_r(), context);
 			}
 		return;
 
@@ -343,12 +440,18 @@ template <
 
 		case Operation::XLAT:	Primitive::xlat<AddressT>(instruction, context);		return;
 
-		case Operation::POP:
-			destination_w() = Primitive::pop<IntT, false>(context);
-			if constexpr (std::is_same_v<IntT, uint16_t>) {
-				context.segments.did_update(instruction.destination().source());
+		case Operation::POP: {
+			const auto value = Primitive::pop<IntT, false>(context);
+			const auto segment = instruction.destination().source();
+
+			if(is_segment_register(segment)) {
+				context.segments.preauthorise(segment, value);
+				destination_w() = value;
+				context.segments.did_update(segment);
+			} else {
+				destination_w() = value;
 			}
-		break;
+		} break;
 		case Operation::PUSH:
 			Primitive::push<IntT, false>(source_rmw(), context);	// PUSH SP modifies SP before pushing it;
 																	// hence PUSH is sometimes read-modify-write.
@@ -357,21 +460,29 @@ template <
 		case Operation::POPF:
 			if constexpr (std::is_same_v<IntT, uint16_t> || std::is_same_v<IntT, uint32_t>) {
 				Primitive::popf(context);
+			} else {
+				assert(false);
 			}
 		return;
 		case Operation::PUSHF:
 			if constexpr (std::is_same_v<IntT, uint16_t> || std::is_same_v<IntT, uint32_t>) {
 				Primitive::pushf(context);
+			} else {
+				assert(false);
 			}
 		return;
 		case Operation::POPA:
 			if constexpr (std::is_same_v<IntT, uint16_t> || std::is_same_v<IntT, uint32_t>) {
 				Primitive::popa<IntT>(context);
+			} else {
+				assert(false);
 			}
 		return;
 		case Operation::PUSHA:
 			if constexpr (std::is_same_v<IntT, uint16_t> || std::is_same_v<IntT, uint32_t>) {
 				Primitive::pusha<IntT>(context);
+			} else {
+				assert(false);
 			}
 		return;
 
@@ -417,10 +528,12 @@ template <
 		break;
 
 		case Operation::OUTS:
-			Primitive::outs<IntT, AddressT, Repetition::None>(instruction, eCX(), context.registers.dx(), eSI(), context);
+			Primitive::outs<IntT, AddressT, Repetition::None>(
+				instruction, eCX(), context.registers.dx(), eSI(), context);
 		return;
 		case Operation::OUTS_REP:
-			Primitive::outs<IntT, AddressT, Repetition::Rep>(instruction, eCX(), context.registers.dx(), eSI(), context);
+			Primitive::outs<IntT, AddressT, Repetition::Rep>(
+				instruction, eCX(), context.registers.dx(), eSI(), context);
 		return;
 
 		case Operation::INS:
@@ -429,6 +542,36 @@ template <
 		case Operation::INS_REP:
 			Primitive::ins<IntT, AddressT, Repetition::Rep>(eCX(), context.registers.dx(), eDI(), context);
 		break;
+
+		case Operation::ARPL:
+			if constexpr (ContextT::model >= Model::i80286 && std::is_same_v<IntT, uint16_t>) {
+				if(is_real(context.cpu_control.mode())) {
+					throw Exception::exception<Vector::InvalidOpcode>();
+					return;
+				}
+				Primitive::arpl(destination_rmw(), source_r(), context);
+			} else {
+				assert(false);
+			}
+		break;
+		case Operation::CLTS:
+			if constexpr (ContextT::model >= Model::i80286) {
+				Primitive::clts(context);
+			} else {
+				assert(false);
+			}
+		break;
+
+		// TODO to reach a full 80286:
+		//
+		//	LAR
+		//	VERR
+		//	VERW
+		//	LSL
+		//	LTR
+		//	STR
+		//	IMUL_3
+		//	LOADALL
 	}
 
 	// Write to memory if required to complete this operation.
@@ -447,15 +590,19 @@ template <
 // It'd be a substantial effort to find the most neat expression of that, I think, so it is not currently done.
 //
 template <
-	typename InstructionT,
+	InstructionType type,
 	typename ContextT
-> void perform(
-	const InstructionT &instruction,
+>
+requires is_context<ContextT>
+void perform(
+	const Instruction<type> &instruction,
 	ContextT &context
 ) {
-	auto size = [](DataSize operation_size, AddressSize address_size) constexpr -> int {
+	const auto size = [](DataSize operation_size, AddressSize address_size) constexpr -> int {
 		return int(operation_size) + (int(address_size) << 2);
 	};
+
+	static constexpr bool supports_32bit = type != InstructionType::Bits16;
 
 	// Dispatch to a function specialised on data and address size.
 	switch(size(instruction.operation_size(), instruction.address_size())) {
@@ -473,25 +620,29 @@ template <
 		// model combinations. So if a caller nominates a 16-bit model it can supply registers and memory objects
 		// that don't implement 32-bit registers or accesses.
 		case size(DataSize::Byte, AddressSize::b32):
-			if constexpr (is_32bit(ContextT::model)) {
+			assert(supports_32bit);
+			if constexpr (supports_32bit) {
 				perform<DataSize::Byte, AddressSize::b32>(instruction, context);
 				return;
 			}
 		break;
 		case size(DataSize::Word, AddressSize::b32):
-			if constexpr (is_32bit(ContextT::model)) {
+			assert(supports_32bit);
+			if constexpr (supports_32bit) {
 				perform<DataSize::Word, AddressSize::b32>(instruction, context);
 				return;
 			}
 		break;
 		case size(DataSize::DWord, AddressSize::b16):
-			if constexpr (is_32bit(ContextT::model)) {
+			assert(supports_32bit);
+			if constexpr (supports_32bit) {
 				perform<DataSize::DWord, AddressSize::b16>(instruction, context);
 				return;
 			}
 		break;
 		case size(DataSize::DWord, AddressSize::b32):
-			if constexpr (is_32bit(ContextT::model)) {
+			assert(supports_32bit);
+			if constexpr (supports_32bit) {
 				perform<DataSize::DWord, AddressSize::b32>(instruction, context);
 				return;
 			}
@@ -507,27 +658,71 @@ template <
 
 template <
 	typename ContextT
-> void interrupt(
-	int index,
+>
+requires is_context<ContextT>
+void interrupt(
+	const Exception exception,
 	ContextT &context
 ) {
-	const uint32_t address = static_cast<uint32_t>(index) << 2;
-	context.memory.preauthorise_read(address, sizeof(uint16_t) * 2);
-	context.memory.preauthorise_stack_write(sizeof(uint16_t) * 3);
+	const auto table_pointer = [&] {
+		if constexpr (ContextT::model >= Model::i80286) {
+			return context.registers.template get<DescriptorTable::Interrupt>();
+		}
+		return DescriptorTablePointer{
+			.limit = 1024,
+			.base = 0
+		};
+	} ();
 
-	const uint16_t ip = context.memory.template access<uint16_t, AccessType::PreauthorisedRead>(address);
-	const uint16_t cs = context.memory.template access<uint16_t, AccessType::PreauthorisedRead>(address + 2);
+	const auto far_call = [&](const uint16_t segment, const uint16_t offset) {
+		context.memory.preauthorise_stack_write(sizeof(uint16_t) * 3);
 
-	auto flags = context.flags.get();
-	Primitive::push<uint16_t, true>(flags, context);
+		const auto flags = context.flags.get();
+		Primitive::push<uint16_t, true>(flags, context);
+
+		// Push CS and IP.
+		Primitive::push<uint16_t, true>(context.registers.cs(), context);
+		Primitive::push<uint16_t, true>(context.registers.ip(), context);
+
+		// Set new destination.
+		context.flow_controller.jump(segment, offset);
+	};
+
+	if constexpr (ContextT::model >= Model::i80286) {
+		if(context.registers.msw() & MachineStatus::ProtectedModeEnable) {
+			const auto call_gate = descriptor_at<InstructionSet::x86::InterruptDescriptor>(
+				context.linear_memory, table_pointer, uint16_t(exception.vector << 3));
+
+			if(!call_gate.present()) {
+				printf("TODO: should throw for non-present IDT entry\n");
+				assert(false);
+			}
+
+			if(
+				call_gate.type() != InterruptDescriptor::Type::Interrupt16 &&
+				call_gate.type() != InterruptDescriptor::Type::Trap16
+			) {
+				printf("TODO: unknown or unhandled call gate type\n");
+				assert(false);
+			}
+
+			far_call(call_gate.segment(), static_cast<uint16_t>(call_gate.offset()));
+			if(call_gate.type() == InterruptDescriptor::Type::Interrupt16) {
+				context.flags.template set_from<Flag::Interrupt>(0);
+			}
+			return;
+		}
+	}
+
+	const uint32_t address = static_cast<uint32_t>(table_pointer.base + exception.vector) << 2;
+	context.linear_memory.preauthorise_read(address, sizeof(uint16_t) * 2);
+
+	// TODO: I think (?) these are always physical addresses, not linear ones.
+	// Indicate that when fetching.
+	const uint16_t ip = context.linear_memory.template read<uint16_t>(address);
+	const uint16_t cs = context.linear_memory.template read<uint16_t>(address + 2);
+	far_call(cs, ip);
 	context.flags.template set_from<Flag::Interrupt, Flag::Trap>(0);
-
-	// Push CS and IP.
-	Primitive::push<uint16_t, true>(context.registers.cs(), context);
-	Primitive::push<uint16_t, true>(context.registers.ip(), context);
-
-	// Set new destination.
-	context.flow_controller.jump(cs, ip);
 }
 
 }

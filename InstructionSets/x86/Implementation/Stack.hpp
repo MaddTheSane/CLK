@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "../AccessType.hpp"
+#include "InstructionSets/x86/AccessType.hpp"
 
 #include <type_traits>
 
@@ -18,7 +18,7 @@ namespace InstructionSet::x86::Primitive {
 // which should place the value of SP after the push onto the stack.
 template <typename IntT, bool preauthorised, typename ContextT>
 void push(
-	IntT &value,
+	const IntT &value,
 	ContextT &context
 ) {
 	context.registers.sp() -= sizeof(IntT);
@@ -45,7 +45,7 @@ IntT pop(
 
 template <typename ContextT>
 void sahf(
-	uint8_t &ah,
+	const uint8_t &ah,
 	ContextT &context
 ) {
 	/*
@@ -86,7 +86,7 @@ template <typename ContextT>
 void pushf(
 	ContextT &context
 ) {
-	uint16_t value = context.flags.get();
+	const uint16_t value = context.flags.get();
 	push<uint16_t, false>(value, context);
 }
 
@@ -121,7 +121,7 @@ void pusha(
 	ContextT &context
 ) {
 	context.memory.preauthorise_stack_read(sizeof(IntT) * 8);
-	IntT initial_sp = context.registers.sp();
+	const IntT initial_sp = context.registers.sp();
 	if constexpr (std::is_same_v<IntT, uint32_t>) {
 		push<uint32_t, true>(context.registers.eax(), context);
 		push<uint32_t, true>(context.registers.ecx(), context);
@@ -130,7 +130,7 @@ void pusha(
 		push<uint32_t, true>(initial_sp, context);
 		push<uint32_t, true>(context.registers.ebp(), context);
 		push<uint32_t, true>(context.registers.esi(), context);
-		push<uint32_t, true>(context.registers.esi(), context);
+		push<uint32_t, true>(context.registers.edi(), context);
 	} else {
 		push<uint16_t, true>(context.registers.ax(), context);
 		push<uint16_t, true>(context.registers.cx(), context);
@@ -139,7 +139,7 @@ void pusha(
 		push<uint16_t, true>(initial_sp, context);
 		push<uint16_t, true>(context.registers.bp(), context);
 		push<uint16_t, true>(context.registers.si(), context);
-		push<uint16_t, true>(context.registers.si(), context);
+		push<uint16_t, true>(context.registers.di(), context);
 	}
 }
 
@@ -152,33 +152,38 @@ void enter(
 	const auto alloc_size = instruction.dynamic_storage_size();
 	const auto nesting_level = instruction.nesting_level() & 0x1f;
 
-	// Preauthorse contents that'll be fetched via BP.
+	// Preauthorise contents that'll be fetched via BP.
 	const auto copied_pointers = nesting_level - 2;
 	if(copied_pointers > 0) {
 		context.memory.preauthorise_read(
 			Source::SS,
-			context.registers.bp() - copied_pointers * sizeof(uint16_t),
-			copied_pointers * sizeof(uint16_t)
+			uint16_t(context.registers.bp() - size_t(copied_pointers) * sizeof(uint16_t)),
+			uint32_t(size_t(copied_pointers) * sizeof(uint16_t))	// TODO: I don't think this can actually be 32 bit.
 		);
 	}
 
-	// Preauthorse stack activity.
-	context.memory.preauthorise_stack_write((1 + copied_pointers) * sizeof(uint16_t));
+	// Preauthorise writes.
+	context.memory.preauthorise_stack_write(uint32_t(size_t(nesting_level) * sizeof(uint16_t)));
 
 	// Push BP and grab the end of frame.
 	push<uint16_t, true>(context.registers.bp(), context);
 	const auto frame = context.registers.sp();
 
 	// Copy data as per the nesting level.
-	for(int c = 1; c < nesting_level; c++) {
-		context.registers.bp() -= 2;
+	if(nesting_level > 0) {
+		for(int c = 1; c < nesting_level; c++) {
+			context.registers.bp() -= 2;
 
-		const auto value = context.memory.template preauthorised_read<uint16_t>(Source::SS, context.registers.bp());
-		push<uint16_t, true>(value);
+			const auto value =
+				context.memory.template access<uint16_t, AccessType::PreauthorisedRead>(Source::SS, context.registers.bp());
+			push<uint16_t, true>(value, context);
+		}
+		push<uint16_t, true>(frame, context);
 	}
 
 	// Set final BP.
 	context.registers.bp() = frame;
+	context.registers.sp() -= alloc_size;
 }
 
 template <typename IntT, typename ContextT>

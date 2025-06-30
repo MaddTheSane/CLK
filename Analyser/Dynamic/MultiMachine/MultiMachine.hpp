@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include "../../../Machines/DynamicMachine.hpp"
+#include "Machines/DynamicMachine.hpp"
 
-#include "Implementation/MultiProducer.hpp"
-#include "Implementation/MultiConfigurable.hpp"
-#include "Implementation/MultiProducer.hpp"
-#include "Implementation/MultiJoystickMachine.hpp"
-#include "Implementation/MultiKeyboardMachine.hpp"
-#include "Implementation/MultiMediaTarget.hpp"
+#include "Analyser/Dynamic/MultiMachine/Implementation/MultiProducer.hpp"
+#include "Analyser/Dynamic/MultiMachine/Implementation/MultiConfigurable.hpp"
+#include "Analyser/Dynamic/MultiMachine/Implementation/MultiProducer.hpp"
+#include "Analyser/Dynamic/MultiMachine/Implementation/MultiJoystickMachine.hpp"
+#include "Analyser/Dynamic/MultiMachine/Implementation/MultiKeyboardMachine.hpp"
+#include "Analyser/Dynamic/MultiMachine/Implementation/MultiMediaTarget.hpp"
 
 #include <memory>
 #include <mutex>
@@ -38,44 +38,46 @@ namespace Analyser::Dynamic {
 	the others in the set, that machine stops running.
 */
 class MultiMachine: public ::Machine::DynamicMachine, public MultiTimedMachine::Delegate {
-	public:
-		/*!
-			Allows a potential MultiMachine creator to enquire as to whether there's any benefit in
-			requesting this class as a proxy.
+public:
+	/*!
+		Allows a potential MultiMachine creator to enquire as to whether there's any benefit in
+		requesting this class as a proxy.
 
-			@returns @c true if the multimachine would discard all but the first machine in this list;
-				@c false otherwise.
-		*/
-		static bool would_collapse(const std::vector<std::unique_ptr<DynamicMachine>> &machines);
-		MultiMachine(std::vector<std::unique_ptr<DynamicMachine>> &&machines);
+		@returns @c true if the multimachine would discard all but the first machine in this list;
+			@c false otherwise.
+	*/
+	static bool would_collapse(const std::vector<std::unique_ptr<DynamicMachine>> &);
+	MultiMachine(std::vector<std::unique_ptr<DynamicMachine>> &&);
 
-		Activity::Source *activity_source() final;
-		Configurable::Device *configurable_device() final;
-		MachineTypes::TimedMachine *timed_machine() final;
-		MachineTypes::ScanProducer *scan_producer() final;
-		MachineTypes::AudioProducer *audio_producer() final;
-		MachineTypes::JoystickMachine *joystick_machine() final;
-		MachineTypes::KeyboardMachine *keyboard_machine() final;
-		MachineTypes::MouseMachine *mouse_machine() final;
-		MachineTypes::MediaTarget *media_target() final;
-		void *raw_pointer() final;
+	Activity::Source *activity_source() final;
+	Configurable::Device *configurable_device() final;
+	MachineTypes::TimedMachine *timed_machine() final;
+	MachineTypes::ScanProducer *scan_producer() final;
+	MachineTypes::AudioProducer *audio_producer() final;
+	MachineTypes::JoystickMachine *joystick_machine() final;
+	MachineTypes::KeyboardMachine *keyboard_machine() final;
+	MachineTypes::MouseMachine *mouse_machine() final;
+	MachineTypes::MediaTarget *media_target() final;
+	MachineTypes::MediaChangeObserver *media_change_observer() final;
+	void *raw_pointer() final;
 
-	private:
-		void did_run_machines(MultiTimedMachine *) final;
+private:
+	void did_run_machines(MultiTimedMachine *) final;
 
-		std::vector<std::unique_ptr<DynamicMachine>> machines_;
-		std::recursive_mutex machines_mutex_;
+	std::vector<std::unique_ptr<DynamicMachine>> machines_;
+	std::recursive_mutex machines_mutex_;
 
-		MultiConfigurable configurable_;
-		MultiTimedMachine timed_machine_;
-		MultiScanProducer scan_producer_;
-		MultiAudioProducer audio_producer_;
-		MultiJoystickMachine joystick_machine_;
-		MultiKeyboardMachine keyboard_machine_;
-		MultiMediaTarget media_target_;
+	MultiConfigurable configurable_;
+	MultiTimedMachine timed_machine_;
+	MultiScanProducer scan_producer_;
+	MultiAudioProducer audio_producer_;
+	MultiJoystickMachine joystick_machine_;
+	MultiKeyboardMachine keyboard_machine_;
+	MultiMediaTarget media_target_;
+	MultiMediaChangeObserver media_change_observer_;
 
-		void pick_first();
-		bool has_picked_ = false;
+	void pick_first();
+	bool has_picked_ = false;
 };
 
 }

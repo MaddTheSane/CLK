@@ -8,15 +8,20 @@
 
 #include "StaticAnalyser.hpp"
 
-#include "../Enterprise/StaticAnalyser.hpp"
-#include "../PCCompatible/StaticAnalyser.hpp"
+#include "Analyser/Static/Enterprise/StaticAnalyser.hpp"
+#include "Analyser/Static/PCCompatible/StaticAnalyser.hpp"
 
-#include "../../../Storage/Disk/Track/TrackSerialiser.hpp"
-#include "../../../Storage/Disk/Encodings/MFM/Constants.hpp"
-#include "../../../Storage/Disk/Encodings/MFM/SegmentParser.hpp"
+#include "Storage/Disk/Track/TrackSerialiser.hpp"
+#include "Storage/Disk/Encodings/MFM/Constants.hpp"
+#include "Storage/Disk/Encodings/MFM/SegmentParser.hpp"
 
 
-Analyser::Static::TargetList Analyser::Static::FAT12::GetTargets(const Media &media, const std::string &file_name, TargetPlatform::IntType platforms) {
+Analyser::Static::TargetList Analyser::Static::FAT12::GetTargets(
+	const Media &media,
+	const std::string &file_name,
+	TargetPlatform::IntType platforms,
+	bool
+) {
 	// This analyser can comprehend disks only.
 	if(media.disks.empty()) return {};
 
@@ -34,12 +39,13 @@ Analyser::Static::TargetList Analyser::Static::FAT12::GetTargets(const Media &me
 
 	// If the disk image is very small or large, map it to the PC. That's the only option old enough
 	// to have used 5.25" media.
-	if(disk->get_maximum_head_position() <= Storage::Disk::HeadPosition(40)) {
-		return Analyser::Static::PCCompatible::GetTargets(media, file_name, platforms);
+	if(disk->maximum_head_position() <= Storage::Disk::HeadPosition(40)) {
+		return Analyser::Static::PCCompatible::GetTargets(media, file_name, platforms, true);
 	}
 
 	// Attempt to grab MFM track 0, sector 1: the boot sector.
-	const auto track_zero = disk->get_track_at_position(Storage::Disk::Track::Address(0, Storage::Disk::HeadPosition(0)));
+	const auto track_zero =
+		disk->track_at_position(Storage::Disk::Track::Address(0, Storage::Disk::HeadPosition(0)));
 	const auto sector_map = Storage::Encodings::MFM::sectors_from_segment(
 			Storage::Disk::track_serialisation(
 				*track_zero,
@@ -48,7 +54,7 @@ Analyser::Static::TargetList Analyser::Static::FAT12::GetTargets(const Media &me
 
 	// If no sectors were found, assume this disk was either single density or high density, which both imply the PC.
 	if(sector_map.empty() || sector_map.size() > 10) {
-		return Analyser::Static::PCCompatible::GetTargets(media, file_name, platforms);
+		return Analyser::Static::PCCompatible::GetTargets(media, file_name, platforms, true);
 	}
 
 	const Storage::Encodings::MFM::Sector *boot_sector = nullptr;
@@ -77,7 +83,7 @@ Analyser::Static::TargetList Analyser::Static::FAT12::GetTargets(const Media &me
 		if(
 			std::search(sample.begin(), sample.end(), string.begin(), string.end()) != sample.end()
 		) {
-			return Analyser::Static::PCCompatible::GetTargets(media, file_name, platforms);
+			return Analyser::Static::PCCompatible::GetTargets(media, file_name, platforms, true);
 		}
 	}
 
@@ -96,5 +102,5 @@ Analyser::Static::TargetList Analyser::Static::FAT12::GetTargets(const Media &me
 	// could redirect to an MSX2 with MSX-DOS2? Though it'd be nicer if I had a machine that was pure CP/M.
 
 	// Being unable to prove that this is a PC disk, throw it to the Enterprise.
-	return Analyser::Static::Enterprise::GetTargets(media, file_name, platforms);
+	return Analyser::Static::Enterprise::GetTargets(media, file_name, platforms, false);
 }

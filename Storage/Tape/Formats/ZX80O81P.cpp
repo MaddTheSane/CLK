@@ -7,34 +7,42 @@
 //
 
 #include "ZX80O81P.hpp"
-#include "../../Data/ZX8081.hpp"
+#include "Storage/Data/ZX8081.hpp"
 
 using namespace Storage::Tape;
 
 ZX80O81P::ZX80O81P(const std::string &file_name) {
-	Storage::FileHolder file(file_name);
+	Storage::FileHolder file(file_name, FileHolder::FileMode::Read);
 
-	// Grab the actual file contents
-	data_.resize(size_t(file.stats().st_size));
-	file.read(data_.data(), size_t(file.stats().st_size));
+	// Grab file contents.
+	data_ = file.read(size_t(file.stats().st_size));
 
 	// If it's a ZX81 file, prepend a file name.
-	std::string type = file.extension();
-	platform_type_ = TargetPlatform::ZX80;
+	const auto type = file.extension();
+	target_platforms_ = TargetPlatform::ZX80;
 	if(type == "p" || type == "81") {
 		// TODO, maybe: prefix a proper file name; this is leaving the file nameless.
 		data_.insert(data_.begin(), 0x80);
-		platform_type_ = TargetPlatform::ZX81;
+		target_platforms_ = TargetPlatform::ZX81;
 	}
 
-	std::shared_ptr<::Storage::Data::ZX8081::File> zx_file = Storage::Data::ZX8081::FileFromData(data_);
+	const auto zx_file = Storage::Data::ZX8081::FileFromData(data_);
 	if(!zx_file) throw ErrorNotZX80O81P;
-
-	// then rewind and start again
-	virtual_reset();
 }
 
-void ZX80O81P::virtual_reset() {
+TargetPlatform::Type ZX80O81P::target_platforms() {
+	return target_platforms_;
+}
+
+std::unique_ptr<FormatSerialiser> ZX80O81P::format_serialiser() const {
+	return std::make_unique<Serialiser>(data_);
+}
+
+ZX80O81P::Serialiser::Serialiser(const std::vector<uint8_t> &data) : data_(data) {
+	reset();
+}
+
+void ZX80O81P::Serialiser::reset() {
 	data_pointer_ = 0;
 	is_past_silence_ = false;
 	has_ended_final_byte_ = false;
@@ -42,16 +50,16 @@ void ZX80O81P::virtual_reset() {
 	bit_pointer_ = wave_pointer_ = 0;
 }
 
-bool ZX80O81P::has_finished_data() {
+bool ZX80O81P::Serialiser::has_finished_data() const {
 	return (data_pointer_ == data_.size()) && !wave_pointer_ && !bit_pointer_;
 }
 
-bool ZX80O81P::is_at_end() {
+bool ZX80O81P::Serialiser::is_at_end() const {
 	return has_finished_data() && has_ended_final_byte_;
 }
 
-Tape::Pulse ZX80O81P::virtual_get_next_pulse() {
-	Tape::Pulse pulse;
+Pulse ZX80O81P::Serialiser::next_pulse() {
+	Pulse pulse;
 
 	// Start with 1 second of silence.
 	if(!is_past_silence_ || has_finished_data()) {
@@ -101,8 +109,4 @@ Tape::Pulse ZX80O81P::virtual_get_next_pulse() {
 	}
 
 	return pulse;
-}
-
-TargetPlatform::Type ZX80O81P::target_platform_type() {
-	return platform_type_;
 }

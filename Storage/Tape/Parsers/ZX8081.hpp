@@ -10,7 +10,7 @@
 
 #include "TapeParser.hpp"
 
-#include "../../Data/ZX8081.hpp"
+#include "Storage/Data/ZX8081.hpp"
 
 #include <string>
 #include <vector>
@@ -27,31 +27,31 @@ enum class SymbolType {
 };
 
 class Parser: public Storage::Tape::PulseClassificationParser<WaveType, SymbolType> {
-	public:
-		Parser();
+public:
+	Parser();
 
-		/*!
-			Reads and combines the next eight bits. Returns -1 if any errors are encountered.
-		*/
-		int get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape);
+	/*!
+		Reads and combines the next eight bits. Returns -1 if any errors are encountered.
+	*/
+	int get_next_byte(Storage::Tape::TapeSerialiser &);
 
-		/*!
-			Waits for a long gap, reads all the bytes between that and the next long gap, then
-			attempts to parse those as a valid ZX80 or ZX81 file. If no file is found,
-			returns nullptr.
-		*/
-		std::shared_ptr<Storage::Data::ZX8081::File> get_next_file(const std::shared_ptr<Storage::Tape::Tape> &tape);
+	/*!
+		Waits for a long gap, reads all the bytes between that and the next long gap, then
+		attempts to parse those as a valid ZX80 or ZX81 file. If no file is found,
+		returns nullptr.
+	*/
+	std::optional<Storage::Data::ZX8081::File> get_next_file(Storage::Tape::TapeSerialiser &);
 
-	private:
-		bool pulse_was_high_;
-		Time pulse_time_;
-		void post_pulse();
+private:
+	bool pulse_was_high_;
+	Time pulse_time_;
+	void post_pulse();
 
-		void process_pulse(const Storage::Tape::Tape::Pulse &pulse) override;
-		void mark_end() override;
-		void inspect_waves(const std::vector<WaveType> &waves) override;
+	void process_pulse(const Storage::Tape::Pulse &pulse) override;
+	void mark_end() override;
+	void inspect_waves(const std::vector<WaveType> &waves) override;
 
-		std::shared_ptr<std::vector<uint8_t>> get_next_file_data(const std::shared_ptr<Storage::Tape::Tape> &tape);
+	std::optional<std::vector<uint8_t>> get_next_file_data(Storage::Tape::TapeSerialiser &);
 };
 
 }

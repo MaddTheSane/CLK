@@ -186,7 +186,9 @@ class ProcessorStorage {
 
 			CycleFetchFromHalfUpdatedPC,		// performs a throwaway read from (PC + (signed)operand).l combined with PC.h
 			CycleAddSignedOperandToPC,			// sets next_address to PC + (signed)operand. If the high byte of next_address differs from the PC, schedules a throwaway read from the half-updated PC. 65C02 specific: if the top two bytes are the same, proceeds directly to fetch-decode-execute, ignoring any pending interrupts.
-			OperationAddSignedOperandToPC16,	// adds (signed)operand into the PC
+			OperationAddSignedOperandToPC16,	// adds (signed)operand into the PC, leaving old PC in next_address_ and skipping a program step if there was no carry from low to high byte
+
+			CycleFetchFromNextAddress,			// performs a throwaway fetch from next_address_
 
 			OperationSetFlagsFromOperand,			// sets all flags based on operand_
 			OperationSetOperandFromFlagsWithBRKSet,	// sets operand_ to the value of all flags, with the break flag set
@@ -196,9 +198,12 @@ class ProcessorStorage {
 			OperationSetFlagsFromX,		// sets the zero and negative flags based on the value of x
 			OperationSetFlagsFromY,		// sets the zero and negative flags based on the value of y
 
-			OperationScheduleJam,		// schedules the program for operation F2
-			OperationScheduleWait,		// puts the processor into WAI mode (i.e. it'll do nothing until an interrupt is received)
-			OperationScheduleStop,		// puts the processor into STP mode (i.e. it'll do nothing until a reset is received)
+			OperationScheduleWait,			// puts the processor into WAI mode (i.e. it'll do nothing until an interrupt is received)
+			OperationScheduleStop,			// puts the processor into STP mode (i.e. it'll do nothing until a reset is received)
+
+			CycleFetchFFFE,			// perform a throwaway read from $FFFE
+			CycleFetchFFFF,			// perform a throwaway read from $FFFF
+			OperationSetJAMmed,		// decrements the micro-operation program counter back to the operation before this one, marking the CPU as jammed
 		};
 
 		using InstructionList = MicroOp[12];

@@ -5,7 +5,7 @@ project(CLK
 	VERSION 24.01.22
 )
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -29,6 +29,7 @@ endif()
 message(STATUS "Configuring for ${CLK_UI} UI")
 
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include_directories(".")
 include("CLK_SOURCES")
 
 add_executable(clksignal ${CLK_SOURCES})

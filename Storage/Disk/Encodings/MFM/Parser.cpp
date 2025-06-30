@@ -9,7 +9,7 @@
 #include "Parser.hpp"
 
 #include "Constants.hpp"
-#include "../../Track/TrackSerialiser.hpp"
+#include "Storage/Disk/Track/TrackSerialiser.hpp"
 #include "SegmentParser.hpp"
 
 using namespace Storage::Encodings::MFM;
@@ -25,7 +25,7 @@ void Parser::install_track(const Storage::Disk::Track::Address &address) {
 		return;
 	}
 
-	const auto track = disk_->get_track_at_position(address);
+	const auto track = disk_->track_at_position(address);
 	if(!track) {
 		return;
 	}
@@ -70,4 +70,16 @@ const Sector *Parser::sector(int head, int track, uint8_t sector) {
 	}
 
 	return &stored_sector->second;
+}
+
+const Sector *Parser::any_sector(int head, int track) {
+	const Disk::Track::Address address(head, Storage::Disk::HeadPosition(track));
+	install_track(address);
+
+	const auto sectors = sectors_by_address_by_track_.find(address);
+	if(sectors == sectors_by_address_by_track_.end()) {
+		return nullptr;
+	}
+
+	return &sectors->second.begin()->second;
 }

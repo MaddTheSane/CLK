@@ -9,8 +9,8 @@
 #pragma once
 
 #include "ReactiveDevice.hpp"
-#include "../../../Inputs/Keyboard.hpp"
-#include "../../KeyboardMachine.hpp"
+#include "Inputs/Keyboard.hpp"
+#include "Machines/KeyboardMachine.hpp"
 
 #include <array>
 #include <cstdint>
@@ -94,20 +94,20 @@ enum class Key: uint16_t {
 };
 
 class Keyboard: public ReactiveDevice {
-	public:
-		Keyboard(Bus &);
+public:
+	Keyboard(Bus &);
 
-		bool set_key_pressed(Key key, bool is_pressed);
-		void clear_all_keys();
+	bool set_key_pressed(Key key, bool is_pressed);
+	void clear_all_keys();
 
-	private:
-		void perform_command(const Command &command) override;
-		void did_receive_data(const Command &, const std::vector<uint8_t> &) override;
+private:
+	void perform_command(const Command &command) override;
+	void did_receive_data(const Command &, const std::vector<uint8_t> &) override;
 
-		std::mutex keys_mutex_;
-		std::array<bool, 128> pressed_keys_{};
-		std::vector<uint8_t> pending_events_;
-		uint16_t modifiers_ = 0xffff;
+	std::mutex keys_mutex_;
+	std::array<bool, 128> pressed_keys_{};
+	std::vector<uint8_t> pending_events_;
+	uint16_t modifiers_ = 0xffff;
 };
 
 /*!

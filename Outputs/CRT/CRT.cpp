@@ -8,10 +8,10 @@
 
 #include "CRT.hpp"
 
-#include <cstdarg>
-#include <cmath>
 #include <algorithm>
 #include <cassert>
+#include <cmath>
+#include <cstdarg>
 
 using namespace Outputs::CRT;
 
@@ -58,6 +58,7 @@ void CRT::set_new_timing(int cycles_per_line, int height_of_display, Outputs::Di
 	vertical_flywheel_output_divider_ = (real_clock_scan_period + 65534) / 65535;
 
 	// Communicate relevant fields to the scan target.
+	scan_target_modals_.cycles_per_line = cycles_per_line;
 	scan_target_modals_.output_scale.x = uint16_t(horizontal_flywheel_->get_scan_period());
 	scan_target_modals_.output_scale.y = uint16_t(real_clock_scan_period / vertical_flywheel_output_divider_);
 	scan_target_modals_.expected_vertical_lines = height_of_display;
@@ -117,13 +118,26 @@ void CRT::set_new_display_type(int cycles_per_line, Outputs::Display::Type displ
 		case Outputs::Display::Type::PAL50:
 		case Outputs::Display::Type::PAL60:
 			scan_target_modals_.intended_gamma = 2.8f;
-			set_new_timing(cycles_per_line, (displayType == Outputs::Display::Type::PAL50) ? 312 : 262, Outputs::Display::ColourSpace::YUV, 709379, 2500, 5, true);
-					// i.e. 283.7516 colour cycles per line; 2.5 lines = vertical sync.
+			set_new_timing(
+				cycles_per_line,
+				(displayType == Outputs::Display::Type::PAL50) ? 312 : 262,
+				PAL::ColourSpace,
+				PAL::ColourCycleNumerator,
+				PAL::ColourCycleDenominator,
+				PAL::VerticalSyncLength,
+				PAL::AlternatesPhase);
 		break;
 
 		case Outputs::Display::Type::NTSC60:
 			scan_target_modals_.intended_gamma = 2.2f;
-			set_new_timing(cycles_per_line, 262, Outputs::Display::ColourSpace::YIQ, 455, 2, 6, false);			// i.e. 227.5 colour cycles per line, 3 lines = vertical sync.
+			set_new_timing(
+				cycles_per_line,
+				262,
+				NTSC::ColourSpace,
+				NTSC::ColourCycleNumerator,
+				NTSC::ColourCycleDenominator,
+				NTSC::VerticalSyncLength,
+				NTSC::AlternatesPhase);
 		break;
 	}
 }
@@ -150,7 +164,6 @@ CRT::CRT(	int cycles_per_line,
 			bool should_alternate,
 			Outputs::Display::InputDataType data_type) {
 	scan_target_modals_.input_data_type = data_type;
-	scan_target_modals_.cycles_per_line = cycles_per_line;
 	scan_target_modals_.clocks_per_pixel_greatest_common_divisor = clocks_per_pixel_greatest_common_divisor;
 	set_new_timing(cycles_per_line, height_of_display, colour_space, colour_cycle_numerator, colour_cycle_denominator, vertical_sync_half_lines, should_alternate);
 }
@@ -160,7 +173,6 @@ CRT::CRT(	int cycles_per_line,
 			Outputs::Display::Type display_type,
 			Outputs::Display::InputDataType data_type) {
 	scan_target_modals_.input_data_type = data_type;
-	scan_target_modals_.cycles_per_line = cycles_per_line;
 	scan_target_modals_.clocks_per_pixel_greatest_common_divisor = clocks_per_pixel_greatest_common_divisor;
 	set_new_display_type(cycles_per_line, display_type);
 }
@@ -171,11 +183,13 @@ CRT::CRT(int cycles_per_line,
 	int vertical_sync_half_lines,
 	Outputs::Display::InputDataType data_type) {
 	scan_target_modals_.input_data_type = data_type;
-	scan_target_modals_.cycles_per_line = cycles_per_line;
 	scan_target_modals_.clocks_per_pixel_greatest_common_divisor = clocks_per_pixel_greatest_common_divisor;
 	set_new_timing(cycles_per_line, height_of_display, Outputs::Display::ColourSpace::YIQ, 1, 1, vertical_sync_half_lines, false);
 }
 
+// Use some from-thin-air arbitrary constants for default timing, otherwise passing
+// construction off to one of the other constructors.
+CRT::CRT(Outputs::Display::InputDataType data_type) : CRT(100, 1, 100, 1, data_type) {}
 
 // MARK: - Sync loop
 
@@ -430,9 +444,9 @@ void CRT::set_immediate_default_phase(float phase) {
 
 void CRT::output_data(int number_of_cycles, size_t number_of_samples) {
 #ifndef NDEBUG
-	assert(number_of_samples > 0);
-	assert(number_of_samples <= allocated_data_length_);
-	allocated_data_length_ = std::numeric_limits<size_t>::min();
+//	assert(number_of_samples > 0);
+//	assert(number_of_samples <= allocated_data_length_);
+//	allocated_data_length_ = std::numeric_limits<size_t>::min();
 #endif
 	scan_target_->end_data(number_of_samples);
 	Scan scan;
@@ -444,40 +458,58 @@ void CRT::output_data(int number_of_cycles, size_t number_of_samples) {
 
 // MARK: - Getters.
 
-Outputs::Display::Rect CRT::get_rect_for_area(int first_line_after_sync, int number_of_lines, int first_cycle_after_sync, int number_of_cycles, float aspect_ratio) const {
+Outputs::Display::Rect CRT::get_rect_for_area(
+	int first_line_after_sync,
+	int number_of_lines,
+	int first_cycle_after_sync,
+	int number_of_cycles,
+	float aspect_ratio
+) const {
+	assert(number_of_cycles > 0);
+	assert(number_of_lines > 0);
+	assert(first_line_after_sync >= 0);
+	assert(first_cycle_after_sync >= 0);
+
+	// Scale up x coordinates and add a little extra leeway to y.
 	first_cycle_after_sync *= time_multiplier_;
 	number_of_cycles *= time_multiplier_;
 
 	first_line_after_sync -= 2;
 	number_of_lines += 4;
 
-	// determine prima facie x extent
+	// Determine prima facie x extent.
 	const int horizontal_period = horizontal_flywheel_->get_standard_period();
 	const int horizontal_scan_period = horizontal_flywheel_->get_scan_period();
 	const int horizontal_retrace_period = horizontal_period - horizontal_scan_period;
 
-	// make sure that the requested range is visible
-	if(int(first_cycle_after_sync) < horizontal_retrace_period) first_cycle_after_sync = int(horizontal_retrace_period);
-	if(int(first_cycle_after_sync + number_of_cycles) > horizontal_scan_period) number_of_cycles = int(horizontal_scan_period - int(first_cycle_after_sync));
+	// Ensure requested range is within visible region.
+	first_cycle_after_sync = std::max(horizontal_retrace_period, first_cycle_after_sync);
+	number_of_cycles = std::min(horizontal_period - first_cycle_after_sync, number_of_cycles);
 
-	float start_x = float(int(first_cycle_after_sync) - horizontal_retrace_period) / float(horizontal_scan_period);
+	float start_x = float(first_cycle_after_sync - horizontal_retrace_period) / float(horizontal_scan_period);
 	float width = float(number_of_cycles) / float(horizontal_scan_period);
 
-	// determine prima facie y extent
+	// Determine prima facie y extent.
 	const int vertical_period = vertical_flywheel_->get_standard_period();
 	const int vertical_scan_period = vertical_flywheel_->get_scan_period();
 	const int vertical_retrace_period = vertical_period - vertical_scan_period;
 
-	// make sure that the requested range is visible
-//	if(int(first_line_after_sync) * horizontal_period < vertical_retrace_period)
-//		first_line_after_sync = (vertical_retrace_period + horizontal_period - 1) / horizontal_period;
-//	if((first_line_after_sync + number_of_lines) * horizontal_period > vertical_scan_period)
-//		number_of_lines = int(horizontal_scan_period - int(first_cycle_after_sync));
+	// Ensure range is visible.
+	first_line_after_sync = std::max(
+		first_line_after_sync * horizontal_period,
+		vertical_retrace_period
+	) / horizontal_period;
+	number_of_lines = std::min(
+		vertical_period - first_line_after_sync * horizontal_period,
+		number_of_lines * horizontal_period
+	) / horizontal_period;
 
-	float start_y = float((int(first_line_after_sync) * horizontal_period) - vertical_retrace_period) / float(vertical_scan_period);
-	float height = float(int(number_of_lines) * horizontal_period) / vertical_scan_period;
+	float start_y =
+		float(first_line_after_sync * horizontal_period - vertical_retrace_period) /
+		float(vertical_scan_period);
+	float height = float(number_of_lines * horizontal_period) / vertical_scan_period;
 
-	// adjust to ensure aspect ratio is correct
+	// Pick a zoom that includes the entire requested visible area given the aspect ratio constraints.
 	const float adjusted_aspect_ratio = (3.0f*aspect_ratio / 4.0f);
 	const float ideal_width = height * adjusted_aspect_ratio;
 	if(ideal_width > width) {
@@ -488,6 +520,8 @@ Outputs::Display::Rect CRT::get_rect_for_area(int first_line_after_sync, int num
 		start_y -= (ideal_height - height) * 0.5f;
 		height = ideal_height;
 	}
+
+	// TODO: apply absolute clipping constraints now.
 
 	return Outputs::Display::Rect(start_x, start_y, width, height);
 }

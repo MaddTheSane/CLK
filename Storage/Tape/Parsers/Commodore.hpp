@@ -9,6 +9,7 @@
 #pragma once
 
 #include "TapeParser.hpp"
+#include "Storage/TargetPlatforms.hpp"
 #include <memory>
 #include <string>
 
@@ -44,7 +45,9 @@ struct Header {
 		Writes a byte serialised version of this header to @c target, writing at most
 		@c length bytes.
 	*/
-	void serialise(uint8_t *target, uint16_t length);
+	void serialise(uint8_t *target, uint16_t length) const;
+
+	uint8_t type_descriptor() const;
 };
 
 struct Data {
@@ -54,78 +57,81 @@ struct Data {
 };
 
 class Parser: public Storage::Tape::PulseClassificationParser<WaveType, SymbolType> {
-	public:
-		Parser();
+public:
+	Parser(TargetPlatform::Type);
 
-		/*!
-			Advances to the next block on the tape, treating it as a header, then consumes, parses, and returns it.
-			Returns @c nullptr if any wave-encoding level errors are encountered.
-		*/
-		std::unique_ptr<Header> get_next_header(const std::shared_ptr<Storage::Tape::Tape> &tape);
+	/*!
+		Advances to the next block on the tape, treating it as a header, then consumes, parses, and returns it.
+		Returns @c nullptr if any wave-encoding level errors are encountered.
+	*/
+	std::unique_ptr<Header> get_next_header(Storage::Tape::TapeSerialiser &);
 
-		/*!
-			Advances to the next block on the tape, treating it as data, then consumes, parses, and returns it.
-			Returns @c nullptr if any wave-encoding level errors are encountered.
-		*/
-		std::unique_ptr<Data> get_next_data(const std::shared_ptr<Storage::Tape::Tape> &tape);
+	/*!
+		Advances to the next block on the tape, treating it as data, then consumes, parses, and returns it.
+		Returns @c nullptr if any wave-encoding level errors are encountered.
+	*/
+	std::unique_ptr<Data> get_next_data(Storage::Tape::TapeSerialiser &);
 
-	private:
-		/*!
-			Template for the logic in selecting which of two copies of something to consider authoritative,
-			including setting the duplicate_matched flag.
-		*/
-		template<class ObjectType>
-			std::unique_ptr<ObjectType> duplicate_match(std::unique_ptr<ObjectType> first_copy, std::unique_ptr<ObjectType> second_copy);
+private:
+	TargetPlatform::Type target_platform_;
 
-		std::unique_ptr<Header> get_next_header_body(const std::shared_ptr<Storage::Tape::Tape> &tape, bool is_original);
-		std::unique_ptr<Data> get_next_data_body(const std::shared_ptr<Storage::Tape::Tape> &tape, bool is_original);
+	/*!
+		Template for the logic in selecting which of two copies of something to consider authoritative,
+		including setting the duplicate_matched flag.
+	*/
+	template<class ObjectType>
+		std::unique_ptr<ObjectType> duplicate_match(
+			std::unique_ptr<ObjectType> first_copy, std::unique_ptr<ObjectType> second_copy);
 
-		/*!
-			Finds and completes the next landing zone.
-		*/
-		void proceed_to_landing_zone(const std::shared_ptr<Storage::Tape::Tape> &tape, bool is_original);
+	std::unique_ptr<Header> get_next_header_body(Storage::Tape::TapeSerialiser &, bool is_original);
+	std::unique_ptr<Data> get_next_data_body(Storage::Tape::TapeSerialiser &, bool is_original);
 
-		/*!
-			Swallows the next byte; sets the error flag if it is not equal to @c value.
-		*/
-		void expect_byte(const std::shared_ptr<Storage::Tape::Tape> &tape, uint8_t value);
+	/*!
+		Finds and completes the next landing zone.
+	*/
+	void proceed_to_landing_zone(Storage::Tape::TapeSerialiser &, bool is_original);
 
-		uint8_t parity_byte_ = 0;
-		void reset_parity_byte();
-		uint8_t get_parity_byte();
-		void add_parity_byte(uint8_t byte);
+	/*!
+		Swallows the next byte; sets the error flag if it is not equal to @c value.
+	*/
+	void expect_byte(Storage::Tape::TapeSerialiser &, uint8_t value);
 
-		/*!
-			Proceeds to the next word marker then returns the result of @c get_next_byte_contents.
-		*/
-		uint8_t get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape);
+	uint8_t parity_byte_ = 0;
+	void reset_parity_byte();
+	uint8_t get_parity_byte();
+	void add_parity_byte(uint8_t byte);
 
-		/*!
-			Reads the next nine symbols and applies a binary test to each to differentiate between ::One and not-::One.
-			Returns a byte composed of the first eight of those as bits; sets the error flag if any symbol is not
-			::One and not ::Zero, or if the ninth bit is not equal to the odd parity of the other eight.
-		*/
-		uint8_t get_next_byte_contents(const std::shared_ptr<Storage::Tape::Tape> &tape);
+	/*!
+		Proceeds to the next word marker then returns the result of @c get_next_byte_contents.
+	*/
+	uint8_t get_next_byte(Storage::Tape::TapeSerialiser &);
 
-		/*!
-			Returns the result of two consecutive @c get_next_byte calls, arranged in little-endian format.
-		*/
-		uint16_t get_next_short(const std::shared_ptr<Storage::Tape::Tape> &tape);
+	/*!
+		Reads the next nine symbols and applies a binary test to each to differentiate between ::One and not-::One.
+		Returns a byte composed of the first eight of those as bits; sets the error flag if any symbol is not
+		::One and not ::Zero, or if the ninth bit is not equal to the odd parity of the other eight.
+	*/
+	uint8_t get_next_byte_contents(Storage::Tape::TapeSerialiser &);
 
-		/*!
-			Per the contract with Analyser::Static::TapeParser; sums time across pulses. If this pulse
-			indicates a high to low transition, inspects the time since the last transition, to produce
-			a long, medium, short or unrecognised wave period.
-		*/
-		void process_pulse(const Storage::Tape::Tape::Pulse &pulse) override;
-		bool previous_was_high_ = false;
-		float wave_period_ = 0.0f;
+	/*!
+		Returns the result of two consecutive @c get_next_byte calls, arranged in little-endian format.
+	*/
+	uint16_t get_next_short(Storage::Tape::TapeSerialiser &);
 
-		/*!
-			Per the contract with Analyser::Static::TapeParser; produces any of a word marker, an end-of-block marker,
-			a zero, a one or a lead-in symbol based on the currently captured waves.
-		*/
-		void inspect_waves(const std::vector<WaveType> &waves) override;
+	/*!
+		Per the contract with Analyser::Static::TapeParser; sums time across pulses. If this pulse
+		indicates a high to low transition, inspects the time since the last transition, to produce
+		a long, medium, short or unrecognised wave period.
+	*/
+	void process_pulse(const Storage::Tape::Pulse &pulse) override;
+	bool previous_was_high_ = false;
+	float wave_period_ = 0.0f;
+
+	/*!
+		Per the contract with Analyser::Static::TapeParser; produces any of a word marker, an end-of-block marker,
+		a zero, a one or a lead-in symbol based on the currently captured waves.
+	*/
+	void inspect_waves(const std::vector<WaveType> &waves) override;
 };
 
 }

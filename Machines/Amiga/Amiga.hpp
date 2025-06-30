@@ -8,19 +8,18 @@
 
 #pragma once
 
-#include "../../Analyser/Static/StaticAnalyser.hpp"
-#include "../ROMMachine.hpp"
+#include "Analyser/Static/StaticAnalyser.hpp"
+#include "Machines/ROMMachine.hpp"
 
 #include <memory>
 
 namespace Amiga {
 
-class Machine {
-	public:
-		virtual ~Machine() = default;
+struct Machine {
+	virtual ~Machine() = default;
 
-		/// Creates and returns an Amiga.
-		static std::unique_ptr<Machine> Amiga(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
+	/// Creates and returns an Amiga.
+	static std::unique_ptr<Machine> Amiga(const Analyser::Static::Target *, const ROMMachine::ROMFetcher &);
 };
 
 }

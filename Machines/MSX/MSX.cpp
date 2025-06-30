@@ -8,46 +8,46 @@
 
 #include "MSX.hpp"
 
-#include <algorithm>
-
 #include "DiskROM.hpp"
 #include "Keyboard.hpp"
 #include "MemorySlotHandler.hpp"
 
-#include "../../Analyser/Static/MSX/Cartridge.hpp"
-#include "Cartridges/ASCII8kb.hpp"
-#include "Cartridges/ASCII16kb.hpp"
-#include "Cartridges/Konami.hpp"
-#include "Cartridges/KonamiWithSCC.hpp"
+#include "Analyser/Static/MSX/Cartridge.hpp"
+#include "Machines/MSX/Cartridges/ASCII8kb.hpp"
+#include "Machines/MSX/Cartridges/ASCII16kb.hpp"
+#include "Machines/MSX/Cartridges/Konami.hpp"
+#include "Machines/MSX/Cartridges/KonamiWithSCC.hpp"
 
-#include "../../Processors/Z80/Z80.hpp"
+#include "Processors/Z80/Z80.hpp"
 
-#include "../../Components/1770/1770.hpp"
-#include "../../Components/8255/i8255.hpp"
-#include "../../Components/9918/9918.hpp"
-#include "../../Components/AudioToggle/AudioToggle.hpp"
-#include "../../Components/AY38910/AY38910.hpp"
-#include "../../Components/KonamiSCC/KonamiSCC.hpp"
-#include "../../Components/OPx/OPLL.hpp"
-#include "../../Components/RP5C01/RP5C01.hpp"
+#include "Components/1770/1770.hpp"
+#include "Components/8255/i8255.hpp"
+#include "Components/9918/9918.hpp"
+#include "Components/AudioToggle/AudioToggle.hpp"
+#include "Components/AY38910/AY38910.hpp"
+#include "Components/KonamiSCC/KonamiSCC.hpp"
+#include "Components/OPx/OPLL.hpp"
+#include "Components/RP5C01/RP5C01.hpp"
 
-#include "../../Storage/Tape/Parsers/MSX.hpp"
-#include "../../Storage/Tape/Tape.hpp"
+#include "Storage/Tape/Parsers/MSX.hpp"
+#include "Storage/Tape/Tape.hpp"
 
-#include "../../Activity/Source.hpp"
-#include "../MachineTypes.hpp"
-#include "../../Configurable/Configurable.hpp"
+#include "Activity/Source.hpp"
+#include "Machines/MachineTypes.hpp"
+#include "Configurable/Configurable.hpp"
 
-#include "../../Outputs/Log.hpp"
-#include "../../Outputs/Speaker/Implementation/CompoundSource.hpp"
-#include "../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
-#include "../../Outputs/Speaker/Implementation/BufferSource.hpp"
+#include "Outputs/Log.hpp"
+#include "Outputs/Speaker/Implementation/CompoundSource.hpp"
+#include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
+#include "Outputs/Speaker/Implementation/BufferSource.hpp"
 
-#include "../../Configurable/StandardOptions.hpp"
-#include "../../ClockReceiver/ForceInline.hpp"
-#include "../../ClockReceiver/JustInTime.hpp"
+#include "Configurable/StandardOptions.hpp"
+#include "ClockReceiver/ForceInline.hpp"
+#include "ClockReceiver/JustInTime.hpp"
 
-#include "../../Analyser/Static/MSX/Target.hpp"
+#include "Analyser/Static/MSX/Target.hpp"
+
+#include <algorithm>
 
 namespace {
 Log::Logger<Log::Source::MSX> logger;
@@ -82,7 +82,7 @@ class AYPortHandler: public GI::AY38910::PortHandler {
 				return
 					(static_cast<Joystick *>(joysticks_[selected_joystick_].get())->get_state() & 0x3f) |
 					0x40 |
-					(tape_player_.get_input() ? 0x00 : 0x80);
+					(tape_player_.input() ? 0x00 : 0x80);
 			}
 			return 0xff;
 		}
@@ -198,10 +198,10 @@ class ConcreteMachine:
 	public:
 		ConcreteMachine(const Target &target, const ROMMachine::ROMFetcher &rom_fetcher):
 			z80_(*this),
-			i8255_(i8255_port_handler_),
 			tape_player_(3579545 * 2),
 			i8255_port_handler_(*this, speaker_.audio_toggle, tape_player_),
 			ay_port_handler_(tape_player_),
+			i8255_(i8255_port_handler_),
 			memory_slots_{{*this}, {*this}, {*this}, {*this}},
 			clock_(ClockRate) {
 			set_clock_rate(ClockRate);
@@ -431,7 +431,7 @@ class ConcreteMachine:
 			}
 
 			if(!media.tapes.empty()) {
-				tape_player_.set_tape(media.tapes.front());
+				tape_player_.set_tape(media.tapes.front(), TargetPlatform::MSX);
 			}
 
 			if(!media.disks.empty()) {
@@ -812,7 +812,7 @@ class ConcreteMachine:
 		}
 
 		// MARK: - Configuration options.
-		std::unique_ptr<Reflection::Struct> get_options() final {
+		std::unique_ptr<Reflection::Struct> get_options() const final {
 			auto options = std::make_unique<Options>(Configurable::OptionsType::UserFriendly);
 			options->output = get_video_signal_configurable();
 			options->quickload = allow_fast_tape_;
@@ -893,7 +893,7 @@ class ConcreteMachine:
 					activity_observer_ = observer;
 					if(activity_observer_) {
 						activity_observer_->register_led("Tape motor");
-						activity_observer_->set_led_status("Tape motor", tape_player_.get_motor_control());
+						activity_observer_->set_led_status("Tape motor", tape_player_.motor_control());
 					}
 				}
 
@@ -913,7 +913,6 @@ class ConcreteMachine:
 
 		CPU::Z80::Processor<ConcreteMachine, false, false> z80_;
 		JustInTimeActor<TI::TMS::TMS9918<vdp_model()>> vdp_;
-		Intel::i8255::i8255<i8255PortHandler> i8255_;
 
 		Storage::Tape::BinaryTapePlayer tape_player_;
 		bool tape_player_is_sleeping_ = false;
@@ -931,6 +930,8 @@ class ConcreteMachine:
 		i8255PortHandler i8255_port_handler_;
 		Speaker<has_opll> speaker_;
 		AYPortHandler ay_port_handler_;
+
+		Intel::i8255::i8255<i8255PortHandler> i8255_;
 
 		/// The current primary and secondary slot selections; the former retains whatever was written
 		/// last to the 8255 PPI via port A8 and the latter — if enabled — captures 0xffff on a per-slot basis.
@@ -1038,13 +1039,13 @@ std::unique_ptr<Machine> Machine::MSX(const Analyser::Static::Target *target, co
 	const auto msx_target = dynamic_cast<const Target *>(target);
 	if(msx_target->has_msx_music) {
 		switch(msx_target->model) {
-			default: 					return nullptr;
+			default:					return nullptr;
 			case Target::Model::MSX1:	return std::make_unique<ConcreteMachine<Target::Model::MSX1, true>>(*msx_target, rom_fetcher);
 			case Target::Model::MSX2:	return std::make_unique<ConcreteMachine<Target::Model::MSX2, true>>(*msx_target, rom_fetcher);
 		}
 	} else {
 		switch(msx_target->model) {
-			default: 					return nullptr;
+			default:					return nullptr;
 			case Target::Model::MSX1:	return std::make_unique<ConcreteMachine<Target::Model::MSX1, false>>(*msx_target, rom_fetcher);
 			case Target::Model::MSX2:	return std::make_unique<ConcreteMachine<Target::Model::MSX2, false>>(*msx_target, rom_fetcher);
 		}

@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "Sizes.hpp"
+
+#include <array>
 #include <cstdint>
 
 namespace Numeric {
@@ -18,42 +21,24 @@ template <typename IntT> constexpr IntT bit_reverse(IntT source);
 
 // The single-byte specialisation uses a lookup table.
 template<> constexpr uint8_t bit_reverse<uint8_t>(uint8_t source) {
-	struct ReverseTable {
-		static constexpr std::array<uint8_t, 256> reverse_table() {
-			std::array<uint8_t, 256> map{};
-			for(std::size_t c = 0; c < 256; ++c) {
-				map[c] = uint8_t(
-					((c & 0x80) >> 7) |
-					((c & 0x40) >> 5) |
-					((c & 0x20) >> 3) |
-					((c & 0x10) >> 1) |
-					((c & 0x08) << 1) |
-					((c & 0x04) << 3) |
-					((c & 0x02) << 5) |
-					((c & 0x01) << 7)
-				);
-			}
-			return map;
-		}
-	};
-
-	const std::array<uint8_t, 256> map = ReverseTable::reverse_table();
-	return map[source];
+	source = uint8_t(((source & 0b1111'0000) >> 4) | ((source & 0b0000'1111) << 4));
+	source = uint8_t(((source & 0b1100'1100) >> 2) | ((source & 0b0011'0011) << 2));
+	source = uint8_t(((source & 0b1010'1010) >> 1) | ((source & 0b0101'0101) << 1));
+	return source;
 }
 
-// All other versions just call the byte-level reverse the appropriate number of times.
-template <typename IntT> constexpr IntT bit_reverse(IntT source) {
-	IntT result;
+// All other versions recursively subdivide.
+template <typename IntT>
+constexpr IntT bit_reverse(const IntT source) {
+	static_assert(std::is_same_v<IntT, uint16_t> || std::is_same_v<IntT, uint32_t> || std::is_same_v<IntT, uint64_t>);
 
-	uint8_t *src = reinterpret_cast<uint8_t *>(&source);
-	uint8_t *dest = reinterpret_cast<uint8_t *>(&result) + sizeof(result) - 1;
-	for(size_t c = 0; c < sizeof(source); c++) {
-		*dest = bit_reverse(*src);
-		++src;
-		--dest;
-	}
+	constexpr auto HalfSize = sizeof(IntT) * 4;
+	using HalfIntT = uint_t<HalfSize>;
 
-	return result;
+	return IntT(
+		IntT(bit_reverse(HalfIntT(source >> HalfSize))) |
+		IntT(bit_reverse(HalfIntT(source))) << HalfSize
+	);
 }
 
 }

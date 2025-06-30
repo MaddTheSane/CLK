@@ -345,6 +345,28 @@
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="archimedesTab">
+       <attribute name="title">
+        <string>Archimedes</string>
+       </attribute>
+       <layout class="QVBoxLayout">
+        <item>
+         <layout class="QHBoxLayout">
+          <item>
+           <layout class="QFormLayout">
+            <item row="0" column="0">
+             <widget class="QLabel">
+              <property name="text">
+               <string>At present only a 4mb 26-bit Archimedes is available.</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
       <widget class="QWidget" name="atariSTTab">
        <attribute name="title">
         <string>Atari ST</string>
@@ -856,6 +878,33 @@
            </spacer>
           </item>
          </layout>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="plus4Tab">
+       <attribute name="title">
+        <string>Plus 4</string>
+       </attribute>
+       <layout class="QVBoxLayout">
+        <item>
+         <widget class="QCheckBox" name="plus4C1541CheckBox">
+          <property name="text">
+           <string>Attach C-1541 disk drive</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer>
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
         </item>
        </layout>
       </widget>

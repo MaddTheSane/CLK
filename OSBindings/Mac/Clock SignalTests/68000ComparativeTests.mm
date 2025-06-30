@@ -8,9 +8,9 @@
 
 #import <XCTest/XCTest.h>
 
-#include "../../../Processors/68000/68000.hpp"
-#include "../../../InstructionSets/M68k/Executor.hpp"
-#include "../../../InstructionSets/M68k/Decoder.hpp"
+#include "Processors/68000/68000.hpp"
+#include "InstructionSets/M68k/Executor.hpp"
+#include "InstructionSets/M68k/Decoder.hpp"
 
 #include <array>
 #include <memory>
@@ -112,8 +112,8 @@ struct TestProcessor: public CPU::MC68000::BusHandler {
 		}
 	}
 
-	private:
-		int instructions_remaining_;
+private:
+	int instructions_remaining_;
 };
 
 }

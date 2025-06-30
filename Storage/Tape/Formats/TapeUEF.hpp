@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "../PulseQueuedTape.hpp"
+#include "Storage/Tape/PulseQueuedTape.hpp"
 
-#include "../../TargetPlatforms.hpp"
+#include "Storage/TargetPlatforms.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <zlib.h>
 
@@ -21,39 +22,55 @@ namespace Storage::Tape {
 /*!
 	Provides a @c Tape containing a UEF tape image, a slightly-convoluted description of pulses.
 */
-class UEF : public PulseQueuedTape, public TargetPlatform::TypeDistinguisher {
-	public:
-		/*!
-			Constructs a @c UEF containing content from the file with name @c file_name.
+class UEF : public Tape, public TargetPlatform::Distinguisher {
+public:
+	/*!
+		Constructs a @c UEF containing content from the file with name @c file_name.
 
-			@throws ErrorNotUEF if this file could not be opened and recognised as a valid UEF.
-		*/
-		UEF(const std::string &file_name);
-		~UEF();
+		@throws ErrorNotUEF if this file could not be opened and recognised as a valid UEF.
+	*/
+	UEF(const std::string &file_name);
 
-		enum {
-			ErrorNotUEF
-		};
+	enum {
+		ErrorNotUEF
+	};
 
-	private:
-		void virtual_reset();
+private:
+	TargetPlatform::Type target_platforms() override;
+	std::unique_ptr<FormatSerialiser> format_serialiser() const override;
 
-		void set_platform_type();
-		TargetPlatform::Type target_platform_type();
-		TargetPlatform::Type platform_type_ = TargetPlatform::Acorn;
-
-		gzFile file_;
-		unsigned int time_base_ = 1200;
-		bool is_300_baud_ = false;
+	struct Parser {
+		Parser(const std::string &file_name);
+		~Parser();
 
 		struct Chunk {
 			uint16_t id;
 			uint32_t length;
-			z_off_t start_of_next_chunk;
 		};
+		std::optional<Chunk> next();
+		void reset();
 
-		bool get_next_chunk(Chunk &);
-		void get_next_pulses();
+		template <typename TargetT, int num_bytes = 0> TargetT read();
+
+	private:
+		gzFile file_;
+		z_off_t start_of_next_chunk_;
+	};
+
+	struct Serialiser: public PulseQueuedSerialiser {
+		Serialiser(const std::string &file_name);
+		~Serialiser();
+
+		TargetPlatform::Type target_platforms();
+
+	private:
+		void reset() override;
+
+		Parser parser_;
+		unsigned int time_base_ = 1200;
+		bool is_300_baud_ = false;
+
+		void push_next_pulses() override;
 
 		void queue_implicit_bit_pattern(uint32_t length);
 		void queue_explicit_bit_pattern(uint32_t length);
@@ -69,6 +86,9 @@ class UEF : public PulseQueuedTape, public TargetPlatform::TypeDistinguisher {
 
 		void queue_bit(int bit);
 		void queue_implicit_byte(uint8_t byte);
+	};
+	std::string file_name_;
+	TargetPlatform::Type target_platforms_ = TargetPlatform::Acorn;
 };
 
 }

@@ -8,21 +8,20 @@
 
 #pragma once
 
-#include "../../../Configurable/Configurable.hpp"
-#include "../../../Configurable/StandardOptions.hpp"
-#include "../../../Analyser/Static/StaticAnalyser.hpp"
-#include "../../ROMMachine.hpp"
+#include "Configurable/Configurable.hpp"
+#include "Configurable/StandardOptions.hpp"
+#include "Analyser/Static/StaticAnalyser.hpp"
+#include "Machines/ROMMachine.hpp"
 
 #include <memory>
 
 namespace Apple::IIgs {
 
-class Machine {
-	public:
-		virtual ~Machine() = default;
+struct Machine {
+	virtual ~Machine() = default;
 
-		/// Creates and returns an AppleIIgs.
-		static std::unique_ptr<Machine> AppleIIgs(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
+	/// Creates and returns an AppleIIgs.
+	static std::unique_ptr<Machine> AppleIIgs(const Analyser::Static::Target *, const ROMMachine::ROMFetcher &);
 };
 
 }

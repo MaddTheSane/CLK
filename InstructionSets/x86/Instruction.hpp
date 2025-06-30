@@ -499,10 +499,10 @@ enum class Source: uint8_t {
 	/// getter is used).
 	IndirectNoBase = Indirect - 1,
 };
-constexpr bool is_register(Source source) {
+constexpr bool is_register(const Source source) {
 	return source < Source::None;
 }
-constexpr bool is_segment_register(Source source) {
+constexpr bool is_segment_register(const Source source) {
 	return is_register(source) && source >= Source::ES;
 }
 
@@ -563,60 +563,60 @@ constexpr Operation rep_operation(Operation operation, Repetition repetition) {
 ///
 /// It cannot natively describe a base of ::None.
 class ScaleIndexBase {
-	public:
-		constexpr ScaleIndexBase() noexcept = default;
-		constexpr ScaleIndexBase(uint8_t sib) noexcept : sib_(sib) {}
-		constexpr ScaleIndexBase(int scale, Source index, Source base) noexcept :
-			sib_(uint8_t(
-				scale << 6 |
-				(int(index != Source::None ? index : Source::eSP) << 3) |
-				int(base)
-			)) {}
-		constexpr ScaleIndexBase(Source index, Source base) noexcept : ScaleIndexBase(0, index, base) {}
-		constexpr explicit ScaleIndexBase(Source base) noexcept : ScaleIndexBase(0, Source::None, base) {}
+public:
+	constexpr ScaleIndexBase() noexcept = default;
+	constexpr ScaleIndexBase(uint8_t sib) noexcept : sib_(sib) {}
+	constexpr ScaleIndexBase(int scale, Source index, Source base) noexcept :
+		sib_(uint8_t(
+			scale << 6 |
+			(int(index != Source::None ? index : Source::eSP) << 3) |
+			int(base)
+		)) {}
+	constexpr ScaleIndexBase(Source index, Source base) noexcept : ScaleIndexBase(0, index, base) {}
+	constexpr explicit ScaleIndexBase(Source base) noexcept : ScaleIndexBase(0, Source::None, base) {}
 
-		/// @returns the power of two by which to multiply @c index() before adding it to @c base().
-		constexpr int scale() const {
-			return sib_ >> 6;
-		}
+	/// @returns the power of two by which to multiply @c index() before adding it to @c base().
+	constexpr int scale() const {
+		return sib_ >> 6;
+	}
 
-		/// @returns the @c index for this address; this is guaranteed to be one of eAX, eBX, eCX, eDX, None, eBP, eSI or eDI.
-		constexpr Source index() const {
-			constexpr Source sources[] = {
-				Source::eAX, Source::eCX, Source::eDX, Source::eBX, Source::None, Source::eBP, Source::eSI, Source::eDI,
-			};
-			static_assert(sizeof(sources) == 8);
-			return sources[(sib_ >> 3) & 0x7];
-		}
+	/// @returns the @c index for this address; this is guaranteed to be one of eAX, eBX, eCX, eDX, None, eBP, eSI or eDI.
+	constexpr Source index() const {
+		constexpr Source sources[] = {
+			Source::eAX, Source::eCX, Source::eDX, Source::eBX, Source::None, Source::eBP, Source::eSI, Source::eDI,
+		};
+		static_assert(sizeof(sources) == 8);
+		return sources[(sib_ >> 3) & 0x7];
+	}
 
-		/// @returns the @c base for this address; this is guaranteed to be one of eAX, eBX, eCX, eDX, eSP, eBP, eSI or eDI.
-		constexpr Source base() const {
-			return Source(sib_ & 0x7);
-		}
+	/// @returns the @c base for this address; this is guaranteed to be one of eAX, eBX, eCX, eDX, eSP, eBP, eSI or eDI.
+	constexpr Source base() const {
+		return Source(sib_ & 0x7);
+	}
 
-		constexpr uint8_t without_base() const {
-			return sib_ & ~0x3;
-		}
+	constexpr uint8_t without_base() const {
+		return sib_ & ~0x3;
+	}
 
-		bool operator ==(const ScaleIndexBase &rhs) const {
-			// Permit either exact equality or index and base being equal
-			// but transposed with a scale of 1.
-			return
-				(sib_ == rhs.sib_) ||
-				(
-					!scale() &&	!rhs.scale() &&
-					rhs.index() == base() &&
-					rhs.base() == index()
-				);
-		}
+	bool operator ==(const ScaleIndexBase &rhs) const {
+		// Permit either exact equality or index and base being equal
+		// but transposed with a scale of 1.
+		return
+			(sib_ == rhs.sib_) ||
+			(
+				!scale() &&	!rhs.scale() &&
+				rhs.index() == base() &&
+				rhs.base() == index()
+			);
+	}
 
-		operator uint8_t() const {
-			return sib_;
-		}
+	operator uint8_t() const {
+		return sib_;
+	}
 
-	private:
-		// Data is stored directly as an 80386 SIB byte.
-		uint8_t sib_ = 0;
+private:
+	// Data is stored directly as an 80386 SIB byte.
+	uint8_t sib_ = 0;
 };
 static_assert(sizeof(ScaleIndexBase) == 1);
 static_assert(alignof(ScaleIndexBase) == 1);
@@ -632,286 +632,300 @@ static_assert(alignof(ScaleIndexBase) == 1);
 ///
 /// In all cases, the applicable segment is indicated by the instruction.
 class DataPointer {
-	public:
-		/// Constricts a DataPointer referring to the given source; it shouldn't be ::Indirect.
-		constexpr DataPointer(Source source) noexcept : source_(source) {}
+public:
+	/// Constricts a DataPointer referring to the given source; it shouldn't be ::Indirect.
+	constexpr DataPointer(Source source) noexcept : source_(source) {}
 
-		/// Constricts a DataPointer with a source of ::Indirect and the specified sib.
-		constexpr DataPointer(ScaleIndexBase sib) noexcept : sib_(sib) {}
+	/// Constricts a DataPointer with a source of ::Indirect and the specified sib.
+	constexpr DataPointer(ScaleIndexBase sib) noexcept : sib_(sib) {}
 
-		/// Constructs a DataPointer with a source and SIB; use the source to indicate
-		/// whether the base field of the SIB is effective.
-		constexpr DataPointer(Source source, ScaleIndexBase sib) noexcept : source_(source), sib_(sib) {}
+	/// Constructs a DataPointer with a source and SIB; use the source to indicate
+	/// whether the base field of the SIB is effective.
+	constexpr DataPointer(Source source, ScaleIndexBase sib) noexcept : source_(source), sib_(sib) {}
 
-		/// Constructs an indirect DataPointer referencing the given base, index and scale.
-		/// Automatically maps Source::Indirect to Source::IndirectNoBase if base is Source::None.
-		constexpr DataPointer(Source base, Source index, int scale) noexcept :
-			source_(base != Source::None ? Source::Indirect : Source::IndirectNoBase),
-			sib_(scale, index, base) {}
+	/// Constructs an indirect DataPointer referencing the given base, index and scale.
+	/// Automatically maps Source::Indirect to Source::IndirectNoBase if base is Source::None.
+	constexpr DataPointer(Source base, Source index, int scale) noexcept :
+		source_(base != Source::None ? Source::Indirect : Source::IndirectNoBase),
+		sib_(scale, index, base) {}
 
-		constexpr bool operator ==(const DataPointer &rhs) const {
-			// Require a SIB match only if source_ is ::Indirect or ::IndirectNoBase.
-			return
-				source_ == rhs.source_ && (
-					source_ < Source::IndirectNoBase ||
-					(source_ == Source::Indirect && sib_ == rhs.sib_) ||
-					(source_ == Source::IndirectNoBase && sib_.without_base() == rhs.sib_.without_base())
-				);
+	constexpr bool operator ==(const DataPointer &rhs) const {
+		// Require a SIB match only if source_ is ::Indirect or ::IndirectNoBase.
+		return
+			source_ == rhs.source_ && (
+				source_ < Source::IndirectNoBase ||
+				(source_ == Source::Indirect && sib_ == rhs.sib_) ||
+				(source_ == Source::IndirectNoBase && sib_.without_base() == rhs.sib_.without_base())
+			);
+	}
+
+	constexpr Source source() const {
+		return source_;
+	}
+
+	constexpr int scale() const {
+		return sib_.scale();
+	}
+
+	constexpr Source index() const {
+		return sib_.index();
+	}
+
+	/// @returns The default segment to use for this access.
+	constexpr Source default_segment() const {
+		switch(source_) {
+			default:
+			case Source::IndirectNoBase:
+				return Source::None;
+
+			case Source::Indirect:
+				switch(base()) {
+					default:			return Source::DS;
+					case Source::eBP:
+					case Source::eSP:	return Source::SS;
+					case Source::eDI:	return Source::ES;
+				}
 		}
+	}
 
-		constexpr Source source() const {
-			return source_;
-		}
+	constexpr Source base() const {
+		return sib_.base();
+	}
 
-		constexpr int scale() const {
-			return sib_.scale();
-		}
-
-		constexpr Source index() const {
-			return sib_.index();
-		}
-
-		/// @returns The default segment to use for this access.
-		constexpr Source default_segment() const {
-			switch(source_) {
-				default:
-				case Source::IndirectNoBase:
-					return Source::None;
-
-				case Source::Indirect:
-					switch(base()) {
-						default:			return Source::DS;
-						case Source::eBP:
-						case Source::eSP:	return Source::SS;
-						case Source::eDI:	return Source::ES;
-					}
-			}
-		}
-
-		constexpr Source base() const {
-			return sib_.base();
-		}
-
-	private:
-		Source source_ = Source::Indirect;
-		ScaleIndexBase sib_;
+private:
+	Source source_ = Source::Indirect;
+	ScaleIndexBase sib_;
 };
 
-template<bool is_32bit> class Instruction {
-	public:
-		using DisplacementT = typename std::conditional<is_32bit, int32_t, int16_t>::type;
-		using ImmediateT = typename std::conditional<is_32bit, uint32_t, uint16_t>::type;
-		using AddressT = ImmediateT;
+template<InstructionType type> class Instruction {
+public:
+	using DisplacementT = DisplacementT<type>::type;
+	using ImmediateT = ImmediateT<type>::type;
+	using AddressT = ImmediateT;
 
-		constexpr Instruction() noexcept = default;
-		constexpr Instruction(Operation operation) noexcept :
-			Instruction(operation, Source::None, Source::None, ScaleIndexBase(), false, AddressSize::b16, Source::None, DataSize::None, 0, 0) {}
-		constexpr Instruction(
-			Operation operation,
-			Source source,
-			Source destination,
-			ScaleIndexBase sib,
-			bool lock,
-			AddressSize address_size,
-			Source segment_override,
-			DataSize data_size,
-			DisplacementT displacement,
-			ImmediateT operand) noexcept :
-				operation_(operation),
-				mem_exts_source_(uint8_t(
-					(int(address_size) << 7) |
-					(displacement ? 0x40 : 0x00) |
-					(operand ? 0x20 : 0x00) |
-					int(source) |
-					(source == Source::Indirect ? (uint8_t(sib) & 7) : 0)
-				)),
-				source_data_dest_sib_(uint16_t(
-					(int(data_size) << 14) |
-					(lock ? (1 << 13) : 0) |
-					((uint8_t(sib) & 0xf8) << 2) |
-					int(destination) |
-					(destination == Source::Indirect ? (uint8_t(sib) & 7) : 0)
-				)) {
-			// Decisions on whether to include operand, displacement and/or size extension words
-			// have implicitly been made in the int packing above; honour them here.
-			int extension = 0;
-			if(has_operand()) {
-				extensions_[extension] = operand;
-				++extension;
-			}
-			if(has_displacement()) {
-				extensions_[extension] = ImmediateT(displacement);
-				++extension;
-			}
-
-			// Patch in a fully-resolved segment.
-			Source segment = segment_override;
-			if(segment == Source::None) segment = this->source().default_segment();
-			if(segment == Source::None) segment = this->destination().default_segment();
-			if(segment == Source::None) segment = Source::DS;
-			source_data_dest_sib_ |= (int(segment)&7) << 10;
+	constexpr Instruction() noexcept = default;
+	constexpr Instruction(Operation operation) noexcept :
+		Instruction(
+			operation,
+			Source::None,
+			Source::None,
+			ScaleIndexBase(),
+			false,
+			AddressSize::b16,
+			Source::None,
+			DataSize::None,
+			0,
+			0
+	) {}
+	constexpr Instruction(
+		Operation operation,
+		Source source,
+		Source destination,
+		ScaleIndexBase sib,
+		bool lock,
+		AddressSize address_size,
+		Source segment_override,
+		DataSize data_size,
+		DisplacementT displacement,
+		ImmediateT operand) noexcept :
+			operation_(operation),
+			mem_exts_source_(uint8_t(
+				(int(address_size) << 7) |
+				(displacement ? 0x40 : 0x00) |
+				(operand ? 0x20 : 0x00) |
+				int(source) |
+				(source == Source::Indirect ? (uint8_t(sib) & 7) : 0)
+			)),
+			source_data_dest_sib_(uint16_t(
+				(int(data_size) << 14) |
+				(lock ? (1 << 13) : 0) |
+				((uint8_t(sib) & 0xf8) << 2) |
+				int(destination) |
+				(destination == Source::Indirect ? (uint8_t(sib) & 7) : 0)
+			)) {
+		// Decisions on whether to include operand, displacement and/or size extension words
+		// have implicitly been made in the int packing above; honour them here.
+		int extension = 0;
+		if(has_operand()) {
+			extensions_[extension] = operand;
+			++extension;
+		}
+		if(has_displacement()) {
+			extensions_[extension] = ImmediateT(displacement);
+			++extension;
 		}
 
-		/// @returns The number of bytes used for meaningful content within this class. A receiver must use at least @c sizeof(Instruction) bytes
-		/// to store an @c Instruction but is permitted to reuse the trailing sizeof(Instruction) - packing_size() for any purpose it likes. Teleologically,
-		/// this allows a denser packing of instructions into containers.
-		constexpr size_t packing_size() const	{
-			return
-				offsetof(Instruction<is_32bit>, extensions_) +
-				(has_displacement() + has_operand()) * sizeof(ImmediateT);
+		// Patch in a fully-resolved segment.
+		Source segment = segment_override;
+		if(segment == Source::None) segment = this->source().default_segment();
+		if(segment == Source::None) segment = this->destination().default_segment();
+		if(segment == Source::None) segment = Source::DS;
+		source_data_dest_sib_ |= (int(segment)&7) << 10;
+	}
+
+	/// @returns The number of bytes used for meaningful content within this class. A receiver must use at least @c sizeof(Instruction) bytes
+	/// to store an @c Instruction but is permitted to reuse the trailing sizeof(Instruction) - packing_size() for any purpose it likes. Teleologically,
+	/// this allows a denser packing of instructions into containers.
+	constexpr size_t packing_size() const	{
+		return
+			offsetof(Instruction<type>, extensions_) +
+			(has_displacement() + has_operand()) * sizeof(ImmediateT);
+	}
+
+	static constexpr size_t minimum_packing_size() { return offsetof(Instruction<type>, extensions_); }
+
+	/// @returns The @c Operation performed by this instruction.
+	constexpr Operation operation() const {
+		return operation_;
+	}
+
+	/// @returns A @c DataPointer describing the 'destination' of this instruction, conventionally the first operand in Intel-syntax assembly.
+	constexpr DataPointer destination() const	{
+		return DataPointer(
+			Source(source_data_dest_sib_ & sib_masks[(source_data_dest_sib_ >> 3) & 3]),
+			((source_data_dest_sib_ >> 2) & 0xf8) | (source_data_dest_sib_ & 0x07)
+		);
+	}
+
+	/// @returns A @c DataPointer describing the 'source' of this instruction, conventionally the second operand in Intel-syntax assembly.
+	constexpr DataPointer source() const {
+		return DataPointer(
+			Source(mem_exts_source_ & sib_masks[(mem_exts_source_ >> 3) & 3]),
+			((source_data_dest_sib_ >> 2) & 0xf8) | (mem_exts_source_ & 0x07)
+		);
+	}
+
+	/// @returns @c true if the lock prefix was present on this instruction; @c false otherwise.
+	constexpr bool lock() const {
+		return source_data_dest_sib_ & (1 << 13);
+	}
+
+	/// @returns The address size for this instruction; will always be 16-bit for instructions decoded by a 16-bit decoder but can be 16- or 32-bit for
+	/// instructions decoded by a 32-bit decoder, depending on the program's use of the address size prefix byte.
+	constexpr AddressSize address_size() const {
+		return AddressSize(mem_exts_source_ >> 7);
+	}
+
+	/// @returns The segment that should be used for data fetches if this operation accepts segment overrides.
+	constexpr Source data_segment() const {
+		return Source(
+			int(Source::ES) +
+			((source_data_dest_sib_ >> 10) & 7)
+		);
+	}
+
+	/// @returns The data size of this operation — e.g. `MOV AX, BX` has a data size of `::Word` but `MOV EAX, EBX` has a data size of
+	/// `::DWord`. This value is guaranteed never to be `DataSize::None` even for operations such as `CLI` that don't have operands and operate
+	/// on data that is not a byte, word or double word.
+	constexpr DataSize operation_size() const {
+		return DataSize(source_data_dest_sib_ >> 14);
+	}
+
+	/// @returns The immediate value provided with this instruction, if any. E.g. `ADD AX, 23h` has the operand `23h`.
+	constexpr ImmediateT operand() const	{
+		const ImmediateT ops[] = {0, operand_extension()};
+		return ops[has_operand()];
+	}
+
+	/// @returns The nesting level argument supplied to an ENTER.
+	constexpr ImmediateT nesting_level() const	{
+		return operand();
+	}
+
+	/// @returns The immediate segment value provided with this instruction, if any. Relevant for far calls and jumps; e.g.  `JMP 1234h:5678h` will
+	/// have a segment value of `1234h`.
+	constexpr uint16_t segment() const		{
+		return uint16_t(operand());
+	}
+
+	/// @returns The offset provided with this instruction, if any. E.g. `MOV AX, [es:1998h]` has an offset of `1998h`.
+	constexpr ImmediateT offset() const	{
+		const ImmediateT offsets[] = {0, displacement_extension()};
+		return offsets[has_displacement()];
+	}
+
+	/// @returns The displacement provided with this instruction `SUB AX, [SI+BP-23h]` has an offset of `-23h` and `JMP 19h`
+	/// has an offset of `19h`.
+	constexpr DisplacementT displacement() const {
+		return DisplacementT(offset());
+	}
+
+	/// @returns The dynamic storage size argument supplied to an ENTER.
+	constexpr ImmediateT dynamic_storage_size() const	{
+		return offset();
+	}
+
+	// Standard comparison operator.
+	constexpr bool operator ==(const Instruction<type> &rhs) const {
+		if(	operation_ != rhs.operation_ ||
+			mem_exts_source_ != rhs.mem_exts_source_ ||
+			source_data_dest_sib_ != rhs.source_data_dest_sib_) {
+			return false;
 		}
 
-		/// @returns The @c Operation performed by this instruction.
-		constexpr Operation operation() const {
-			return operation_;
+		// Have already established above that this and RHS have the
+		// same extensions, if any.
+		const int extension_count = has_displacement() + has_operand();
+		for(int c = 0; c < extension_count; c++) {
+			if(extensions_[c] != rhs.extensions_[c]) return false;
 		}
 
-		/// @returns A @c DataPointer describing the 'destination' of this instruction, conventionally the first operand in Intel-syntax assembly.
-		constexpr DataPointer destination() const	{
-			return DataPointer(
-				Source(source_data_dest_sib_ & sib_masks[(source_data_dest_sib_ >> 3) & 3]),
-				((source_data_dest_sib_ >> 2) & 0xf8) | (source_data_dest_sib_ & 0x07)
-			);
-		}
+		return true;
+	}
 
-		/// @returns A @c DataPointer describing the 'source' of this instruction, conventionally the second operand in Intel-syntax assembly.
-		constexpr DataPointer source() const {
-			return DataPointer(
-				Source(mem_exts_source_ & sib_masks[(mem_exts_source_ >> 3) & 3]),
-				((source_data_dest_sib_ >> 2) & 0xf8) | (mem_exts_source_ & 0x07)
-			);
-		}
+private:
+	Operation operation_ = Operation::Invalid;
 
-		/// @returns @c true if the lock prefix was present on this instruction; @c false otherwise.
-		constexpr bool lock() const {
-			return source_data_dest_sib_ & (1 << 13);
-		}
+	// Packing and encoding of fields is admittedly somewhat convoluted; what this
+	// achieves is that instructions will be sized:
+	//
+	//	four bytes + up to two extension words
+	//	(extension words being two bytes for 16-bit instructions, four for 32)
+	//
+	// The extension words are used to retain an operand and displacement
+	// if the instruction has those.
 
-		/// @returns The address size for this instruction; will always be 16-bit for instructions decoded by a 16-bit decoder but can be 16- or 32-bit for
-		/// instructions decoded by a 32-bit decoder, depending on the program's use of the address size prefix byte.
-		constexpr AddressSize address_size() const {
-			return AddressSize(mem_exts_source_ >> 7);
-		}
+	// b7: address size;
+	// b6: has displacement;
+	// b5: has operand;
+	// [b4, b0]: source.
+	uint8_t mem_exts_source_ = 0;
 
-		/// @returns The segment that should be used for data fetches if this operation accepts segment overrides.
-		constexpr Source data_segment() const {
-			return Source(
-				int(Source::ES) +
-				((source_data_dest_sib_ >> 10) & 7)
-			);
-		}
+	bool has_displacement() const {
+		return mem_exts_source_ & (1 << 6);
+	}
+	bool has_operand() const {
+		return mem_exts_source_ & (1 << 5);
+	}
 
-		/// @returns The data size of this operation — e.g. `MOV AX, BX` has a data size of `::Word` but `MOV EAX, EBX` has a data size of
-		/// `::DWord`. This value is guaranteed never to be `DataSize::None` even for operations such as `CLI` that don't have operands and operate
-		/// on data that is not a byte, word or double word.
-		constexpr DataSize operation_size() const {
-			return DataSize(source_data_dest_sib_ >> 14);
-		}
+	// [b15, b14]: data size;
+	// [b13]: lock;
+	// [b12, b10]: segment override;
+	// [b9, b5]: top five of SIB;
+	// [b4, b0]: dest.
+	uint16_t source_data_dest_sib_ = 0;
 
-		/// @returns The immediate value provided with this instruction, if any. E.g. `ADD AX, 23h` has the operand `23h`.
-		constexpr ImmediateT operand() const	{
-			const ImmediateT ops[] = {0, operand_extension()};
-			return ops[has_operand()];
-		}
+	// {operand}, {displacement}.
+	ImmediateT extensions_[2]{};
 
-		/// @returns The nesting level argument supplied to an ENTER.
-		constexpr ImmediateT nesting_level() const	{
-			return operand();
-		}
+	ImmediateT operand_extension() const {
+		return extensions_[0];
+	}
+	ImmediateT displacement_extension() const {
+		return extensions_[(mem_exts_source_ >> 5) & 1];
+	}
 
-		/// @returns The immediate segment value provided with this instruction, if any. Relevant for far calls and jumps; e.g.  `JMP 1234h:5678h` will
-		/// have a segment value of `1234h`.
-		constexpr uint16_t segment() const		{
-			return uint16_t(operand());
-		}
-
-		/// @returns The offset provided with this instruction, if any. E.g. `MOV AX, [es:1998h]` has an offset of `1998h`.
-		constexpr ImmediateT offset() const	{
-			const ImmediateT offsets[] = {0, displacement_extension()};
-			return offsets[has_displacement()];
-		}
-
-		/// @returns The displacement provided with this instruction `SUB AX, [SI+BP-23h]` has an offset of `-23h` and `JMP 19h`
-		/// has an offset of `19h`.
-		constexpr DisplacementT displacement() const {
-			return DisplacementT(offset());
-		}
-
-		/// @returns The dynamic storage size argument supplied to an ENTER.
-		constexpr ImmediateT dynamic_storage_size() const	{
-			return displacement();
-		}
-
-		// Standard comparison operator.
-		constexpr bool operator ==(const Instruction<is_32bit> &rhs) const {
-			if(	operation_ != rhs.operation_ ||
-				mem_exts_source_ != rhs.mem_exts_source_ ||
-				source_data_dest_sib_ != rhs.source_data_dest_sib_) {
-				return false;
-			}
-
-			// Have already established above that this and RHS have the
-			// same extensions, if any.
-			const int extension_count = has_displacement() + has_operand();
-			for(int c = 0; c < extension_count; c++) {
-				if(extensions_[c] != rhs.extensions_[c]) return false;
-			}
-
-			return true;
-		}
-
-	private:
-		Operation operation_ = Operation::Invalid;
-
-		// Packing and encoding of fields is admittedly somewhat convoluted; what this
-		// achieves is that instructions will be sized:
-		//
-		//	four bytes + up to two extension words
-		//	(extension words being two bytes for 16-bit instructions, four for 32)
-		//
-		// The extension words are used to retain an operand and displacement
-		// if the instruction has those.
-
-		// b7: address size;
-		// b6: has displacement;
-		// b5: has operand;
-		// [b4, b0]: source.
-		uint8_t mem_exts_source_ = 0;
-
-		bool has_displacement() const {
-			return mem_exts_source_ & (1 << 6);
-		}
-		bool has_operand() const {
-			return mem_exts_source_ & (1 << 5);
-		}
-
-		// [b15, b14]: data size;
-		// [b13]: lock;
-		// [b12, b10]: segment override;
-		// [b9, b5]: top five of SIB;
-		// [b4, b0]: dest.
-		uint16_t source_data_dest_sib_ = 0;
-
-		// {operand}, {displacement}.
-		ImmediateT extensions_[2]{};
-
-		ImmediateT operand_extension() const {
-			return extensions_[0];
-		}
-		ImmediateT displacement_extension() const {
-			return extensions_[(mem_exts_source_ >> 5) & 1];
-		}
-
-		// A lookup table to help with stripping parts of the SIB that have been
-		// hidden within the source/destination fields.
-		static constexpr uint8_t sib_masks[] = {
-			0x1f, 0x1f, 0x1f, 0x18
-		};
-
+	// A lookup table to help with stripping parts of the SIB that have been
+	// hidden within the source/destination fields.
+	static constexpr uint8_t sib_masks[] = {
+		0x1f, 0x1f, 0x1f, 0x18
+	};
 };
 
-static_assert(sizeof(Instruction<true>) <= 16);
-static_assert(sizeof(Instruction<false>) <= 10);
+static_assert(Instruction<InstructionType::Bits32>::minimum_packing_size() <= 4);
+static_assert(Instruction<InstructionType::Bits16>::minimum_packing_size() <= 4);
+static_assert(sizeof(Instruction<InstructionType::Bits32>) <= 16);
+static_assert(sizeof(Instruction<InstructionType::Bits16>) <= 10);
 
 //
 // Disassembly aids.
@@ -941,10 +955,10 @@ std::string to_string(Source, DataSize);
 ///
 /// See notes below re: @c offset_length and @c immediate_length.
 /// If @c operation_size is the default value of @c ::None, it'll be taken from the @c instruction.
-template <bool is_32bit>
+template <InstructionType type>
 std::string to_string(
 	DataPointer pointer,
-	Instruction<is_32bit> instruction,
+	Instruction<type> instruction,
 	int offset_length,
 	int immediate_length,
 	DataSize operation_size = InstructionSet::x86::DataSize::None
@@ -956,11 +970,10 @@ std::string to_string(
 ///
 /// If @c offset_length is '2' or '4', truncates any printed offset to 2 or 4 digits if it is compatible with being that length.
 /// If @c immediate_length is '2' or '4', truncates any printed immediate value to 2 or 4 digits if it is compatible with being that length.
-template<bool is_32bit>
+template <InstructionType type>
 std::string to_string(
-	std::pair<int, Instruction<is_32bit>> instruction,
+	std::pair<int, Instruction<type>> instruction,
 	Model model,
 	int offset_length = 0,
 	int immediate_length = 0);
-
 }

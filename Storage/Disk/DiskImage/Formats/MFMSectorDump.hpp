@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "../DiskImage.hpp"
-#include "../../../FileHolder.hpp"
-#include "../../Encodings/MFM/Constants.hpp"
+#include "Storage/Disk/DiskImage/DiskImage.hpp"
+#include "Storage/FileHolder.hpp"
+#include "Storage/Disk/Encodings/MFM/Constants.hpp"
 
 #include <string>
 
@@ -20,24 +20,27 @@ namespace Storage::Disk {
 	Provides the base for writeable [M]FM disk images that just contain contiguous sector content dumps.
 */
 class MFMSectorDump: public DiskImage {
-	public:
-		MFMSectorDump(const std::string &file_name);
+public:
+	MFMSectorDump(const std::string &file_name);
 
-		bool get_is_read_only() final;
-		void set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) final;
-		std::shared_ptr<Track> get_track_at_position(Track::Address address) final;
+	bool is_read_only() const;
+	bool represents(const std::string &) const;
+	void set_tracks(const std::map<Track::Address, std::unique_ptr<Track>> &tracks);
+	std::unique_ptr<Track> track_at_position(Track::Address) const;
 
-	protected:
-		Storage::FileHolder file_;
-		void set_geometry(int sectors_per_track, uint8_t sector_size, uint8_t first_sector, Encodings::MFM::Density density);
+protected:
+	mutable Storage::FileHolder file_;
+	void set_geometry(int sectors_per_track, uint8_t sector_size, uint8_t first_sector, Encodings::MFM::Density);
 
-	private:
-		virtual long get_file_offset_for_position(Track::Address address) = 0;
+private:
+	virtual int head_count() const = 0;
+	virtual HeadPosition maximum_head_position() const = 0;
+	virtual long get_file_offset_for_position(Track::Address) const = 0;
 
-		int sectors_per_track_ = 0;
-		uint8_t sector_size_ = 0;
-		Encodings::MFM::Density density_ = Encodings::MFM::Density::Single;
-		uint8_t first_sector_ = 0;
+	int sectors_per_track_ = 0;
+	uint8_t sector_size_ = 0;
+	Encodings::MFM::Density density_ = Encodings::MFM::Density::Single;
+	uint8_t first_sector_ = 0;
 };
 
 }

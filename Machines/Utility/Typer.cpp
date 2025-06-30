@@ -59,7 +59,7 @@ void Typer::append(const std::string &string) {
 	// If the final character in the string is not Typer::EndString
 	// then this machine doesn't need Begin and End, so don't worry about it.
 	ssize_t insertion_position = ssize_t(string_.size());
-	if(string_.back() == Typer::EndString) --insertion_position;
+	if(!string_.empty() && string_.back() == Typer::EndString) --insertion_position;
 
 	string_.reserve(string_.size() + string.size());
 	for(const char c : string) {
@@ -124,7 +124,7 @@ bool Typer::type_next_character() {
 			if(string_pointer_ == string_.size()) return false;
 		}
 
-		if(character_mapper_.needs_pause_after_key(key_pressed)) {
+		if(key_pressed && character_mapper_.needs_pause_after_key(key_pressed)) {
 			break;
 		}
 	}

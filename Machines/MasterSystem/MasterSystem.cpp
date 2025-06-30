@@ -8,24 +8,24 @@
 
 #include "MasterSystem.hpp"
 
-#include "../../Processors/Z80/Z80.hpp"
+#include "Processors/Z80/Z80.hpp"
 
-#include "../../Components/9918/9918.hpp"
-#include "../../Components/SN76489/SN76489.hpp"
-#include "../../Components/OPx/OPLL.hpp"
+#include "Components/9918/9918.hpp"
+#include "Components/SN76489/SN76489.hpp"
+#include "Components/OPx/OPLL.hpp"
 
-#include "../MachineTypes.hpp"
-#include "../../Configurable/Configurable.hpp"
+#include "Machines/MachineTypes.hpp"
+#include "Configurable/Configurable.hpp"
 
-#include "../../ClockReceiver/ForceInline.hpp"
-#include "../../ClockReceiver/JustInTime.hpp"
+#include "ClockReceiver/ForceInline.hpp"
+#include "ClockReceiver/JustInTime.hpp"
 
-#include "../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
-#include "../../Outputs/Speaker/Implementation/CompoundSource.hpp"
+#include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
+#include "Outputs/Speaker/Implementation/CompoundSource.hpp"
 
-#include "../../Outputs/Log.hpp"
+#include "Outputs/Log.hpp"
 
-#include "../../Analyser/Static/Sega/Target.hpp"
+#include "Analyser/Static/Sega/Target.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -80,14 +80,15 @@ class Joystick: public Inputs::ConcreteJoystick {
 
 template <Analyser::Static::Sega::Target::Model model> class ConcreteMachine:
 	public Machine,
-	public CPU::Z80::BusHandler,
-	public MachineTypes::TimedMachine,
-	public MachineTypes::ScanProducer,
-	public MachineTypes::AudioProducer,
-	public MachineTypes::KeyboardMachine,
-	public MachineTypes::JoystickMachine,
 	public Configurable::Device,
-	public Inputs::Keyboard::Delegate {
+	public CPU::Z80::BusHandler,
+	public Inputs::Keyboard::Delegate,
+	public MachineTypes::AudioProducer,
+	public MachineTypes::JoystickMachine,
+	public MachineTypes::KeyboardMachine,
+	public MachineTypes::MediaChangeObserver,
+	public MachineTypes::ScanProducer,
+	public MachineTypes::TimedMachine {
 
 	public:
 		ConcreteMachine(const Analyser::Static::Sega::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
@@ -178,6 +179,10 @@ template <Analyser::Static::Sega::Target::Model model> class ConcreteMachine:
 
 		~ConcreteMachine() {
 			audio_queue_.flush();
+		}
+
+		ChangeEffect effect_for_file_did_change(const std::string &) const final {
+			return ChangeEffect::RestartMachine;
 		}
 
 		void set_scan_target(Outputs::Display::ScanTarget *scan_target) final {
@@ -421,7 +426,7 @@ template <Analyser::Static::Sega::Target::Model model> class ConcreteMachine:
 		}
 
 		// MARK: - Configuration options.
-		std::unique_ptr<Reflection::Struct> get_options() final {
+		std::unique_ptr<Reflection::Struct> get_options() const final {
 			auto options = std::make_unique<Options>(Configurable::OptionsType::UserFriendly);
 			options->output = get_video_signal_configurable();
 			return options;

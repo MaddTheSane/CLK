@@ -3,8 +3,8 @@ greaterThan(5, QT_MAJOR_VERSION) QT += openglwidgets
 
 # Be specific about C++17 but also try the vaguer C++1z for older
 # versions of Qt.
-CONFIG += c++17
-CONFIG += c++1z
+CONFIG += c++20
+CONFIG += c++2a
 
 # Permit multiple source files in different directories to have the same file name.
 CONFIG += object_parallel_to_source
@@ -30,6 +30,7 @@ QMAKE_CXXFLAGS_RELEASE += -DNDEBUG
 DEFINES += QT_DEPRECATED_WARNINGS
 DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x070000
 
+INCLUDEPATH += $$PWD/../..
 SRC = $$PWD/../..
 
 SOURCES += \
@@ -71,11 +72,12 @@ SOURCES += \
 	$$SRC/Components/AudioToggle/*.cpp \
 	$$SRC/Components/AY38910/*.cpp \
 	$$SRC/Components/DiskII/*.cpp \
+	$$SRC/Components/I2C/*.cpp \
 	$$SRC/Components/KonamiSCC/*.cpp \
 	$$SRC/Components/OPx/*.cpp \
-	$$SRC/Components/SN76489/*.cpp \
-	$$SRC/Components/Serial/*.cpp \
 	$$SRC/Components/RP5C01/*.cpp \
+	$$SRC/Components/Serial/*.cpp \
+	$$SRC/Components/SN76489/*.cpp \
 \
 	$$SRC/Inputs/*.cpp \
 \
@@ -85,6 +87,7 @@ SOURCES += \
 	$$SRC/InstructionSets/x86/*.cpp \
 \
 	$$SRC/Machines/*.cpp \
+	$$SRC/Machines/Acorn/Archimedes/*.cpp \
 	$$SRC/Machines/Acorn/Electron/*.cpp \
 	$$SRC/Machines/Amiga/*.cpp \
 	$$SRC/Machines/AmstradCPC/*.cpp \
@@ -97,6 +100,7 @@ SOURCES += \
 	$$SRC/Machines/ColecoVision/*.cpp \
 	$$SRC/Machines/Commodore/*.cpp \
 	$$SRC/Machines/Commodore/1540/Implementation/*.cpp \
+	$$SRC/Machines/Commodore/Plus4/*.cpp \
 	$$SRC/Machines/Commodore/Vic-20/*.cpp \
 	$$SRC/Machines/Enterprise/*.cpp \
 	$$SRC/Machines/MasterSystem/*.cpp \
@@ -201,12 +205,13 @@ HEADERS += \
 	$$SRC/Components/AudioToggle/*.hpp \
 	$$SRC/Components/AY38910/*.hpp \
 	$$SRC/Components/DiskII/*.hpp \
+	$$SRC/Components/I2C/*.hpp \
 	$$SRC/Components/KonamiSCC/*.hpp \
 	$$SRC/Components/OPx/*.hpp \
 	$$SRC/Components/OPx/Implementation/*.hpp \
+	$$SRC/Components/RP5C01/*.hpp \
 	$$SRC/Components/Serial/*.hpp \
 	$$SRC/Components/SN76489/*.hpp \
-	$$SRC/Components/RP5C01/*.hpp \
 \
 	$$SRC/Concurrency/*.hpp \
 \
@@ -221,6 +226,8 @@ HEADERS += \
 	$$SRC/InstructionSets/x86/*.hpp \
 \
 	$$SRC/Machines/*.hpp \
+	$$SRC/Machines/Acorn/Archimedes/*.hpp \
+	$$SRC/Machines/Acorn/Electron/*.hpp \
 	$$SRC/Machines/Amiga/*.hpp \
 	$$SRC/Machines/AmstradCPC/*.hpp \
 	$$SRC/Machines/Apple/ADB/*.hpp \
@@ -232,8 +239,8 @@ HEADERS += \
 	$$SRC/Machines/ColecoVision/*.hpp \
 	$$SRC/Machines/Commodore/*.hpp \
 	$$SRC/Machines/Commodore/1540/Implementation/*.hpp \
+	$$SRC/Machines/Commodore/Plus4/*.hpp \
 	$$SRC/Machines/Commodore/Vic-20/*.hpp \
-	$$SRC/Machines/Electron/*.hpp \
 	$$SRC/Machines/Enterprise/*.hpp \
 	$$SRC/Machines/MasterSystem/*.hpp \
 	$$SRC/Machines/MSX/*.hpp \

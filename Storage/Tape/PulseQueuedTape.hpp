@@ -16,34 +16,30 @@ namespace Storage::Tape {
 /*!
 	Provides a @c Tape with a queue of upcoming pulses and an is-at-end flag.
 
-	If is-at-end is set then get_next_pulse() returns a second of silence and
-	is_at_end() returns true.
+	If is-at-end is set then @c next_pulse() returns a second of silence and
+	@c is_at_end() returns @c true.
 
-	Otherwise get_next_pulse() returns something from the pulse queue if there is
-	anything there, and otherwise calls get_next_pulses(). get_next_pulses() is
+	Otherwise @c next_pulse() returns something from the pulse queue if there is
+	anything there, and otherwise calls @c push_next_pulses() which is
 	virtual, giving subclasses a chance to provide the next batch of pulses.
 */
-class PulseQueuedTape: public Tape {
-	public:
-		PulseQueuedTape();
-		bool is_at_end();
+class PulseQueuedSerialiser: public FormatSerialiser {
+public:
+	void emplace_back(Pulse::Type, Time);
+	void push_back(Pulse);
+	void clear();
+	bool empty() const;
 
-	protected:
-		void emplace_back(Tape::Pulse::Type type, Time length);
-		void emplace_back(const Tape::Pulse &&pulse);
-		void clear();
-		bool empty();
+	void set_is_at_end(bool);
+	Pulse next_pulse() override;
+	bool is_at_end() const override;
 
-		void set_is_at_end(bool);
-		virtual void get_next_pulses() = 0;
+	virtual void push_next_pulses() = 0;
 
-	private:
-		Pulse virtual_get_next_pulse();
-		Pulse silence();
-
-		std::vector<Pulse> queued_pulses_;
-		std::size_t pulse_pointer_;
-		bool is_at_end_;
+private:
+	std::vector<Pulse> queued_pulses_;
+	std::size_t pulse_pointer_ = 0;
+	bool is_at_end_ = false;
 };
 
 }

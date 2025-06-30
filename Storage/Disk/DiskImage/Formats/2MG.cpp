@@ -9,8 +9,7 @@
 #include "2MG.hpp"
 
 #include "MacintoshIMG.hpp"
-#include "../../../MassStorage/Formats/HDV.hpp"
-
+#include "Storage/MassStorage/Formats/HDV.hpp"
 
 #include <cstring>
 
@@ -34,17 +33,17 @@ Disk2MG::DiskOrMassStorageDevice Disk2MG::open(const std::string &file_name) {
 	const auto creator = file.read(4);
 
 	// Grab the header size, version number and image format.
-	const uint16_t header_size = file.get16le();
-	const uint16_t version = file.get16le();
-	const uint32_t format = file.get32le();
-	const uint32_t flags = file.get32le();
+	const auto header_size = file.get_le<uint16_t>();
+	const auto version = file.get_le<uint16_t>();
+	const auto format = file.get_le<uint32_t>();
+	const auto flags = file.get_le<uint32_t>();
 
 	// Skip the number of ProDOS blocks; this is surely implicit from the data size?
 	file.seek(4, SEEK_CUR);
 
 	// Get the offset and size of the disk image data.
-	const uint32_t data_start = file.get32le();
-	uint32_t data_size = file.get32le();
+	const auto data_start = file.get_le<uint32_t>();
+	auto data_size = file.get_le<uint32_t>();
 
 	// Correct for the Sweet 16 emulator, which writes broken 2MGs.
 	if(!data_size && !memcmp(creator.data(), "WOOF", 4)) {
@@ -78,7 +77,8 @@ Disk2MG::DiskOrMassStorageDevice Disk2MG::open(const std::string &file_name) {
 			// 'ProDOS order', which could still mean Macintosh-style (ie. not ProDOS, but whatever)
 			// or Apple II-style. Try them both.
 			try {
-				return new DiskImageHolder<Storage::Disk::MacintoshIMG>(file_name, MacintoshIMG::FixedType::GCR, data_start, data_size);
+				return new DiskImageHolder<Storage::Disk::MacintoshIMG>(
+					file_name, MacintoshIMG::FixedType::GCR, data_start, data_size);
 			} catch(...) {}
 
 			// TODO: Apple II-style.

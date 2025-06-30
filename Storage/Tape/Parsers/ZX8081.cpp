@@ -12,10 +12,10 @@ using namespace Storage::Tape::ZX8081;
 
 Parser::Parser() : pulse_was_high_(false), pulse_time_(0) {}
 
-void Parser::process_pulse(const Storage::Tape::Tape::Pulse &pulse) {
+void Parser::process_pulse(const Storage::Tape::Pulse &pulse) {
 	// If this is anything other than a transition from low to high, just add it to the
 	// count of time.
-	const bool pulse_is_high = pulse.type == Storage::Tape::Tape::Pulse::High;
+	const bool pulse_is_high = pulse.type == Storage::Tape::Pulse::High;
 	const bool pulse_did_change = pulse_is_high != pulse_was_high_;
 	pulse_was_high_ = pulse_is_high;
 	if(!pulse_did_change || !pulse_is_high) {
@@ -89,13 +89,13 @@ void Parser::inspect_waves(const std::vector<WaveType> &waves) {
 	}
 }
 
-int Parser::get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape) {
+int Parser::get_next_byte(Storage::Tape::TapeSerialiser &serialiser) {
 	int c = 8;
 	int result = 0;
 	while(c) {
-		if(is_at_end(tape)) return -1;
+		if(is_at_end(serialiser)) return -1;
 
-		SymbolType symbol = get_next_symbol(tape);
+		SymbolType symbol = get_next_symbol(serialiser);
 		if(symbol != SymbolType::One && symbol != SymbolType::Zero) {
 			if(c == 8) continue;
 			return_symbol(symbol);
@@ -108,32 +108,32 @@ int Parser::get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape) {
 	return result;
 }
 
-std::shared_ptr<std::vector<uint8_t>> Parser::get_next_file_data(const std::shared_ptr<Storage::Tape::Tape> &tape) {
-	if(is_at_end(tape)) return nullptr;
-	SymbolType symbol = get_next_symbol(tape);
+std::optional<std::vector<uint8_t>> Parser::get_next_file_data(Storage::Tape::TapeSerialiser &serialiser) {
+	if(is_at_end(serialiser)) return std::nullopt;
+	SymbolType symbol = get_next_symbol(serialiser);
 	if(symbol != SymbolType::FileGap) {
-		return nullptr;
+		return std::nullopt;
 	}
-	while((symbol == SymbolType::FileGap || symbol == SymbolType::Unrecognised) && !is_at_end(tape)) {
-		symbol = get_next_symbol(tape);
+	while((symbol == SymbolType::FileGap || symbol == SymbolType::Unrecognised) && !is_at_end(serialiser)) {
+		symbol = get_next_symbol(serialiser);
 	}
-	if(is_at_end(tape)) return nullptr;
+	if(is_at_end(serialiser)) return std::nullopt;
 	return_symbol(symbol);
 
-	auto result = std::make_shared<std::vector<uint8_t>>();
+	std::vector<uint8_t> result;
 	int byte;
-	while(!is_at_end(tape)) {
-		byte = get_next_byte(tape);
+	while(!is_at_end(serialiser)) {
+		byte = get_next_byte(serialiser);
 		if(byte == -1) return result;
-		result->push_back(uint8_t(byte));
+		result.push_back(uint8_t(byte));
 	}
 	return result;
 }
 
-std::shared_ptr<Storage::Data::ZX8081::File> Parser::get_next_file(const std::shared_ptr<Storage::Tape::Tape> &tape) {
-	std::shared_ptr<std::vector<uint8_t>> file_data = get_next_file_data(tape);
+std::optional<Storage::Data::ZX8081::File> Parser::get_next_file(Storage::Tape::TapeSerialiser &serialiser) {
+	const auto file_data = get_next_file_data(serialiser);
 	if(!file_data) {
-		return nullptr;
+		return std::nullopt;
 	}
 	return Storage::Data::ZX8081::FileFromData(*file_data);
 }

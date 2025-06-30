@@ -8,8 +8,6 @@
 
 #include "Drive.hpp"
 
-#include "Track/UnformattedTrack.hpp"
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -68,6 +66,10 @@ void Drive::set_disk(const std::shared_ptr<Disk> &disk) {
 	update_clocking_observer();
 }
 
+const Disk *Drive::disk() const {
+	return disk_.get();
+}
+
 bool Drive::has_disk() const {
 	return has_disk_;
 }
@@ -107,7 +109,7 @@ void Drive::step(HeadPosition offset) {
 	did_step(head_position_);
 }
 
-std::shared_ptr<Track> Drive::step_to(HeadPosition offset) {
+Track *Drive::step_to(HeadPosition offset) {
 	HeadPosition old_head_position = head_position_;
 	head_position_ = std::max(offset, HeadPosition(0));
 
@@ -127,7 +129,7 @@ void Drive::set_head(int head) {
 	}
 }
 
-int Drive::get_head_count() const {
+int Drive::head_count() const {
 	return available_heads_;
 }
 
@@ -149,8 +151,8 @@ float Drive::get_time_into_track() const {
 	return float(cycles_since_index_hole_) / (float(get_input_clock_rate()) * rotational_multiplier_);
 }
 
-bool Drive::get_is_read_only() const {
-	if(disk_) return disk_->get_is_read_only();
+bool Drive::is_read_only() const {
+	if(disk_) return disk_->is_read_only();
 	return true;
 }
 
@@ -203,8 +205,9 @@ void Drive::advance(const Cycles cycles) {
 }
 
 void Drive::run_for(const Cycles cycles) {
-	// Assumed: the index pulse pulses even if the drive has stopped spinning.
-	index_pulse_remaining_ = std::max(index_pulse_remaining_ - cycles, Cycles(0));
+	// Assumed: the index pulse will end even if the drive has stopped spinning.
+	// Also: because the count here is a 64-bit integer, the std::max can be ignored.
+	index_pulse_remaining_ -= cycles;// std::max(index_pulse_remaining_ - cycles, Cycles(0));
 
 	if(time_until_motor_transition > Cycles(0)) {
 		if(time_until_motor_transition > cycles) {
@@ -342,8 +345,8 @@ void Drive::process_next_event() {
 
 // MARK: - Track management
 
-std::shared_ptr<Track> Drive::get_track() {
-	if(disk_) return disk_->get_track_at_position(Track::Address(head_, head_position_));
+Track *Drive::get_track() {
+	if(disk_) return disk_->track_at_position(Track::Address(head_, head_position_));
 	return nullptr;
 }
 
@@ -354,7 +357,7 @@ void Drive::set_track(const std::shared_ptr<Track> &track) {
 void Drive::setup_track() {
 	track_ = get_track();
 	if(!track_) {
-		track_ = std::make_shared<UnformattedTrack>();
+		track_ = &unformatted_track_;
 	}
 
 	float offset = 0.0f;
@@ -425,11 +428,11 @@ void Drive::end_writing() {
 
 		if(!patched_track_) {
 			// Avoid creating a new patched track if this one is already patched
-			patched_track_ = std::dynamic_pointer_cast<PCMTrack>(track_);
-			if(!patched_track_ || !patched_track_->is_resampled_clone()) {
-				Track *const tr = track_.get();
+//			patched_track_ = dynamic_cast<PCMTrack *>(track_);
+//			if(!patched_track_ || !patched_track_->is_resampled_clone()) {
+				Track *const tr = track_;
 				patched_track_.reset(PCMTrack::resampled_clone(tr, high_resolution_track_rate));
-			}
+//			}
 		}
 		patched_track_->add_segment(write_start_time_, write_segment_, clamp_writing_to_index_hole_);
 		cycles_since_index_hole_ %= cycles_per_revolution_;

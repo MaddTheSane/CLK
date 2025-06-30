@@ -13,20 +13,20 @@
 
 #include "StaticAnalyser.hpp"
 
-#include "../../../../../Analyser/Static/Acorn/Target.hpp"
-#include "../../../../../Analyser/Static/Amiga/Target.hpp"
-#include "../../../../../Analyser/Static/AmstradCPC/Target.hpp"
-#include "../../../../../Analyser/Static/AppleII/Target.hpp"
-#include "../../../../../Analyser/Static/AppleIIgs/Target.hpp"
-#include "../../../../../Analyser/Static/AtariST/Target.hpp"
-#include "../../../../../Analyser/Static/Commodore/Target.hpp"
-#include "../../../../../Analyser/Static/Enterprise/Target.hpp"
-#include "../../../../../Analyser/Static/Macintosh/Target.hpp"
-#include "../../../../../Analyser/Static/MSX/Target.hpp"
-#include "../../../../../Analyser/Static/Oric/Target.hpp"
-#include "../../../../../Analyser/Static/PCCompatible/Target.hpp"
-#include "../../../../../Analyser/Static/ZX8081/Target.hpp"
-#include "../../../../../Analyser/Static/ZXSpectrum/Target.hpp"
+#include "Analyser/Static/Acorn/Target.hpp"
+#include "Analyser/Static/Amiga/Target.hpp"
+#include "Analyser/Static/AmstradCPC/Target.hpp"
+#include "Analyser/Static/AppleII/Target.hpp"
+#include "Analyser/Static/AppleIIgs/Target.hpp"
+#include "Analyser/Static/AtariST/Target.hpp"
+#include "Analyser/Static/Commodore/Target.hpp"
+#include "Analyser/Static/Enterprise/Target.hpp"
+#include "Analyser/Static/Macintosh/Target.hpp"
+#include "Analyser/Static/MSX/Target.hpp"
+#include "Analyser/Static/Oric/Target.hpp"
+#include "Analyser/Static/PCCompatible/Target.hpp"
+#include "Analyser/Static/ZX8081/Target.hpp"
+#include "Analyser/Static/ZXSpectrum/Target.hpp"
 
 #import "Clock_Signal-Swift.h"
 
@@ -136,17 +136,36 @@
 	return self;
 }
 
+- (instancetype)initWithArchimedesModel:(CSMachineArchimedesModel)model {
+	self = [super init];
+	if(self) {
+		auto target = std::make_unique<Analyser::Static::Acorn::ArchimedesTarget>();
+		_targets.push_back(std::move(target));
+	}
+	return self;
+}
 
-- (instancetype)initWithAtariSTModel:(CSMachineAtariSTModel)model memorySize:(Kilobytes)memorySize {
+- (instancetype)initWithAtariSTMemorySize:(Kilobytes)memorySize {
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::AtariST::Target;
 		auto target = std::make_unique<Target>();
 		switch(memorySize) {
-			default:			target->memory_size = Target::MemorySize::FiveHundredAndTwelveKilobytes;	break;
-			case 1024:			target->memory_size = Target::MemorySize::OneMegabyte;						break;
-			case 4096:			target->memory_size = Target::MemorySize::FourMegabytes;					break;
+			default:	target->memory_size = Target::MemorySize::FiveHundredAndTwelveKilobytes;	break;
+			case 1024:	target->memory_size = Target::MemorySize::OneMegabyte;						break;
+			case 4096:	target->memory_size = Target::MemorySize::FourMegabytes;					break;
 		}
+		_targets.push_back(std::move(target));
+	}
+	return self;
+}
+
+- (instancetype)initWithCommodoreTEDModel:(CSMachineCommodoreTEDModel)model hasC1541:(BOOL)hasC1541 {
+	self = [super init];
+	if(self) {
+		using Target = Analyser::Static::Commodore::Plus4Target;
+		auto target = std::make_unique<Target>();
+		target->has_c1541 = hasC1541;
 		_targets.push_back(std::move(target));
 	}
 	return self;
@@ -155,8 +174,7 @@
 - (instancetype)initWithElectronDFS:(BOOL)dfs adfs:(BOOL)adfs ap6:(BOOL)ap6 sidewaysRAM:(BOOL)sidewaysRAM {
 	self = [super init];
 	if(self) {
-		using Target = Analyser::Static::Acorn::Target;
-		auto target = std::make_unique<Target>();
+		auto target = std::make_unique<Analyser::Static::Acorn::ElectronTarget>();
 		target->has_dfs = dfs;
 		target->has_pres_adfs = adfs;
 		target->has_ap6_rom = ap6;
@@ -284,8 +302,8 @@
 			case CSPCCompatibleVideoAdaptorCGA:	target->adaptor = Target::VideoAdaptor::CGA;	break;
 		}
 		switch(speed) {
-			case CSPCCompatibleSpeedOriginal:	target->speed = Target::Speed::ApproximatelyOriginal;	break;
-			case CSPCCompatibleSpeedTurbo:		target->speed = Target::Speed::Fast;					break;
+			case CSPCCompatibleSpeedOriginal:	target->model = Analyser::Static::PCCompatible::Model::XT;		break;
+			case CSPCCompatibleSpeedTurbo:		target->model = Analyser::Static::PCCompatible::Model::TurboXT;	break;
 		}
 		_targets.push_back(std::move(target));
 	}
@@ -313,7 +331,7 @@
 - (instancetype)initWithVic20Region:(CSMachineVic20Region)region memorySize:(Kilobytes)memorySize hasC1540:(BOOL)hasC1540 {
 	self = [super init];
 	if(self) {
-		using Target = Analyser::Static::Commodore::Target;
+		using Target = Analyser::Static::Commodore::Vic20Target;
 		auto target = std::make_unique<Target>();
 		switch(region) {
 			case CSMachineVic20RegionDanish:	target->region = Target::Region::Danish;	break;
@@ -373,8 +391,8 @@ static Analyser::Static::ZX8081::Target::MemoryModel ZX8081MemoryModelFromSize(K
 
 - (NSString *)optionsNibName {
 	switch(_targets.front()->machine) {
-//		case Analyser::Machine::AmstradCPC:		return @"QuickLoadCompositeOptions";
 		case Analyser::Machine::AmstradCPC:		return @"CompositeOptions";
+		case Analyser::Machine::Archimedes:		return @"QuickLoadOptions";
 		case Analyser::Machine::AppleII:		return @"AppleIIOptions";
 		case Analyser::Machine::Atari2600:		return @"Atari2600Options";
 		case Analyser::Machine::AtariST:		return @"CompositeOptions";
@@ -385,6 +403,7 @@ static Analyser::Static::ZX8081::Target::MemoryModel ZX8081MemoryModelFromSize(K
 		case Analyser::Machine::MasterSystem:	return @"CompositeOptions";
 		case Analyser::Machine::MSX:			return @"QuickLoadCompositeOptions";
 		case Analyser::Machine::Oric:			return @"OricOptions";
+		case Analyser::Machine::Plus4:			return @"QuickLoadCompositeOptions";
 		case Analyser::Machine::PCCompatible:	return @"CompositeOptions";
 		case Analyser::Machine::Vic20:			return @"QuickLoadCompositeOptions";
 		case Analyser::Machine::ZX8081:			return @"ZX8081Options";

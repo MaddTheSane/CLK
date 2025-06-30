@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "../DiskImage.hpp"
-#include "../../../MassStorage/MassStorageDevice.hpp"
-
-#include "../../../FileHolder.hpp"
+#include "Storage/Disk/DiskImage/DiskImage.hpp"
+#include "Storage/MassStorage/MassStorageDevice.hpp"
+#include "Storage/FileHolder.hpp"
 
 #include <cstddef>
 #include <variant>
@@ -28,9 +27,10 @@ namespace Storage::Disk {
 */
 
 class Disk2MG {
-	public:
-		using DiskOrMassStorageDevice = std::variant<std::nullptr_t, DiskImageHolderBase *, Storage::MassStorage::MassStorageDevice *>;
-		static DiskOrMassStorageDevice open(const std::string &file_name);
+public:
+	using DiskOrMassStorageDevice =
+		std::variant<std::nullptr_t, DiskImageHolderBase *, Storage::MassStorage::MassStorageDevice *>;
+	static DiskOrMassStorageDevice open(const std::string &file_name);
 };
 
 }

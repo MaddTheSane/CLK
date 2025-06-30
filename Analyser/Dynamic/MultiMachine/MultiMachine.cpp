@@ -7,7 +7,7 @@
 //
 
 #include "MultiMachine.hpp"
-#include "../../../Outputs/Log.hpp"
+#include "Outputs/Log.hpp"
 
 #include <algorithm>
 
@@ -27,7 +27,9 @@ MultiMachine::MultiMachine(std::vector<std::unique_ptr<DynamicMachine>> &&machin
 	audio_producer_(machines_, machines_mutex_),
 	joystick_machine_(machines_),
 	keyboard_machine_(machines_),
-	media_target_(machines_) {
+	media_target_(machines_),
+	media_change_observer_(machines_)
+{
 	timed_machine_.set_delegate(this);
 }
 
@@ -35,13 +37,13 @@ Activity::Source *MultiMachine::activity_source() {
 	return nullptr; // TODO
 }
 
-#define Provider(type, name, member)	\
-	type *MultiMachine::name() {	\
-		if(has_picked_) {	\
+#define Provider(type, name, member)			\
+	type *MultiMachine::name() {				\
+		if(has_picked_) {						\
 			return machines_.front()->name();	\
-		} else {	\
-			return &member;	\
-		}	\
+		} else {								\
+			return &member;						\
+		}										\
 	}
 
 Provider(Configurable::Device, configurable_device, configurable_)
@@ -51,6 +53,7 @@ Provider(MachineTypes::AudioProducer, audio_producer, audio_producer_)
 Provider(MachineTypes::JoystickMachine, joystick_machine, joystick_machine_)
 Provider(MachineTypes::KeyboardMachine, keyboard_machine, keyboard_machine_)
 Provider(MachineTypes::MediaTarget, media_target, media_target_)
+Provider(MachineTypes::MediaChangeObserver, media_change_observer, media_change_observer_)
 
 MachineTypes::MouseMachine *MultiMachine::mouse_machine() {
 	// TODO.

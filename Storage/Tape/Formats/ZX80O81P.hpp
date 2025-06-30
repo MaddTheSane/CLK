@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "../Tape.hpp"
+#include "Storage/Tape/Tape.hpp"
 
-#include "../../FileHolder.hpp"
-#include "../../TargetPlatforms.hpp"
+#include "Storage/FileHolder.hpp"
+#include "Storage/TargetPlatforms.hpp"
 
 #include <cstdint>
 #include <string>
@@ -22,30 +22,32 @@ namespace Storage::Tape {
 /*!
 	Provides a @c Tape containing a ZX80-format .O tape image, which is a byte stream capture.
 */
-class ZX80O81P: public Tape, public TargetPlatform::TypeDistinguisher {
-	public:
-		/*!
-			Constructs a @c ZX80O containing content from the file with name @c file_name.
+class ZX80O81P: public Tape, public TargetPlatform::Distinguisher {
+public:
+	/*!
+		Constructs a @c ZX80O containing content from the file with name @c file_name.
 
-			@throws ErrorNotZX80O81P if this file could not be opened and recognised as a valid ZX80-format .O.
-		*/
-		ZX80O81P(const std::string &file_name);
+		@throws ErrorNotZX80O81P if this file could not be opened and recognised as a valid ZX80-format .O.
+	*/
+	ZX80O81P(const std::string &file_name);
 
-		enum {
-			ErrorNotZX80O81P
-		};
+	enum {
+		ErrorNotZX80O81P
+	};
+
+private:
+	// TargetPlatform::TypeDistinguisher.
+	TargetPlatform::Type target_platforms() override;
+	std::unique_ptr<FormatSerialiser> format_serialiser() const override;
+
+	struct Serialiser: public FormatSerialiser {
+		Serialiser(const std::vector<uint8_t> &data);
 
 	private:
-		// implemented to satisfy @c Tape
-		bool is_at_end();
-
-		// implemented to satisfy TargetPlatform::TypeDistinguisher
-		TargetPlatform::Type target_platform_type();
-		TargetPlatform::Type platform_type_;
-
-		void virtual_reset();
-		Pulse virtual_get_next_pulse();
-		bool has_finished_data();
+		bool is_at_end() const override;
+		void reset() override;
+		Pulse next_pulse() override;
+		bool has_finished_data() const;
 
 		uint8_t byte_;
 		int bit_pointer_;
@@ -53,8 +55,11 @@ class ZX80O81P: public Tape, public TargetPlatform::TypeDistinguisher {
 		bool is_past_silence_, has_ended_final_byte_;
 		bool is_high_;
 
-		std::vector<uint8_t> data_;
+		const std::vector<uint8_t> &data_;
 		std::size_t data_pointer_;
+	};
+	TargetPlatform::Type target_platforms_;
+	std::vector<uint8_t> data_;
 };
 
 }

@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "../../../Storage/Tape/Tape.hpp"
+#include "Storage/Tape/Tape.hpp"
+#include "Storage/TargetPlatforms.hpp"
 #include "File.hpp"
 
 namespace Analyser::Static::Commodore {
 
-std::vector<File> GetFiles(const std::shared_ptr<Storage::Tape::Tape> &tape);
+std::vector<File> GetFiles(Storage::Tape::TapeSerialiser &, TargetPlatform::Type);
 
 }

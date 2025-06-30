@@ -25,9 +25,11 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
 	CVDisplayLinkRef _displayLink;
 	NSNumber *_currentScreenNumber;
 
-	NSTrackingArea *_mouseTrackingArea;
+	NSTrackingArea *_windowTrackingArea;
+	NSTrackingArea *_subviewTrackingArea;
 	NSTimer *_mouseHideTimer;
 	BOOL _mouseIsCaptured;
+	BOOL _ignoreNextMotion;
 
 	atomic_int _isDrawingFlag;
 	BOOL _isInvalid;
@@ -223,25 +225,82 @@ CVReturn DisplayLinkCallback(__unused CVDisplayLinkRef displayLink, const CVTime
 
 - (void)setShouldCaptureMouse:(BOOL)shouldCaptureMouse {
 	_shouldCaptureMouse = shouldCaptureMouse;
+	[self recalculateWindowTrackingArea];
+}
+
+- (void)recalculateWindowTrackingArea {
+	if(_windowTrackingArea) {
+		[self removeTrackingArea:_windowTrackingArea];
+	}
+	if(!_shouldCaptureMouse) {
+		return;
+	}
+	_windowTrackingArea =
+		[[NSTrackingArea alloc]
+		 initWithRect:self.bounds
+			options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingActiveWhenFirstResponder
+			owner:self
+			userInfo:nil];
+	[self addTrackingArea:_windowTrackingArea];
+}
+
+- (void)recalculateSubviewTrackingAreas {
+	if(_subviewTrackingArea) {
+		[self removeTrackingArea:_subviewTrackingArea];
+	}
+
+	// Use the union of rects of interesting subviews as the tracking area.
+	const NSRect emptySentinel = NSMakeRect(-1, -1, -1, -1);
+	NSRect trackingRect = emptySentinel;
+	for(NSView *const subview in self.subviews) {
+		if(
+			[self.responderDelegate respondsToSelector:@selector(scanTargetView:shouldTrackMousovers:)] &&
+			![self.responderDelegate scanTargetView:self shouldTrackMousovers:subview]
+		) {
+			continue;
+		}
+
+		if(NSEqualRects(trackingRect, emptySentinel)) {
+			trackingRect = subview.frame;
+		} else {
+			trackingRect = NSUnionRect(subview.frame, trackingRect);
+		}
+	}
+
+	if(NSEqualRects(trackingRect, emptySentinel)) {
+		return;
+	}
+
+	_subviewTrackingArea =
+		[[NSTrackingArea alloc]
+			initWithRect:trackingRect
+			options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingActiveWhenFirstResponder
+			owner:self
+			userInfo:nil];
+	[self addTrackingArea:_subviewTrackingArea];
 }
 
 - (void)updateTrackingAreas {
 	[super updateTrackingAreas];
+	[self recalculateSubviewTrackingAreas];
+	[self recalculateWindowTrackingArea];
+}
 
-	if(_mouseTrackingArea) {
-		[self removeTrackingArea:_mouseTrackingArea];
-	}
-	_mouseTrackingArea =
-		[[NSTrackingArea alloc]
-			initWithRect:self.bounds
-			options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingActiveWhenFirstResponder
-			owner:self
-			userInfo:nil];
-	[self addTrackingArea:_mouseTrackingArea];
+- (void)didAddSubview:(NSView *)subview {
+	[self recalculateSubviewTrackingAreas];
+}
+
+- (void)layout {
+	[super layout];
+	[self recalculateSubviewTrackingAreas];
+}
+
+- (void)cancelMouseHide {
+	[_mouseHideTimer invalidate];
 }
 
 - (void)scheduleMouseHideAfter:(NSTimeInterval)interval {
-	[_mouseHideTimer invalidate];
+	[self cancelMouseHide];
 
 	_mouseHideTimer = [NSTimer scheduledTimerWithTimeInterval:interval repeats:NO block:^(__unused NSTimer * _Nonnull timer) {
 		// Don't actually hide the mouse if this is a mouse-capture machine; that makes
@@ -256,8 +315,13 @@ CVReturn DisplayLinkCallback(__unused CVDisplayLinkRef displayLink, const CVTime
 - (void)mouseEntered:(NSEvent *)event {
 	[super mouseEntered:event];
 
-	[self.responderDelegate scanTargetViewDidShowOSMouseCursor:self];
-	[self scheduleMouseHideAfter:standardMouseHideInterval];
+	if(event.trackingArea == _windowTrackingArea) {
+		[self scheduleMouseHideAfter:standardMouseHideInterval];
+	}
+	if(event.trackingArea == _subviewTrackingArea && !_mouseIsCaptured) {
+		[self cancelMouseHide];
+		[self.responderDelegate scanTargetViewDidMouseoverSubviews:self];
+	}
 }
 
 - (void)mouseExited:(NSEvent *)event {
@@ -268,39 +332,69 @@ CVReturn DisplayLinkCallback(__unused CVDisplayLinkRef displayLink, const CVTime
 }
 
 - (void)releaseMouse {
-	if(_mouseIsCaptured) {
-		_mouseIsCaptured = NO;
-		CGAssociateMouseAndMouseCursorPosition(true);
-		[NSCursor unhide];
-		[self.responderDelegate scanTargetViewDidReleaseMouse:self];
-		[self.responderDelegate scanTargetViewDidShowOSMouseCursor:self];
-		((CSApplication *)[NSApplication sharedApplication]).eventDelegate = nil;
+	if(!_mouseIsCaptured) {
+		return;
 	}
+
+	_mouseIsCaptured = NO;
+	CGAssociateMouseAndMouseCursorPosition(true);
+	[NSCursor unhide];
+	[self.responderDelegate scanTargetViewDidReleaseMouse:self];
+	((CSApplication *)[NSApplication sharedApplication]).eventDelegate = nil;
+}
+
+- (BOOL)captureMouse {
+	if(_mouseIsCaptured) {
+		return NO;
+	}
+
+	_ignoreNextMotion = _mouseIsCaptured = YES;
+	[NSCursor hide];
+	CGAssociateMouseAndMouseCursorPosition(false);
+	[self recentreCursor];
+	[self.responderDelegate scanTargetViewWouldHideOSMouseCursor:self];
+	[self.responderDelegate scanTargetViewDidCaptureMouse:self];
+	if(self.shouldUsurpCommand) {
+		((CSApplication *)[NSApplication sharedApplication]).eventDelegate = self;
+	}
+	return YES;
 }
 
 #pragma mark - Mouse motion
 
+- (void)recentreCursor {
+	// TODO: should I really need to invert the y coordinate myself? It suggests I
+	// might have an error in mapping here.
+	const NSPoint windowCentre = [self convertPoint:CGPointMake(self.bounds.size.width * 0.5, self.bounds.size.height * 0.5) toView:nil];
+	const NSPoint screenCentre = [self.window convertPointToScreen:windowCentre];
+	const CGRect screenFrame = self.window.screen.frame;
+	CGWarpMouseCursorPosition(NSMakePoint(
+		screenFrame.origin.x + screenCentre.x,
+		screenFrame.origin.y + screenFrame.size.height - screenCentre.y
+	));
+}
+
 - (void)applyMouseMotion:(NSEvent *)event {
 	if(!_mouseIsCaptured) {
 		// Mouse capture is off, so don't play games with the cursor, just schedule it to
-		// hide in the near future.
-		[self scheduleMouseHideAfter:standardMouseHideInterval];
-		[self.responderDelegate scanTargetViewDidShowOSMouseCursor:self];
+		// hide in the near future unless over an interesting subview.
+		if(
+			_subviewTrackingArea &&
+			NSPointInRect([self convertPoint:event.locationInWindow fromView:nil], _subviewTrackingArea.rect)
+		) {
+			[self.responderDelegate scanTargetViewDidMouseoverSubviews:self];
+		} else {
+			[self scheduleMouseHideAfter:standardMouseHideInterval];
+		}
 	} else {
 		// Mouse capture is on, so move the cursor back to the middle of the window, and
 		// forward the deltas to the listener.
-		//
-		// TODO: should I really need to invert the y coordinate myself? It suggests I
-		// might have an error in mapping here.
-		const NSPoint windowCentre = [self convertPoint:CGPointMake(self.bounds.size.width * 0.5, self.bounds.size.height * 0.5) toView:nil];
-		const NSPoint screenCentre = [self.window convertPointToScreen:windowCentre];
-		const CGRect screenFrame = self.window.screen.frame;
-		CGWarpMouseCursorPosition(NSMakePoint(
-			screenFrame.origin.x + screenCentre.x,
-			screenFrame.origin.y + screenFrame.size.height - screenCentre.y
-		));
-
-		[self.responderDelegate mouseMoved:event];
+		[self recentreCursor];
+		if(!_ignoreNextMotion) {
+			// Ignore the first motion that comes in; it seems to be spurious.
+			[self.responderDelegate mouseMoved:event];
+		}
+		_ignoreNextMotion = NO;
 	}
 }
 
@@ -328,16 +422,7 @@ CVReturn DisplayLinkCallback(__unused CVDisplayLinkRef displayLink, const CVTime
 
 - (void)applyButtonDown:(NSEvent *)event {
 	if(self.shouldCaptureMouse) {
-		if(!_mouseIsCaptured) {
-			_mouseIsCaptured = YES;
-			[NSCursor hide];
-			CGAssociateMouseAndMouseCursorPosition(false);
-			[self.responderDelegate scanTargetViewWouldHideOSMouseCursor:self];
-			[self.responderDelegate scanTargetViewDidCaptureMouse:self];
-			if(self.shouldUsurpCommand) {
-				((CSApplication *)[NSApplication sharedApplication]).eventDelegate = self;
-			}
-
+		if([self captureMouse]) {
 			// Don't report the first click to the delegate; treat that as merely
 			// an invitation to capture the cursor.
 			return;

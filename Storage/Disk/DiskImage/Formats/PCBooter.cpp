@@ -8,7 +8,7 @@
 
 #include "PCBooter.hpp"
 
-#include "Utility/ImplicitSectors.hpp"
+#include "Storage/Disk/DiskImage/Formats/Utility/ImplicitSectors.hpp"
 
 using namespace Storage::Disk;
 
@@ -55,14 +55,14 @@ PCBooter::PCBooter(const std::string &file_name) :
 	// as it can also be used to disambiguate FAT12 disks.
 }
 
-HeadPosition PCBooter::get_maximum_head_position() {
+HeadPosition PCBooter::maximum_head_position() const {
 	return HeadPosition(track_count_);
 }
 
-int PCBooter::get_head_count() {
+int PCBooter::head_count() const {
 	return head_count_;
 }
 
-long PCBooter::get_file_offset_for_position(Track::Address address) {
+long PCBooter::get_file_offset_for_position(Track::Address address) const {
 	return (address.position.as_int() * head_count_ + address.head) * 512 * sector_count_;
 }

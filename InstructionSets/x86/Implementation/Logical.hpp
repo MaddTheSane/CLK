@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "../AccessType.hpp"
+#include "InstructionSets/x86/AccessType.hpp"
 
 namespace InstructionSet::x86::Primitive {
 
@@ -23,11 +23,11 @@ void and_(
 	*/
 	/*
 		The OF and CF flags are cleared; the SF, ZF, and PF flags are set according to the result.
-		The state of the AF flag is undefined.
+		The state of the AF flag is formally undefined but implicitly cleared per 8080 compatibility.
 	*/
 	destination &= source;
 
-	context.flags.template set_from<Flag::Overflow, Flag::Carry>(0);
+	context.flags.template set_from<Flag::Overflow, Flag::Carry, Flag::AuxiliaryCarry>(0);
 	context.flags.template set_from<IntT, Flag::Zero, Flag::Sign, Flag::ParityOdd>(destination);
 }
 
@@ -42,11 +42,11 @@ void or_(
 	*/
 	/*
 		The OF and CF flags are cleared; the SF, ZF, and PF flags are set according to the result.
-		The state of the AF flag is undefined.
+		The state of the AF flag is formally undefined but implicitly cleared per 8080 compatibility.
 	*/
 	destination |= source;
 
-	context.flags.template set_from<Flag::Overflow, Flag::Carry>(0);
+	context.flags.template set_from<Flag::Overflow, Flag::Carry, Flag::AuxiliaryCarry>(0);
 	context.flags.template set_from<IntT, Flag::Zero, Flag::Sign, Flag::ParityOdd>(destination);
 }
 
@@ -61,11 +61,11 @@ void xor_(
 	*/
 	/*
 		The OF and CF flags are cleared; the SF, ZF, and PF flags are set according to the result.
-		The state of the AF flag is undefined.
+		The state of the AF flag is formally undefined but implicitly cleared per 8080 compatibility.
 	*/
 	destination ^= source;
 
-	context.flags.template set_from<Flag::Overflow, Flag::Carry>(0);
+	context.flags.template set_from<Flag::Overflow, Flag::Carry, Flag::AuxiliaryCarry>(0);
 	context.flags.template set_from<IntT, Flag::Zero, Flag::Sign, Flag::ParityOdd>(destination);
 }
 
@@ -99,7 +99,7 @@ void cbw(
 template <typename IntT>
 void cwd(
 	IntT &dx,
-	IntT ax
+	const IntT ax
 ) {
 	dx = ax & Numeric::top_bit<IntT>() ? IntT(~0) : IntT(0);
 }

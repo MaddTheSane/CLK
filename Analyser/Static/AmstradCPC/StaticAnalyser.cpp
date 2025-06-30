@@ -8,14 +8,14 @@
 
 #include "StaticAnalyser.hpp"
 
-#include <algorithm>
-#include <cstring>
-
-#include "../../../Storage/Disk/Parsers/CPM.hpp"
-#include "../../../Storage/Disk/Encodings/MFM/Parser.hpp"
-#include "../../../Storage/Tape/Parsers/Spectrum.hpp"
+#include "Storage/Disk/Parsers/CPM.hpp"
+#include "Storage/Disk/Encodings/MFM/Parser.hpp"
+#include "Storage/Tape/Parsers/Spectrum.hpp"
 
 #include "Target.hpp"
+
+#include <algorithm>
+#include <cstring>
 
 namespace {
 
@@ -63,8 +63,8 @@ std::string RunCommandFor(const Storage::Disk::CPM::File &file) {
 
 void InspectCatalogue(
 	const Storage::Disk::CPM::Catalogue &catalogue,
-	const std::unique_ptr<Analyser::Static::AmstradCPC::Target> &target) {
-
+	const std::unique_ptr<Analyser::Static::AmstradCPC::Target> &target
+) {
 	std::vector<const Storage::Disk::CPM::File *> candidate_files;
 	candidate_files.reserve(catalogue.files.size());
 	for(const auto &file : catalogue.files) {
@@ -158,7 +158,10 @@ void InspectCatalogue(
 	target->loading_command = "cat\n";
 }
 
-bool CheckBootSector(const std::shared_ptr<Storage::Disk::Disk> &disk, const std::unique_ptr<Analyser::Static::AmstradCPC::Target> &target) {
+bool CheckBootSector(
+	const std::shared_ptr<Storage::Disk::Disk> &disk,
+	const std::unique_ptr<Analyser::Static::AmstradCPC::Target> &target
+) {
 	Storage::Encodings::MFM::Parser parser(Storage::Encodings::MFM::Density::Double, disk);
 	const Storage::Encodings::MFM::Sector *boot_sector = parser.sector(0, 0, 0x41);
 	if(boot_sector != nullptr && !boot_sector->samples.empty() && boot_sector->samples[0].size() == 512) {
@@ -182,7 +185,7 @@ bool CheckBootSector(const std::shared_ptr<Storage::Disk::Disk> &disk, const std
 	return false;
 }
 
-bool IsAmstradTape(const std::shared_ptr<Storage::Tape::Tape> &tape) {
+bool IsAmstradTape(Storage::Tape::TapeSerialiser &serialiser) {
 	// Limited sophistication here; look for a CPC-style file header, that is
 	// any Spectrum-esque block with a synchronisation character of 0x2c.
 	//
@@ -191,7 +194,7 @@ bool IsAmstradTape(const std::shared_ptr<Storage::Tape::Tape> &tape) {
 	Parser parser(Parser::MachineType::AmstradCPC);
 
 	while(true) {
-		const auto block = parser.find_block(tape);
+		const auto block = parser.find_block(serialiser);
 		if(!block) break;
 
 		if(block->type == 0x2c) {
@@ -204,7 +207,12 @@ bool IsAmstradTape(const std::shared_ptr<Storage::Tape::Tape> &tape) {
 
 } // namespace
 
-Analyser::Static::TargetList Analyser::Static::AmstradCPC::GetTargets(const Media &media, const std::string &, TargetPlatform::IntType) {
+Analyser::Static::TargetList Analyser::Static::AmstradCPC::GetTargets(
+	const Media &media,
+	const std::string &,
+	TargetPlatform::IntType,
+	bool
+) {
 	TargetList destination;
 	auto target = std::make_unique<Target>();
 	target->confidence = 0.5;
@@ -214,7 +222,8 @@ Analyser::Static::TargetList Analyser::Static::AmstradCPC::GetTargets(const Medi
 	if(!media.tapes.empty()) {
 		bool has_cpc_tape = false;
 		for(auto &tape: media.tapes) {
-			has_cpc_tape |= IsAmstradTape(tape);
+			const auto serialiser = tape->serialiser();
+			has_cpc_tape |= IsAmstradTape(*serialiser);
 		}
 
 		if(has_cpc_tape) {
@@ -228,26 +237,14 @@ Analyser::Static::TargetList Analyser::Static::AmstradCPC::GetTargets(const Medi
 	}
 
 	if(!media.disks.empty()) {
-		Storage::Disk::CPM::ParameterBlock data_format;
-		data_format.sectors_per_track = 9;
-		data_format.tracks = 40;
-		data_format.block_size = 1024;
-		data_format.first_sector = 0xc1;
-		data_format.catalogue_allocation_bitmap = 0xc000;
-		data_format.reserved_tracks = 0;
-
-		Storage::Disk::CPM::ParameterBlock system_format;
-		system_format.sectors_per_track = 9;
-		system_format.tracks = 40;
-		system_format.block_size = 1024;
-		system_format.first_sector = 0x41;
-		system_format.catalogue_allocation_bitmap = 0xc000;
-		system_format.reserved_tracks = 2;
+		const auto data_format = Storage::Disk::CPM::ParameterBlock::cpc_data_format();
+		const auto system_format = Storage::Disk::CPM::ParameterBlock::cpc_system_format();
 
 		for(auto &disk: media.disks) {
-			// Check for an ordinary catalogue.
-			std::unique_ptr<Storage::Disk::CPM::Catalogue> data_catalogue = Storage::Disk::CPM::GetCatalogue(disk, data_format);
-			if(data_catalogue) {
+			// Check for an ordinary catalogue, making sure this isn't actually a ZX Spectrum disk.
+			std::unique_ptr<Storage::Disk::CPM::Catalogue> data_catalogue =
+				Storage::Disk::CPM::GetCatalogue(disk, data_format, false);
+			if(data_catalogue && !data_catalogue->is_zx_spectrum_booter()) {
 				InspectCatalogue(*data_catalogue, target);
 				target->media.disks.push_back(disk);
 				continue;
@@ -260,8 +257,9 @@ Analyser::Static::TargetList Analyser::Static::AmstradCPC::GetTargets(const Medi
 			}
 
 			// Failing that check for a system catalogue.
-			std::unique_ptr<Storage::Disk::CPM::Catalogue> system_catalogue = Storage::Disk::CPM::GetCatalogue(disk, system_format);
-			if(system_catalogue) {
+			std::unique_ptr<Storage::Disk::CPM::Catalogue> system_catalogue =
+				Storage::Disk::CPM::GetCatalogue(disk, system_format, false);
+			if(system_catalogue && !system_catalogue->is_zx_spectrum_booter()) {
 				InspectCatalogue(*system_catalogue, target);
 				target->media.disks.push_back(disk);
 				continue;

@@ -8,19 +8,19 @@
 
 #pragma once
 
-#include "../Cartridge.hpp"
+#include "Storage/Cartridge/Cartridge.hpp"
 
 #include <string>
 
 namespace Storage::Cartridge {
 
 class PRG : public Cartridge {
-	public:
-		PRG(const std::string &file_name);
+public:
+	PRG(const std::string &file_name);
 
-		enum {
-			ErrorNotROM
-		};
+	enum {
+		ErrorNotROM
+	};
 };
 
 }

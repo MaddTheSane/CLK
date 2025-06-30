@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "../PulseQueuedTape.hpp"
-#include "../../FileHolder.hpp"
+#include "Storage/Tape/PulseQueuedTape.hpp"
+#include "Storage/FileHolder.hpp"
 
 #include <string>
 
@@ -18,24 +18,30 @@ namespace Storage::Tape {
 /*!
 	Provides a @c Tape containing a CSW tape image, which is a compressed 1-bit sampling.
 */
-class TZX: public PulseQueuedTape {
-	public:
-		/*!
-			Constructs a @c TZX containing content from the file with name @c file_name.
+class TZX: public Tape {
+public:
+	/*!
+		Constructs a @c TZX containing content from the file with name @c file_name.
 
-			@throws ErrorNotTZX if this file could not be opened and recognised as a valid TZX file.
-		*/
-		TZX(const std::string &file_name);
+		@throws ErrorNotTZX if this file could not be opened and recognised as a valid TZX file.
+	*/
+	TZX(const std::string &file_name);
 
-		enum {
-			ErrorNotTZX
-		};
+	enum {
+		ErrorNotTZX
+	};
+
+private:
+	std::unique_ptr<FormatSerialiser> format_serialiser() const override;
+
+	struct Serialiser: public PulseQueuedSerialiser {
+		Serialiser(const std::string &file_name);
 
 	private:
 		Storage::FileHolder file_;
 
-		void virtual_reset();
-		void get_next_pulses();
+		void reset() override;
+		void push_next_pulses() override;
 
 		bool current_level_;
 
@@ -86,7 +92,12 @@ class TZX: public PulseQueuedTape {
 			Data data;
 		};
 
-		void get_generalised_segment(uint32_t output_symbols, uint8_t max_pulses_per_symbol, uint8_t number_of_symbols, bool is_data);
+		void get_generalised_segment(
+			uint32_t output_symbols,
+			uint8_t max_pulses_per_symbol,
+			uint8_t number_of_symbols,
+			bool is_data
+		);
 		void get_data_block(const DataBlock &);
 		void get_data(const Data &);
 
@@ -95,6 +106,8 @@ class TZX: public PulseQueuedTape {
 		void post_gap(unsigned int milliseconds);
 
 		void post_pulse(const Storage::Time &time);
+	};
+	std::string file_name_;
 };
 
 }

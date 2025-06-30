@@ -8,11 +8,11 @@
 
 #include "OricMFMDSK.hpp"
 
-#include "../../Encodings/MFM/Constants.hpp"
-#include "../../Encodings/MFM/Shifter.hpp"
-#include "../../Encodings/MFM/Encoder.hpp"
-#include "../../Track/PCMTrack.hpp"
-#include "../../Track/TrackSerialiser.hpp"
+#include "Storage/Disk/Encodings/MFM/Constants.hpp"
+#include "Storage/Disk/Encodings/MFM/Shifter.hpp"
+#include "Storage/Disk/Encodings/MFM/Encoder.hpp"
+#include "Storage/Disk/Track/PCMTrack.hpp"
+#include "Storage/Disk/Track/TrackSerialiser.hpp"
 
 using namespace Storage::Disk;
 
@@ -21,23 +21,23 @@ OricMFMDSK::OricMFMDSK(const std::string &file_name) :
 	if(!file_.check_signature("MFM_DISK"))
 		throw Error::InvalidFormat;
 
-	head_count_ = file_.get32le();
-	track_count_ = file_.get32le();
-	geometry_type_ = file_.get32le();
+	head_count_ = file_.get_le<uint32_t>();
+	track_count_ = file_.get_le<uint32_t>();
+	geometry_type_ = file_.get_le<uint32_t>();
 
 	if(geometry_type_ < 1 || geometry_type_ > 2)
 		throw Error::InvalidFormat;
 }
 
-HeadPosition OricMFMDSK::get_maximum_head_position() {
+HeadPosition OricMFMDSK::maximum_head_position() const {
 	return HeadPosition(int(track_count_));
 }
 
-int OricMFMDSK::get_head_count() {
+int OricMFMDSK::head_count() const {
 	return int(head_count_);
 }
 
-long OricMFMDSK::get_file_offset_for_position(Track::Address address) {
+long OricMFMDSK::get_file_offset_for_position(Track::Address address) const {
 	int seek_offset = 0;
 	switch(geometry_type_) {
 		case 1:
@@ -50,10 +50,10 @@ long OricMFMDSK::get_file_offset_for_position(Track::Address address) {
 	return long(seek_offset) * 6400 + 256;
 }
 
-std::shared_ptr<Track> OricMFMDSK::get_track_at_position(Track::Address address) {
+std::unique_ptr<Track> OricMFMDSK::track_at_position(const Track::Address address) const {
 	PCMSegment segment;
 	{
-		std::lock_guard lock_guard(file_.get_file_access_mutex());
+		std::lock_guard lock_guard(file_.file_access_mutex());
 		file_.seek(get_file_offset_for_position(address), SEEK_SET);
 
 		// The file format omits clock bits. So it's not a genuine MFM capture.
@@ -63,7 +63,7 @@ std::shared_ptr<Track> OricMFMDSK::get_track_at_position(Track::Address address)
 		std::unique_ptr<Encodings::MFM::Encoder> encoder = Encodings::MFM::GetMFMEncoder(segment.data);
 		bool did_sync = false;
 		while(track_offset < 6250) {
-			uint8_t next_byte = file_.get8();
+			uint8_t next_byte = file_.get();
 			track_offset++;
 
 			switch(next_byte) {
@@ -75,7 +75,7 @@ std::shared_ptr<Track> OricMFMDSK::get_track_at_position(Track::Address address)
 
 							case 0xfe:
 								for(int byte = 0; byte < 6; byte++) {
-									last_header[byte] = file_.get8();
+									last_header[byte] = file_.get();
 									encoder->add_byte(last_header[byte]);
 									++track_offset;
 									if(track_offset == 6250) break;
@@ -84,7 +84,7 @@ std::shared_ptr<Track> OricMFMDSK::get_track_at_position(Track::Address address)
 
 							case 0xfb:
 								for(int byte = 0; byte < (128 << last_header[3]) + 2; byte++) {
-									encoder->add_byte(file_.get8());
+									encoder->add_byte(file_.get());
 									++track_offset;
 									// Special exception: don't interrupt a sector body if it seems to
 									// be about to run over the end of the track. It seems like BD-500
@@ -112,10 +112,10 @@ std::shared_ptr<Track> OricMFMDSK::get_track_at_position(Track::Address address)
 		}
 	}
 
-	return std::make_shared<PCMTrack>(segment);
+	return std::make_unique<PCMTrack>(segment);
 }
 
-void OricMFMDSK::set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) {
+void OricMFMDSK::set_tracks(const std::map<Track::Address, std::unique_ptr<Track>> &tracks) {
 	for(const auto &track : tracks) {
 		PCMSegment segment = Storage::Disk::track_serialisation(*track.second, Storage::Encodings::MFM::MFMBitLength);
 		Storage::Encodings::MFM::Shifter shifter;
@@ -157,13 +157,17 @@ void OricMFMDSK::set_tracks(const std::map<Track::Address, std::shared_ptr<Track
 
 		long file_offset = get_file_offset_for_position(track.first);
 
-		std::lock_guard lock_guard(file_.get_file_access_mutex());
+		std::lock_guard lock_guard(file_.file_access_mutex());
 		file_.seek(file_offset, SEEK_SET);
 		std::size_t track_size = std::min(size_t(6400), parsed_track.size());
 		file_.write(parsed_track.data(), track_size);
 	}
 }
 
-bool OricMFMDSK::get_is_read_only() {
-	return file_.get_is_known_read_only();
+bool OricMFMDSK::is_read_only() const {
+	return file_.is_known_read_only();
+}
+
+bool OricMFMDSK::represents(const std::string &name) const {
+	return name == file_.name();
 }

@@ -8,19 +8,19 @@
 
 #pragma once
 
-#include "../Cartridge.hpp"
+#include "Storage/Cartridge/Cartridge.hpp"
 
 #include <string>
 
 namespace Storage::Cartridge {
 
 class BinaryDump : public Cartridge {
-	public:
-		BinaryDump(const std::string &file_name);
+public:
+	BinaryDump(const std::string &file_name);
 
-		enum {
-			ErrorNotAccessible
-		};
+	enum {
+		ErrorNotAccessible
+	};
 };
 
 }

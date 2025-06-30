@@ -9,9 +9,14 @@
 #include "StaticAnalyser.hpp"
 #include "Target.hpp"
 
-Analyser::Static::TargetList Analyser::Static::Macintosh::GetTargets(const Media &media, const std::string &, TargetPlatform::IntType) {
+Analyser::Static::TargetList Analyser::Static::Macintosh::GetTargets(
+	const Media &media,
+	const std::string &,
+	TargetPlatform::IntType,
+	bool is_confident
+) {
 	// This analyser can comprehend disks and mass-storage devices only.
-	if(media.disks.empty() && media.mass_storage_devices.empty()) return {};
+	if(media.disks.empty() && media.mass_storage_devices.empty() && !is_confident) return {};
 
 	// As there is at least one usable media image, wave it through.
 	Analyser::Static::TargetList targets;
@@ -24,7 +29,7 @@ Analyser::Static::TargetList Analyser::Static::Macintosh::GetTargets(const Media
 	if(media.mass_storage_devices.empty()) {
 		bool has_800kb_disks = false;
 		for(const auto &disk: media.disks) {
-			has_800kb_disks |= disk->get_head_count() > 1;
+			has_800kb_disks |= disk->head_count() > 1;
 		}
 
 		if(!has_800kb_disks) {

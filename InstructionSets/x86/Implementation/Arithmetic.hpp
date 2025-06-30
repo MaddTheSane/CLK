@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "../AccessType.hpp"
-#include "../Interrupts.hpp"
-#include "../Perform.hpp"
+#include "InstructionSets/x86/AccessType.hpp"
+#include "InstructionSets/x86/Exceptions.hpp"
+#include "InstructionSets/x86/Perform.hpp"
 
-#include "../../../Numeric/Carry.hpp"
+#include "Numeric/Carry.hpp"
 
 namespace InstructionSet::x86::Primitive {
 
@@ -30,12 +30,13 @@ void add(
 	*/
 	const IntT result = destination + source + (with_carry ? context.flags.template carry_bit<IntT>() : 0);
 
+	using NumOp = Numeric::Operation;
 	context.flags.template set_from<Flag::Carry>(
-		Numeric::carried_out<true, Numeric::bit_size<IntT>() - 1>(destination, source, result));
+		Numeric::carried_out<NumOp::Add, Numeric::bit_size<IntT>() - 1>(destination, source, result));
 	context.flags.template set_from<Flag::AuxiliaryCarry>(
 		Numeric::carried_in<4>(destination, source, result));
 	context.flags.template set_from<Flag::Overflow>(
-		Numeric::overflow<true, IntT>(destination, source, result));
+		Numeric::overflow<NumOp::Add, IntT>(destination, source, result));
 
 	context.flags.template set_from<IntT, Flag::Zero, Flag::Sign, Flag::ParityOdd>(result);
 
@@ -56,12 +57,13 @@ void sub(
 	*/
 	const IntT result = destination - source - (with_borrow ? context.flags.template carry_bit<IntT>() : 0);
 
+	using NumOp = Numeric::Operation;
 	context.flags.template set_from<Flag::Carry>(
-		Numeric::carried_out<false, Numeric::bit_size<IntT>() - 1>(destination, source, result));
+		Numeric::carried_out<NumOp::Subtract, Numeric::bit_size<IntT>() - 1>(destination, source, result));
 	context.flags.template set_from<Flag::AuxiliaryCarry>(
 		Numeric::carried_in<4>(destination, source, result));
 	context.flags.template set_from<Flag::Overflow>(
-		Numeric::overflow<false, IntT>(destination, source, result));
+		Numeric::overflow<NumOp::Subtract, IntT>(destination, source, result));
 
 	context.flags.template set_from<IntT, Flag::Zero, Flag::Sign, Flag::ParityOdd>(result);
 
@@ -90,11 +92,11 @@ void test(
 	/*
 		The OF and CF flags are cleared to 0.
 		The SF, ZF, and PF flags are set according to the result (see the “Operation” section above).
-		The state of the AF flag is undefined.
+		The state of the AF flag is formally undefined but known to be reset.
 	*/
 	const IntT result = destination & source;
 
-	context.flags.template set_from<Flag::Carry, Flag::Overflow>(0);
+	context.flags.template set_from<Flag::Carry, Flag::Overflow, Flag::AuxiliaryCarry>(0);
 	context.flags.template set_from<IntT, Flag::Zero, Flag::Sign, Flag::ParityOdd>(result);
 }
 
@@ -165,6 +167,20 @@ void imul(
 	context.flags.template set_from<Flag::Overflow, Flag::Carry>(destination_high != sign_extension);
 }
 
+template <typename ContextT>
+void divide_error(ContextT &context) {
+	// 8086-style: just segue directly to the interrupt.
+	//
+	// 80286-style: throw the divide error, allowing the caller to insert
+	// additional context (primarily: IP of this instruction, not the next).
+	constexpr auto exception = Exception::exception<Vector::DivideError>();
+	if constexpr (uses_8086_exceptions(ContextT::model)) {
+		interrupt(exception, context);
+	} else {
+		throw exception;
+	}
+}
+
 template <typename IntT, typename ContextT>
 void div(
 	modify_t<IntT> destination_high,
@@ -210,16 +226,14 @@ void div(
 		The CF, OF, SF, ZF, AF, and PF flags are undefined.
 	*/
 	if(!source) {
-		interrupt(Interrupt::DivideError, context);
-		return;
+		return divide_error(context);
 	}
 
 	// TEMPORARY HACK. Will not work with DWords.
 	const uint32_t dividend = uint32_t((destination_high << (8 * sizeof(IntT))) + destination_low);
 	const auto result = dividend / source;
 	if(IntT(result) != result) {
-		interrupt(Interrupt::DivideError, context);
-		return;
+		return divide_error(context);
 	}
 
 	destination_low = IntT(result);
@@ -240,7 +254,8 @@ void idiv(
 		IF OperandSize = 8 (* word/byte operation *)
 			THEN
 				temp ← AX / SRC; (* signed division *)
-				IF (temp > 7FH) OR (temp < 80H) (* if a positive result is greater than 7FH or a negative result is less than 80H *)
+				IF (temp > 7FH) OR (temp < 80H)		(* if a positive result is greater than
+													7FH or a negative result is less than 80H *)
 					THEN #DE; (* divide error *) ;
 					ELSE
 						AL ← temp;
@@ -250,7 +265,8 @@ void idiv(
 			IF OperandSize = 16 (* doubleword/word operation *)
 				THEN
 					temp ← DX:AX / SRC; (* signed division *)
-					IF (temp > 7FFFH) OR (temp < 8000H) (* if a positive result is greater than 7FFFH or a negative result is less than 8000H *)
+					IF (temp > 7FFFH) OR (temp < 8000H)		(* if a positive result is greater than 7FFFH or a
+															negative result is less than 8000H *)
 						THEN #DE; (* divide error *) ;
 						ELSE
 							AX ← temp;
@@ -258,7 +274,8 @@ void idiv(
 					FI;
 				ELSE (* quadword/doubleword operation *)
 					temp ← EDX:EAX / SRC; (* signed division *)
-					IF (temp > 7FFFFFFFH) OR (temp < 80000000H) (* if a positive result is greater than 7FFFFFFFH or a negative result is less than 80000000H *)
+					IF (temp > 7FFFFFFFH) OR (temp < 80000000H) 	(* if a positive result is greater than 7FFFFFFFH
+																	or a negative result is less than 80000000H *)
 						THEN #DE; (* divide error *) ;
 						ELSE
 							EAX ← temp;
@@ -271,8 +288,7 @@ void idiv(
 		The CF, OF, SF, ZF, AF, and PF flags are undefined.
 	*/
 	if(!source) {
-		interrupt(Interrupt::DivideError, context);
-		return;
+		return divide_error(context);
 	}
 
 	// TEMPORARY HACK. Will not work with DWords.
@@ -287,8 +303,7 @@ void idiv(
 	}
 
 	if(sIntT(result) != result) {
-		interrupt(Interrupt::DivideError, context);
-		return;
+		return divide_error(context);
 	}
 
 	destination_low = IntT(result);
@@ -350,7 +365,11 @@ void neg(
 		The CF flag cleared to 0 if the source operand is 0; otherwise it is set to 1.
 		The OF, SF, ZF, AF, and PF flags are set according to the result.
 	*/
-	context.flags.template set_from<Flag::AuxiliaryCarry>(Numeric::carried_in<4>(IntT(0), destination, IntT(-destination)));
+	context.flags.template set_from<Flag::AuxiliaryCarry>(Numeric::carried_in<4>(
+		IntT(0),
+		destination,
+		IntT(-destination))
+	);
 
 	destination = -destination;
 

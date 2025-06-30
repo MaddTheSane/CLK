@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "../../../Reflection/Enum.hpp"
-#include "../../../Reflection/Struct.hpp"
-#include "../StaticAnalyser.hpp"
+#include "Analyser/Static/StaticAnalyser.hpp"
+#include "Reflection/Enum.hpp"
+#include "Reflection/Struct.hpp"
 
 namespace Analyser::Static::Sega {
 
@@ -37,15 +37,17 @@ struct Target: public Analyser::Static::Target, public Reflection::StructImpl<Ta
 	Region region = Region::Japan;
 	PagingScheme paging_scheme = PagingScheme::Sega;
 
-	Target() : Analyser::Static::Target(Machine::MasterSystem) {
-		if(needs_declare()) {
-			DeclareField(region);
-			AnnounceEnum(Region);
-		}
+	Target() : Analyser::Static::Target(Machine::MasterSystem) {}
+
+private:
+	friend Reflection::StructImpl<Target>;
+	void declare_fields() {
+		DeclareField(region);
+		AnnounceEnum(Region);
 	}
 };
 
-constexpr bool is_master_system(Analyser::Static::Sega::Target::Model model) {
+constexpr bool is_master_system(const Analyser::Static::Sega::Target::Model model) {
 	return model >= Analyser::Static::Sega::Target::Model::MasterSystem;
 }
 

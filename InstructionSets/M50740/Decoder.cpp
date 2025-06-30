@@ -13,11 +13,12 @@
 namespace InstructionSet {
 namespace M50740 {
 
-Instruction Decoder::instrucion_for_opcode(uint8_t opcode) {
+Instruction Decoder::instrucion_for_opcode(const uint8_t opcode) {
 	switch(opcode) {
 		default:	return Instruction(opcode);
 
-#define Map(opcode, operation, addressing_mode)	case opcode: return Instruction(Operation::operation, AddressingMode::addressing_mode, opcode);
+#define Map(opcode, operation, addressing_mode)	\
+	case opcode: return Instruction(Operation::operation, AddressingMode::addressing_mode, opcode);
 
 	/* 0x00 – 0x0f */
 		Map(0x00, BRK, Implied);					Map(0x01, ORA, XIndirect);
@@ -231,7 +232,7 @@ Instruction Decoder::instrucion_for_opcode(uint8_t opcode) {
 	}
 }
 
-std::pair<int, InstructionSet::M50740::Instruction> Decoder::decode(const uint8_t *source, size_t length) {
+std::pair<int, InstructionSet::M50740::Instruction> Decoder::decode(const uint8_t *source, const size_t length) {
 	const uint8_t *const end = source + length;
 
 	if(phase_ == Phase::Instruction && source != end) {

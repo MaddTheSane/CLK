@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "../../../Reflection/Struct.hpp"
-#include "../StaticAnalyser.hpp"
+#include "Analyser/Static/StaticAnalyser.hpp"
+#include "Reflection/Struct.hpp"
 
 namespace Analyser::Static::AtariST {
 
@@ -20,11 +20,13 @@ struct Target: public Analyser::Static::Target, public Reflection::StructImpl<Ta
 		FourMegabytes);
 	MemorySize memory_size = MemorySize::OneMegabyte;
 
-	Target() : Analyser::Static::Target(Machine::AtariST) {
-		if(needs_declare()) {
-			DeclareField(memory_size);
-			AnnounceEnum(MemorySize);
-		}
+	Target() : Analyser::Static::Target(Machine::AtariST) {}
+
+private:
+	friend Reflection::StructImpl<Target>;
+	void declare_fields() {
+		DeclareField(memory_size);
+		AnnounceEnum(MemorySize);
 	}
 };
 

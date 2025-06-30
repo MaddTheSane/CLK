@@ -1,18 +1,24 @@
 name: Build
 on: [pull_request]
 jobs:
+
   build-mac-xcodebuild:
     name: Mac UI / xcodebuild / ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-11, macos-12, macos-13, macos-14]
+        os: [macos-latest] #[macos-13, macos-14, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+    - name: Install Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
     - name: Make
       working-directory: OSBindings/Mac
       run: xcodebuild CODE_SIGN_IDENTITY=-
+
   build-sdl-cmake:
     name: SDL UI / cmake / ${{ matrix.os }}
     strategy:
@@ -49,11 +55,12 @@ jobs:
         esac
         cmake -S. -Bbuild -DCLK_UI=SDL -DCMAKE_BUILD_TYPE=Release
         cmake --build build -v -j"$jobs"
+
   build-sdl-scons:
     name: SDL UI / scons / ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-11, macos-12, macos-13, macos-14, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout
@@ -85,3 +92,45 @@ jobs:
             jobs=1
         esac
         scons -j"$jobs"
+
+  build-qt5:
+    name: Qt 5 / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Install dependencies
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '5.15.2'
+        archives: 'qtbase qtmultimedia qtx11extras icu'
+    - name: Make
+      working-directory: OSBindings/Qt
+      shell: bash
+      run: |
+        qmake -o Makefile clksignal.pro
+        make
+
+#  build-qt6:
+#    name: Qt 6 / ${{ matrix.os }}
+#    strategy:
+#      matrix:
+#        os: [ubuntu-latest]
+#    runs-on: ${{ matrix.os }}
+#    steps:
+#    - name: Checkout
+#      uses: actions/checkout@v4
+#    - name: Install dependencies
+#      uses: jurplel/install-qt-action@v4
+#      with:
+#        version: '6.8'
+#        archives: qtbase
+#    - name: Make
+#      working-directory: OSBindings/Qt
+#      shell: bash
+#      run: |
+#        qmake -o Makefile clksignal.pro
+#        make

@@ -9,21 +9,22 @@
 #include "Commodore.hpp"
 
 #include <cstring>
-#include "../../Data/Commodore.hpp"
+#include "Storage/Data/Commodore.hpp"
 
 using namespace Storage::Tape::Commodore;
 
-Parser::Parser() :
-	Storage::Tape::PulseClassificationParser<WaveType, SymbolType>() {}
+Parser::Parser(TargetPlatform::Type target_platform) :
+	Storage::Tape::PulseClassificationParser<WaveType, SymbolType>(),
+	target_platform_(target_platform) {}
 
 /*!
 	Advances to the next block on the tape, treating it as a header, then consumes, parses, and returns it.
 	Returns @c nullptr if any wave-encoding level errors are encountered.
 */
-std::unique_ptr<Header> Parser::get_next_header(const std::shared_ptr<Storage::Tape::Tape> &tape) {
+std::unique_ptr<Header> Parser::get_next_header(Storage::Tape::TapeSerialiser &serialiser) {
 	return duplicate_match<Header>(
-		get_next_header_body(tape, true),
-		get_next_header_body(tape, false)
+		get_next_header_body(serialiser, true),
+		get_next_header_body(serialiser, false)
 	);
 }
 
@@ -31,10 +32,10 @@ std::unique_ptr<Header> Parser::get_next_header(const std::shared_ptr<Storage::T
 	Advances to the next block on the tape, treating it as data, then consumes, parses, and returns it.
 	Returns @c nullptr if any wave-encoding level errors are encountered.
 */
-std::unique_ptr<Data> Parser::get_next_data(const std::shared_ptr<Storage::Tape::Tape> &tape) {
+std::unique_ptr<Data> Parser::get_next_data(Storage::Tape::TapeSerialiser &serialiser) {
 	return duplicate_match<Data>(
-		get_next_data_body(tape, true),
-		get_next_data_body(tape, false)
+		get_next_data_body(serialiser, true),
+		get_next_data_body(serialiser, false)
 	);
 }
 
@@ -43,7 +44,10 @@ std::unique_ptr<Data> Parser::get_next_data(const std::shared_ptr<Storage::Tape:
 	including setting the duplicate_matched flag.
 */
 template<class ObjectType>
-	std::unique_ptr<ObjectType> Parser::duplicate_match(std::unique_ptr<ObjectType> first_copy, std::unique_ptr<ObjectType> second_copy) {
+std::unique_ptr<ObjectType> Parser::duplicate_match(
+	std::unique_ptr<ObjectType> first_copy,
+	std::unique_ptr<ObjectType> second_copy
+) {
 	// if only one copy was parsed successfully, return it
 	if(!first_copy) return second_copy;
 	if(!second_copy) return first_copy;
@@ -64,19 +68,19 @@ template<class ObjectType>
 	return std::move(*copy_to_return);
 }
 
-std::unique_ptr<Header> Parser::get_next_header_body(const std::shared_ptr<Storage::Tape::Tape> &tape, bool is_original) {
+std::unique_ptr<Header> Parser::get_next_header_body(Storage::Tape::TapeSerialiser &serialiser, bool is_original) {
 	auto header = std::make_unique<Header>();
 	reset_error_flag();
 
 	// find and proceed beyond lead-in tone
-	proceed_to_symbol(tape, SymbolType::LeadIn);
+	proceed_to_symbol(serialiser, SymbolType::LeadIn);
 
 	// look for landing zone
-	proceed_to_landing_zone(tape, is_original);
+	proceed_to_landing_zone(serialiser, is_original);
 	reset_parity_byte();
 
 	// get header type
-	const uint8_t header_type = get_next_byte(tape);
+	const uint8_t header_type = get_next_byte(serialiser);
 	switch(header_type) {
 		default:	header->type = Header::Unknown;					break;
 		case 0x01:	header->type = Header::RelocatableProgram;		break;
@@ -89,11 +93,11 @@ std::unique_ptr<Header> Parser::get_next_header_body(const std::shared_ptr<Stora
 	// grab rest of data
 	header->data.reserve(191);
 	for(std::size_t c = 0; c < 191; c++) {
-		header->data.push_back(get_next_byte(tape));
+		header->data.push_back(get_next_byte(serialiser));
 	}
 
 	const uint8_t parity_byte = get_parity_byte();
-	header->parity_was_valid = get_next_byte(tape) == parity_byte;
+	header->parity_was_valid = get_next_byte(serialiser) == parity_byte;
 
 	// parse if this is not pure data
 	if(header->type != Header::DataBlock) {
@@ -110,35 +114,38 @@ std::unique_ptr<Header> Parser::get_next_header_body(const std::shared_ptr<Stora
 	return header;
 }
 
-void Header::serialise(uint8_t *target, [[maybe_unused]] uint16_t length) {
+uint8_t Header::type_descriptor() const {
 	switch(type) {
-		default:							target[0] = 0xff;	break;
-		case Header::RelocatableProgram:	target[0] = 0x01;	break;
-		case Header::DataBlock:				target[0] = 0x02;	break;
-		case Header::NonRelocatableProgram:	target[0] = 0x03;	break;
-		case Header::DataSequenceHeader:	target[0] = 0x04;	break;
-		case Header::EndOfTape:				target[0] = 0x05;	break;
+		default:							return 0xff;
+		case Header::RelocatableProgram:	return 0x01;
+		case Header::DataBlock:				return 0x02;
+		case Header::NonRelocatableProgram:	return 0x03;
+		case Header::DataSequenceHeader:	return 0x04;
+		case Header::EndOfTape:				return 0x05;
 	}
+}
+
+void Header::serialise(uint8_t *target, [[maybe_unused]] uint16_t length) const {
+	target[0] = type_descriptor();
 
 	// TODO: validate length.
-
 	std::memcpy(&target[1], data.data(), 191);
 }
 
-std::unique_ptr<Data> Parser::get_next_data_body(const std::shared_ptr<Storage::Tape::Tape> &tape, bool is_original) {
+std::unique_ptr<Data> Parser::get_next_data_body(Storage::Tape::TapeSerialiser &serialiser, bool is_original) {
 	auto data = std::make_unique<Data>();
 	reset_error_flag();
 
 	// find and proceed beyond lead-in tone to the next landing zone
-	proceed_to_symbol(tape, SymbolType::LeadIn);
-	proceed_to_landing_zone(tape, is_original);
+	proceed_to_symbol(serialiser, SymbolType::LeadIn);
+	proceed_to_landing_zone(serialiser, is_original);
 	reset_parity_byte();
 
 	// accumulate until the next non-word marker is hit
-	while(!tape->is_at_end()) {
-		const SymbolType start_symbol = get_next_symbol(tape);
+	while(!serialiser.is_at_end()) {
+		const SymbolType start_symbol = get_next_symbol(serialiser);
 		if(start_symbol != SymbolType::Word) break;
-		data->data.push_back(get_next_byte_contents(tape));
+		data->data.push_back(get_next_byte_contents(serialiser));
 	}
 
 	// the above has reead the parity byte to the end of the data; if it matched the calculated parity it'll now be zero
@@ -154,11 +161,11 @@ std::unique_ptr<Data> Parser::get_next_data_body(const std::shared_ptr<Storage::
 /*!
 	Finds and completes the next landing zone.
 */
-void Parser::proceed_to_landing_zone(const std::shared_ptr<Storage::Tape::Tape> &tape, bool is_original) {
+void Parser::proceed_to_landing_zone(Storage::Tape::TapeSerialiser &serialiser, bool is_original) {
 	uint8_t landing_zone[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-	while(!tape->is_at_end()) {
+	while(!serialiser.is_at_end()) {
 		memmove(landing_zone, &landing_zone[1], sizeof(uint8_t) * 8);
-		landing_zone[8] = get_next_byte(tape);
+		landing_zone[8] = get_next_byte(serialiser);
 
 		bool is_landing_zone = true;
 		for(int c = 0; c < 9; c++) {
@@ -174,8 +181,8 @@ void Parser::proceed_to_landing_zone(const std::shared_ptr<Storage::Tape::Tape> 
 /*!
 	Swallows the next byte; sets the error flag if it is not equal to @c value.
 */
-void Parser::expect_byte(const std::shared_ptr<Storage::Tape::Tape> &tape, uint8_t value) {
-	const uint8_t next_byte = get_next_byte(tape);
+void Parser::expect_byte(Storage::Tape::TapeSerialiser &serialiser, uint8_t value) {
+	const uint8_t next_byte = get_next_byte(serialiser);
 	if(next_byte != value) set_error_flag();
 }
 
@@ -186,9 +193,9 @@ void Parser::add_parity_byte(uint8_t byte)	{ parity_byte_ ^= byte;	}
 /*!
 	Proceeds to the next word marker then returns the result of @c get_next_byte_contents.
 */
-uint8_t Parser::get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape) {
-	proceed_to_symbol(tape, SymbolType::Word);
-	return get_next_byte_contents(tape);
+uint8_t Parser::get_next_byte(Storage::Tape::TapeSerialiser &serialiser) {
+	proceed_to_symbol(serialiser, SymbolType::Word);
+	return get_next_byte_contents(serialiser);
 }
 
 /*!
@@ -196,11 +203,11 @@ uint8_t Parser::get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape) 
 	Returns a byte composed of the first eight of those as bits; sets the error flag if any symbol is not
 	::One and not ::Zero, or if the ninth bit is not equal to the odd parity of the other eight.
 */
-uint8_t Parser::get_next_byte_contents(const std::shared_ptr<Storage::Tape::Tape> &tape) {
+uint8_t Parser::get_next_byte_contents(Storage::Tape::TapeSerialiser &serialiser) {
 	int byte_plus_parity = 0;
 	int c = 9;
 	while(c--) {
-		const SymbolType next_symbol = get_next_symbol(tape);
+		const SymbolType next_symbol = get_next_symbol(serialiser);
 		if((next_symbol != SymbolType::One) && (next_symbol != SymbolType::Zero)) set_error_flag();
 		byte_plus_parity = (byte_plus_parity >> 1) | (((next_symbol == SymbolType::One) ? 1 : 0) << 8);
 	}
@@ -219,9 +226,9 @@ uint8_t Parser::get_next_byte_contents(const std::shared_ptr<Storage::Tape::Tape
 /*!
 	Returns the result of two consecutive @c get_next_byte calls, arranged in little-endian format.
 */
-uint16_t Parser::get_next_short(const std::shared_ptr<Storage::Tape::Tape> &tape) {
-	uint16_t value = get_next_byte(tape);
-	value |= get_next_byte(tape) << 8;
+uint16_t Parser::get_next_short(Storage::Tape::TapeSerialiser &serialiser) {
+	uint16_t value = get_next_byte(serialiser);
+	value |= get_next_byte(serialiser) << 8;
 	return value;
 }
 
@@ -230,17 +237,34 @@ uint16_t Parser::get_next_short(const std::shared_ptr<Storage::Tape::Tape> &tape
 	indicates a high to low transition, inspects the time since the last transition, to produce
 	a long, medium, short or unrecognised wave period.
 */
-void Parser::process_pulse(const Storage::Tape::Tape::Pulse &pulse) {
+void Parser::process_pulse(const Storage::Tape::Pulse &pulse) {
 	// The Complete Commodore Inner Space Anthology, P 97, gives half-cycle lengths of:
 	// short: 182us		=>	0.000364s cycle
 	// medium: 262us	=>	0.000524s cycle
 	// long: 342us		=>	0.000684s cycle
-	const bool is_high = pulse.type == Storage::Tape::Tape::Pulse::High;
+
+	// The C16, which polls for tape level around lengthy bad line pauses, instead uses these timings:
+	// short: 240us		=>	0.000480s cycle
+	// medium: 480us	=>	0.000960s cycle
+	// long: 960us		=>	0.001920s cycle
+
+	const bool is_high = pulse.type == Storage::Tape::Pulse::High;
 	if(!is_high && previous_was_high_) {
-		if(wave_period_ >= 0.000764)		push_wave(WaveType::Unrecognised);
-		else if(wave_period_ >= 0.000604)	push_wave(WaveType::Long);
-		else if(wave_period_ >= 0.000444)	push_wave(WaveType::Medium);
-		else if(wave_period_ >= 0.000284)	push_wave(WaveType::Short);
+		const bool is_plus4 = target_platform_ == TargetPlatform::Plus4;
+		const float short_ms = is_plus4 ? 240.0f : 182.0f;
+		const float medium_ms = is_plus4 ? 480.0f : 262.0f;
+		const float long_ms = is_plus4 ? 960.0f : 342.0f;
+
+		constexpr float to_s = 2.0f / 1'000'000.0f;
+		const float overlong_threshold = (long_ms + long_ms - medium_ms) * to_s;
+		const float long_threshold = ((long_ms + medium_ms) * 0.5f) * to_s;
+		const float medium_threshold = ((medium_ms + short_ms) * 0.5f) * to_s;
+		const float short_threshold = (short_ms * 0.5f) * to_s;
+
+		if(wave_period_ >= overlong_threshold)		push_wave(WaveType::Unrecognised);
+		else if(wave_period_ >= long_threshold)		push_wave(WaveType::Long);
+		else if(wave_period_ >= medium_threshold)	push_wave(WaveType::Medium);
+		else if(wave_period_ >= short_threshold)	push_wave(WaveType::Short);
 		else push_wave(WaveType::Unrecognised);
 
 		wave_period_ = 0.0f;

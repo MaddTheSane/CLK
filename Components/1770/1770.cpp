@@ -8,8 +8,8 @@
 
 #include "1770.hpp"
 
-#include "../../Storage/Disk/Encodings/MFM/Constants.hpp"
-#include "../../Outputs/Log.hpp"
+#include "Storage/Disk/Encodings/MFM/Constants.hpp"
+#include "Outputs/Log.hpp"
 
 namespace {
 Log::Logger<Log::Source::WDFDC> logger;
@@ -17,7 +17,7 @@ Log::Logger<Log::Source::WDFDC> logger;
 
 using namespace WD;
 
-WD1770::WD1770(Personality p) :
+WD1770::WD1770(const Personality p) :
 		Storage::Disk::MFMController(8000000),
 		personality_(p),
 		interesting_event_mask_(int(Event1770::Command)) {
@@ -25,7 +25,7 @@ WD1770::WD1770(Personality p) :
 	posit_event(int(Event1770::Command));
 }
 
-void WD1770::write(int address, uint8_t value) {
+void WD1770::write(const int address, const uint8_t value) {
 	switch(address&3) {
 		case 0: {
 			if((value&0xf0) == 0xd0) {
@@ -56,7 +56,7 @@ void WD1770::write(int address, uint8_t value) {
 	}
 }
 
-uint8_t WD1770::read(int address) {
+uint8_t WD1770::read(const int address) {
 	switch(address&3) {
 		default: {
 			update_status([] (Status &status) {
@@ -77,7 +77,7 @@ uint8_t WD1770::read(int address) {
 					status |=
 						(status_.track_zero ? Flag::TrackZero : 0) |
 						(status_.seek_error ? Flag::SeekError : 0) |
-						(get_drive().get_is_read_only() ? Flag::WriteProtect : 0) |
+						(get_drive().is_read_only() ? Flag::WriteProtect : 0) |
 						(get_drive().get_index_pulse() ? Flag::Index : 0);
 				break;
 
@@ -132,26 +132,29 @@ void WD1770::run_for(const Cycles cycles) {
 	}
 }
 
+void WD1770::posit_event(const int new_event_type) {
 #define WAIT_FOR_EVENT(mask)	resume_point_ = __LINE__; interesting_event_mask_ = int(mask); return; case __LINE__:
 #define WAIT_FOR_TIME(ms)		resume_point_ = __LINE__; delay_time_ = ms * 8000; WAIT_FOR_EVENT(Event1770::Timer);
-#define WAIT_FOR_BYTES(count)	resume_point_ = __LINE__; distance_into_section_ = 0; WAIT_FOR_EVENT(Event::Token); if(get_latest_token().type == Token::Byte) distance_into_section_++; if(distance_into_section_ < count) { interesting_event_mask_ = int(Event::Token); return; }
+#define WAIT_FOR_BYTES(count)	distance_into_section_ = 0; \
+								WAIT_FOR_EVENT(Event::Token); \
+								if(get_latest_token().type == Token::Byte) ++distance_into_section_; \
+								if(distance_into_section_ < count) { \
+									return;	\
+								}
 #define BEGIN_SECTION()	switch(resume_point_) { default:
 #define END_SECTION()	(void)0; }
 
-#define READ_ID()	\
-		if(new_event_type == int(Event::Token)) {	\
-			if(!distance_into_section_ && get_latest_token().type == Token::ID) {\
-				set_data_mode(DataMode::Reading);	\
-				++distance_into_section_;	\
-			} else if(distance_into_section_ && distance_into_section_ < 7 && get_latest_token().type == Token::Byte) {	\
-				header_[distance_into_section_ - 1] = get_latest_token().byte_value;	\
-				++distance_into_section_;	\
-			}	\
+	const auto READ_ID = [&] {
+		if(new_event_type == int(Event::Token)) {
+			if(!distance_into_section_ && get_latest_token().type == Token::ID) {
+				set_data_mode(DataMode::Reading);
+				++distance_into_section_;
+			} else if(distance_into_section_ && distance_into_section_ < 7 && get_latest_token().type == Token::Byte) {
+				header_[distance_into_section_ - 1] = get_latest_token().byte_value;
+				++distance_into_section_;
+			}
 		}
-
-#define CONCATENATE(x, y) x ## y
-#define INDIRECT_CONCATENATE(x, y) TOKENPASTE(x, y)
-#define LINE_LABEL INDIRECT_CONCATENATE(label, __LINE__)
+	};
 
 #define SPIN_UP()	\
 		set_motor_on(true);	\
@@ -160,24 +163,6 @@ void WD1770::run_for(const Cycles cycles) {
 		WAIT_FOR_EVENT(Event1770::IndexHoleTarget);	\
 		status_.spin_up = true;
 
-// +--------+----------+-------------------------+
-// !	    !	       !          BITS           !
-// ! TYPE   ! COMMAND  !  7  6	5  4  3  2  1  0 !
-// +--------+----------+-------------------------+
-// !	 1  ! Restore  !  0  0	0  0  h  v r1 r0 !
-// !	 1  ! Seek     !  0  0	0  1  h  v r1 r0 !
-// !	 1  ! Step     !  0  0	1  u  h  v r1 r0 !
-// !	 1  ! Step-in  !  0  1	0  u  h  v r1 r0 !
-// !	 1  ! Step-out !  0  1	1  u  h  v r1 r0 !
-// !	 2  ! Rd sectr !  1  0	0  m  h  E  0  0 !
-// !	 2  ! Wt sectr !  1  0	1  m  h  E  P a0 !
-// !	 3  ! Rd addr  !  1  1	0  0  h  E  0  0 !
-// !	 3  ! Rd track !  1  1	1  0  h  E  0  0 !
-// !	 3  ! Wt track !  1  1	1  1  h  E  P  0 !
-// !	 4  ! Forc int !  1  1	0  1 i3 i2 i1 i0 !
-// +--------+----------+-------------------------+
-
-void WD1770::posit_event(int new_event_type) {
 	if(new_event_type == int(Event::IndexHole)) {
 		index_hole_count_++;
 		if(index_hole_count_target_ == index_hole_count_) {
@@ -208,6 +193,23 @@ void WD1770::posit_event(int new_event_type) {
 		if(!(interesting_event_mask_ & int(new_event_type))) return;
 		interesting_event_mask_ &= ~new_event_type;
 	}
+
+// +--------+----------+-------------------------+
+// !	    !	       !          BITS           !
+// ! TYPE   ! COMMAND  !  7  6	5  4  3  2  1  0 !
+// +--------+----------+-------------------------+
+// !	 1  ! Restore  !  0  0	0  0  h  v r1 r0 !
+// !	 1  ! Seek     !  0  0	0  1  h  v r1 r0 !
+// !	 1  ! Step     !  0  0	1  u  h  v r1 r0 !
+// !	 1  ! Step-in  !  0  1	0  u  h  v r1 r0 !
+// !	 1  ! Step-out !  0  1	1  u  h  v r1 r0 !
+// !	 2  ! Rd sectr !  1  0	0  m  h  E  0  0 !
+// !	 2  ! Wt sectr !  1  0	1  m  h  E  P a0 !
+// !	 3  ! Rd addr  !  1  1	0  0  h  E  0  0 !
+// !	 3  ! Rd track !  1  1	1  0  h  E  0  0 !
+// !	 3  ! Wt track !  1  1	1  1  h  E  P  0 !
+// !	 4  ! Forc int !  1  1	0  1 i3 i2 i1 i0 !
+// +--------+----------+-------------------------+
 
 	BEGIN_SECTION()
 
@@ -417,7 +419,7 @@ void WD1770::posit_event(int new_event_type) {
 		WAIT_FOR_TIME(30);
 
 	test_type2_write_protection:
-		if(command_&0x20 && get_drive().get_is_read_only()) {
+		if(command_&0x20 && get_drive().is_read_only()) {
 			update_status([] (Status &status) {
 				status.write_protect = true;
 			});
@@ -716,7 +718,7 @@ void WD1770::posit_event(int new_event_type) {
 			status.lost_data = false;
 		});
 
-		if(get_drive().get_is_read_only()) {
+		if(get_drive().is_read_only()) {
 			update_status([] (Status &status) {
 				status.write_protect = true;
 			});
@@ -809,7 +811,7 @@ void WD1770::posit_event(int new_event_type) {
 	END_SECTION()
 }
 
-void WD1770::update_status(std::function<void(Status &)> updater) {
+void WD1770::update_status(const std::function<void(Status &)> updater) {
 	const Status old_status = status_;
 
 	if(delegate_) {
@@ -827,7 +829,7 @@ void WD1770::update_status(std::function<void(Status &)> updater) {
 void WD1770::set_head_load_request(bool) {}
 void WD1770::set_motor_on(bool) {}
 
-void WD1770::set_head_loaded(bool head_loaded) {
+void WD1770::set_head_loaded(const bool head_loaded) {
 	head_is_loaded_ = head_loaded;
 	if(head_loaded) posit_event(int(Event1770::HeadLoad));
 }

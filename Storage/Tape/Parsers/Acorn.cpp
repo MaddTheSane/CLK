@@ -14,17 +14,17 @@ namespace {
 constexpr int PLLClockRate = 1920000;
 }
 
-Parser::Parser(): crc_(0x1021) {
+Parser::Parser() {
 	shifter_.set_delegate(this);
 }
 
-int Parser::get_next_bit(const std::shared_ptr<Storage::Tape::Tape> &tape) {
-	const SymbolType symbol = get_next_symbol(tape);
+int Parser::get_next_bit(Storage::Tape::TapeSerialiser &serialiser) {
+	const SymbolType symbol = get_next_symbol(serialiser);
 	return (symbol == SymbolType::One) ? 1 : 0;
 }
 
-int Parser::get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape) {
-	if(get_next_bit(tape)) {
+int Parser::get_next_byte(Storage::Tape::TapeSerialiser &serialiser) {
+	if(get_next_bit(serialiser)) {
 		set_error_flag();
 		return -1;
 	}
@@ -32,9 +32,9 @@ int Parser::get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape) {
 	int value = 0;
 	int c = 8;
 	while(c--) {
-		value = (value >> 1) | (get_next_bit(tape) << 7);
+		value = (value >> 1) | (get_next_bit(serialiser) << 7);
 	}
-	if(!get_next_bit(tape)) {
+	if(!get_next_bit(serialiser)) {
 		set_error_flag();
 		return -1;
 	}
@@ -42,15 +42,15 @@ int Parser::get_next_byte(const std::shared_ptr<Storage::Tape::Tape> &tape) {
 	return value;
 }
 
-unsigned int Parser::get_next_short(const std::shared_ptr<Storage::Tape::Tape> &tape) {
-	unsigned int result = unsigned(get_next_byte(tape));
-	result |= unsigned(get_next_byte(tape)) << 8;
+unsigned int Parser::get_next_short(Storage::Tape::TapeSerialiser &serialiser) {
+	unsigned int result = unsigned(get_next_byte(serialiser));
+	result |= unsigned(get_next_byte(serialiser)) << 8;
 	return result;
 }
 
-unsigned int Parser::get_next_word(const std::shared_ptr<Storage::Tape::Tape> &tape) {
-	unsigned int result = get_next_short(tape);
-	result |= get_next_short(tape) << 8;
+unsigned int Parser::get_next_word(Storage::Tape::TapeSerialiser &serialiser) {
+	unsigned int result = get_next_short(serialiser);
+	result |= get_next_short(serialiser) << 8;
 	return result;
 }
 
@@ -61,7 +61,7 @@ void Parser::acorn_shifter_output_bit(int value) {
 	push_symbol(value ? SymbolType::One : SymbolType::Zero);
 }
 
-void Parser::process_pulse(const Storage::Tape::Tape::Pulse &pulse) {
+void Parser::process_pulse(const Storage::Tape::Pulse &pulse) {
 	shifter_.process_pulse(pulse);
 }
 
@@ -72,10 +72,10 @@ Shifter::Shifter() :
 	input_pattern_(0),
 	delegate_(nullptr) {}
 
-void Shifter::process_pulse(const Storage::Tape::Tape::Pulse &pulse) {
+void Shifter::process_pulse(const Storage::Tape::Pulse &pulse) {
 	pll_.run_for(Cycles(int(float(PLLClockRate) * pulse.length.get<float>())));
 
-	const bool is_high = pulse.type == Storage::Tape::Tape::Pulse::High;
+	const bool is_high = pulse.type == Storage::Tape::Pulse::High;
 	if(is_high != was_high_) {
 		pll_.add_pulse();
 	}

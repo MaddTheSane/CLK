@@ -9,8 +9,8 @@
 #pragma once
 
 #include "6502Esque.hpp"
-#include "../6502/6502.hpp"
-#include "../65816/65816.hpp"
+#include "Processors/6502/6502.hpp"
+#include "Processors/65816/65816.hpp"
 
 namespace CPU::MOS6502Esque {
 
@@ -48,7 +48,7 @@ template <> class BusHandlerT<Type::TWDC65816>: public BusHandler<uint32_t> {};
 /*
 	Query for implemented registers.
 */
-constexpr bool has(Type processor_type, Register r) {
+constexpr bool has(const Type processor_type, const Register r) {
 	switch(r) {
 		case Register::LastOperationAddress:
 		case Register::ProgramCounter:
@@ -67,7 +67,7 @@ constexpr bool has(Type processor_type, Register r) {
 	}
 }
 
-constexpr bool has_extended_bus_output(Type processor_type) {
+constexpr bool has_extended_bus_output(const Type processor_type) {
 	return processor_type == Type::TWDC65816;
 }
 

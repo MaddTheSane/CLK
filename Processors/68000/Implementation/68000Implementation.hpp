@@ -11,7 +11,7 @@
 #include <cassert>
 #include <cstdio>
 
-#include "../../../InstructionSets/M68k/ExceptionVectors.hpp"
+#include "InstructionSets/M68k/ExceptionVectors.hpp"
 
 namespace CPU::MC68000 {
 
@@ -1083,6 +1083,7 @@ void Processor<BusHandler, dtack_is_implicit, permit_overrun, signal_will_perfor
 				default:
 					assert(false);
 			}
+			[[fallthrough]];	// 'Reachable' only after default: assert(false).
 
 #undef Duplicate
 #undef StdCASE
@@ -1869,6 +1870,7 @@ void Processor<BusHandler, dtack_is_implicit, permit_overrun, signal_will_perfor
 					SetupDataAccess(0, Operation::SelectWord);
 				MoveToStateSpecific(StoreOperand_l);
 
+				default:	// Convince GCC that nothing here is amiss.
 				case InstructionSet::M68k::DataSize::Word:
 					SetupDataAccess(0, Operation::SelectWord);
 				MoveToStateSpecific(StoreOperand_bw);

@@ -9,7 +9,7 @@
 #include "StaticAnalyser.hpp"
 #include "Target.hpp"
 
-#include "../../../Storage/Disk/Parsers/FAT.hpp"
+#include "Storage/Disk/Parsers/FAT.hpp"
 
 #include <algorithm>
 
@@ -26,7 +26,12 @@ bool insensitive_equal(const std::string &lhs, const std::string &rhs) {
 
 }
 
-Analyser::Static::TargetList Analyser::Static::Enterprise::GetTargets(const Media &media, const std::string &, TargetPlatform::IntType) {
+Analyser::Static::TargetList Analyser::Static::Enterprise::GetTargets(
+	const Media &media,
+	const std::string &,
+	TargetPlatform::IntType,
+	bool
+) {
 	// This analyser can comprehend disks only.
 	if(media.disks.empty()) return {};
 
@@ -72,7 +77,8 @@ Analyser::Static::TargetList Analyser::Static::Enterprise::GetTargets(const Medi
 
 			if(!has_exdos_ini) {
 				if(did_pick_file) {
-					target->loading_command = std::string("run \"") + selected_file->name + "." + selected_file->extension + "\"\n";
+					target->loading_command =
+						std::string("run \"") + selected_file->name + "." + selected_file->extension + "\"\n";
 				} else {
 					target->loading_command = ":dir\n";
 				}

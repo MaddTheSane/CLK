@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "../../../../Machines/MediaTarget.hpp"
-#include "../../../../Machines/DynamicMachine.hpp"
+#include "Machines/MediaTarget.hpp"
+#include "Machines/DynamicMachine.hpp"
 
 #include <memory>
 #include <vector>
@@ -23,14 +23,25 @@ namespace Analyser::Dynamic {
 	order of delivered messages.
 */
 struct MultiMediaTarget: public MachineTypes::MediaTarget {
-	public:
-		MultiMediaTarget(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &machines);
+public:
+	MultiMediaTarget(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &);
 
-		// Below is the standard MediaTarget::Machine interface; see there for documentation.
-		bool insert_media(const Analyser::Static::Media &media) final;
+	// Below is the standard MediaTarget::Machine interface; see there for documentation.
+	bool insert_media(const Analyser::Static::Media &) final;
 
-	private:
-		std::vector<MachineTypes::MediaTarget *> targets_;
+private:
+	std::vector<MachineTypes::MediaTarget *> targets_;
+};
+
+struct MultiMediaChangeObserver: public MachineTypes::MediaChangeObserver {
+public:
+	MultiMediaChangeObserver(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &);
+
+	// Below is the standard MediaTarget::Machine interface; see there for documentation.
+	ChangeEffect effect_for_file_did_change(const std::string &) const final;
+
+private:
+	std::vector<MachineTypes::MediaChangeObserver *> targets_;
 };
 
 }

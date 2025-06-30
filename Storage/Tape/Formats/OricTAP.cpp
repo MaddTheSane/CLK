@@ -12,28 +12,33 @@
 
 using namespace Storage::Tape;
 
-OricTAP::OricTAP(const std::string &file_name) :
-	file_(file_name)
-{
+OricTAP::OricTAP(const std::string &file_name) : file_name_(file_name) {
+	Storage::FileHolder file(file_name, FileHolder::FileMode::Read);
+
 	// Check for a sequence of at least three 0x16s followed by a 0x24.
 	while(true) {
-		const uint8_t next = file_.get8();
+		const uint8_t next = file.get();
 		if(next != 0x16 && next != 0x24) {
 			throw ErrorNotOricTAP;
 		}
 		if(next == 0x24) {
-			if(file_.tell() < 4) {
+			if(file.tell() < 4) {
 				throw ErrorNotOricTAP;
 			}
 			break;
 		}
 	}
-
-	// then rewind and start again
-	virtual_reset();
 }
 
-void OricTAP::virtual_reset() {
+std::unique_ptr<FormatSerialiser> OricTAP::format_serialiser() const {
+	return std::make_unique<Serialiser>(file_name_);
+}
+
+OricTAP::Serialiser::Serialiser(const std::string &file_name) : file_(file_name, FileHolder::FileMode::Read) {
+	reset();
+}
+
+void OricTAP::Serialiser::reset() {
 	file_.seek(0, SEEK_SET);
 	bit_count_ = 13;
 	phase_ = next_phase_ = LeadIn;
@@ -41,7 +46,7 @@ void OricTAP::virtual_reset() {
 	pulse_counter_ = 0;
 }
 
-Tape::Pulse OricTAP::virtual_get_next_pulse() {
+Pulse OricTAP::Serialiser::next_pulse() {
 	// Each byte byte is written as 13 bits: 0, eight bits of data, parity, three 1s.
 	if(bit_count_ == 13) {
 		if(next_phase_ != phase_) {
@@ -57,7 +62,7 @@ Tape::Pulse OricTAP::virtual_get_next_pulse() {
 				phase_counter_++;
 				if(phase_counter_ == 259) {	// 256 artificial bytes plus the three in the file = 259
 					while(1) {
-						if(file_.get8() != 0x16) break;
+						if(file_.get() != 0x16) break;
 					}
 					next_phase_ = Header;
 				}
@@ -72,7 +77,7 @@ Tape::Pulse OricTAP::virtual_get_next_pulse() {
 				// [6, 7]:		start address of data
 				// 8:			"unused" (on the Oric 1)
 				// [9...]:		filename, up to NULL byte
-				next_byte = file_.get8();
+				next_byte = file_.get();
 
 				if(phase_counter_ == 4)	data_end_address_ = uint16_t(next_byte << 8);
 				if(phase_counter_ == 5)	data_end_address_ |= next_byte;
@@ -96,7 +101,7 @@ Tape::Pulse OricTAP::virtual_get_next_pulse() {
 			break;
 
 			case Data:
-				next_byte = file_.get8();
+				next_byte = file_.get();
 				phase_counter_++;
 				if(phase_counter_ >= (data_end_address_ - data_start_address_)+1) {
 					if(next_byte == 0x16) {
@@ -122,7 +127,7 @@ Tape::Pulse OricTAP::virtual_get_next_pulse() {
 	// In slow mode, a 0 is 4 periods of 1200 Hz, a 1 is 8 periods at 2400 Hz.
 	// In fast mode, a 1 is a single period of 2400 Hz, a 0 is a 2400 Hz pulse followed by a 1200 Hz pulse.
 	// This code models fast mode.
-	Tape::Pulse pulse;
+	Pulse pulse;
 	pulse.length.clock_rate = 4800;
 	int next_bit;
 
@@ -158,6 +163,6 @@ Tape::Pulse OricTAP::virtual_get_next_pulse() {
 	return pulse;
 }
 
-bool OricTAP::is_at_end() {
+bool OricTAP::Serialiser::is_at_end() const {
 	return phase_ == End;
 }

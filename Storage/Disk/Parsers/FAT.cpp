@@ -8,8 +8,9 @@
 
 #include "FAT.hpp"
 
-#include "../Encodings/MFM/Parser.hpp"
+#include "Storage/Disk/Encodings/MFM/Parser.hpp"
 
+#include <algorithm>
 #include <iostream>
 
 using namespace Storage::Disk;
@@ -113,12 +114,12 @@ std::optional<FAT::Volume> FAT::GetVolume(const std::shared_ptr<Storage::Disk::D
 		if(!fat_sector || fat_sector->samples.empty() || fat_sector->samples[0].size() != volume.bytes_per_sector) {
 			return std::nullopt;
 		}
-		std::copy(fat_sector->samples[0].begin(), fat_sector->samples[0].end(), std::back_inserter(source_fat));
+		std::ranges::copy(fat_sector->samples[0], std::back_inserter(source_fat));
 	}
 
 	// Decode the FAT.
 	// TODO: stop assuming FAT12 here.
-	for(size_t c = 0; c < source_fat.size(); c += 3) {
+	for(size_t c = 0; c < source_fat.size() - 2; c += 3) {
 		const uint32_t double_cluster = uint32_t(source_fat[c] + (source_fat[c + 1] << 8) + (source_fat[c + 2] << 16));
 		volume.fat.push_back(uint16_t(double_cluster & 0xfff));
 		volume.fat.push_back(uint16_t(double_cluster >> 12));
@@ -135,7 +136,7 @@ std::optional<FAT::Volume> FAT::GetVolume(const std::shared_ptr<Storage::Disk::D
 		if(!sector || sector->samples.empty() || sector->samples[0].size() != volume.bytes_per_sector) {
 			return std::nullopt;
 		}
-		std::copy(sector->samples[0].begin(), sector->samples[0].end(), std::back_inserter(root_directory));
+		std::ranges::copy(sector->samples[0], std::back_inserter(root_directory));
 	}
 	volume.root_directory = directory_from(root_directory);
 
@@ -161,7 +162,7 @@ std::optional<std::vector<uint8_t>> FAT::GetFile(const std::shared_ptr<Storage::
 			if(!sector_contents || sector_contents->samples.empty() || sector_contents->samples[0].size() != volume.bytes_per_sector) {
 				return std::nullopt;
 			}
-			std::copy(sector_contents->samples[0].begin(), sector_contents->samples[0].end(), std::back_inserter(contents));
+			std::ranges::copy(sector_contents->samples[0], std::back_inserter(contents));
 		}
 
 		cluster = volume.fat[cluster];

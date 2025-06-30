@@ -8,13 +8,13 @@
 
 #include "z8530.hpp"
 
-#include "../../Outputs/Log.hpp"
+#include "Outputs/Log.hpp"
 
 using namespace Zilog::SCC;
 
 namespace {
 
-Log::Logger<Log::Source::SCC> log;
+Log::Logger<Log::Source::SCC> logger;
 
 }
 
@@ -39,7 +39,7 @@ bool z8530::get_interrupt_line() const {
 	A1 = C/D		(i.e. control or data)
 */
 
-std::uint8_t z8530::read(int address) {
+std::uint8_t z8530::read(const int address) {
 	if(address & 2) {
 		// Read data register for channel.
 		return channels_[address & 1].read(true, pointer_);
@@ -54,7 +54,7 @@ std::uint8_t z8530::read(int address) {
 
 			case 2:		// Handled non-symmetrically between channels.
 				if(address & 1) {
-					log.error().append("Unimplemented: register 2 status bits");
+					logger.error().append("Unimplemented: register 2 status bits");
 				} else {
 					result = interrupt_vector_;
 
@@ -89,7 +89,7 @@ std::uint8_t z8530::read(int address) {
 	return 0x00;
 }
 
-void z8530::write(int address, std::uint8_t value) {
+void z8530::write(const int address, const std::uint8_t value) {
 	if(address & 2) {
 		// Write data register for channel. This is completely independent
 		// of whatever is going on over in the control realm.
@@ -111,11 +111,11 @@ void z8530::write(int address, std::uint8_t value) {
 			case 2:	// Interrupt vector register; used only by Channel B.
 					// So there's only one of these.
 				interrupt_vector_ = value;
-				log.info().append("Interrupt vector set to %d", value);
+				logger.info().append("Interrupt vector set to %d", value);
 			break;
 
 			case 9:	// Master interrupt and reset register; there is also only one of these.
-				log.info().append("Master interrupt and reset register: %02x", value);
+				logger.info().append("Master interrupt and reset register: %02x", value);
 				master_interrupt_control_ = value;
 			break;
 		}
@@ -140,19 +140,19 @@ void z8530::write(int address, std::uint8_t value) {
 	update_delegate();
 }
 
-void z8530::set_dcd(int port, bool level) {
+void z8530::set_dcd(const int port, const bool level) {
 	channels_[port].set_dcd(level);
 	update_delegate();
 }
 
 // MARK: - Channel implementations
 
-uint8_t z8530::Channel::read(bool data, uint8_t pointer) {
+uint8_t z8530::Channel::read(const bool data, const uint8_t pointer) {
 	// If this is a data read, just return it.
 	if(data) {
 		return data_;
 	} else {
-		log.info().append("Control read from register %d", pointer);
+		logger.info().append("Control read from register %d", pointer);
 		// Otherwise, this is a control read...
 		switch(pointer) {
 			default:
@@ -232,15 +232,15 @@ uint8_t z8530::Channel::read(bool data, uint8_t pointer) {
 	return 0x00;
 }
 
-void z8530::Channel::write(bool data, uint8_t pointer, uint8_t value) {
+void z8530::Channel::write(const bool data, const uint8_t pointer, const uint8_t value) {
 	if(data) {
 		data_ = value;
 		return;
 	} else {
-		log.info().append("Control write: %02x to register %d", value, pointer);
+		logger.info().append("Control write: %02x to register %d", value, pointer);
 		switch(pointer) {
 			default:
-				log.info().append("Unrecognised control write: %02x to register %d", value, pointer);
+				logger.info().append("Unrecognised control write: %02x to register %d", value, pointer);
 			break;
 
 			case 0x0:	// Write register 0 — CRC reset and other functions.
@@ -248,13 +248,13 @@ void z8530::Channel::write(bool data, uint8_t pointer, uint8_t value) {
 				switch(value >> 6) {
 					default:	/* Do nothing. */		break;
 					case 1:
-						log.error().append("TODO: reset Rx CRC checker.");
+						logger.error().append("TODO: reset Rx CRC checker.");
 					break;
 					case 2:
-						log.error().append("TODO: reset Tx CRC checker.");
+						logger.error().append("TODO: reset Tx CRC checker.");
 					break;
 					case 3:
-						log.error().append("TODO: reset Tx underrun/EOM latch.");
+						logger.error().append("TODO: reset Tx underrun/EOM latch.");
 					break;
 				}
 
@@ -262,24 +262,24 @@ void z8530::Channel::write(bool data, uint8_t pointer, uint8_t value) {
 				switch((value >> 3)&7) {
 					default:	/* Do nothing. */		break;
 					case 2:
-//						log.info().append("reset ext/status interrupts.");
+//						logger.info().append("reset ext/status interrupts.");
 						external_status_interrupt_ = false;
 						external_interrupt_status_ = 0;
 					break;
 					case 3:
-						log.error().append("TODO: send abort (SDLC).");
+						logger.error().append("TODO: send abort (SDLC).");
 					break;
 					case 4:
-						log.error().append("TODO: enable interrupt on next Rx character.");
+						logger.error().append("TODO: enable interrupt on next Rx character.");
 					break;
 					case 5:
-						log.error().append("TODO: reset Tx interrupt pending.");
+						logger.error().append("TODO: reset Tx interrupt pending.");
 					break;
 					case 6:
-						log.error().append("TODO: reset error.");
+						logger.error().append("TODO: reset error.");
 					break;
 					case 7:
-						log.error().append("TODO: reset highest IUS.");
+						logger.error().append("TODO: reset highest IUS.");
 					break;
 				}
 			break;
@@ -304,7 +304,7 @@ void z8530::Channel::write(bool data, uint8_t pointer, uint8_t value) {
 					b1 = 1 => transmit buffer empty interrupt is enabled; 0 => it isn't.
 					b0 = 1 => external interrupt is enabled; 0 => it isn't.
 				*/
-				log.info().append("Interrupt mask: %02x", value);
+				logger.info().append("Interrupt mask: %02x", value);
 			break;
 
 			case 0x2:	// Write register 2 - interrupt vector.
@@ -319,7 +319,7 @@ void z8530::Channel::write(bool data, uint8_t pointer, uint8_t value) {
 					case 2:		receive_bit_count = 6;	break;
 					case 3:		receive_bit_count = 8;	break;
 				}
-				log.info().append("Receive bit count: %d", receive_bit_count);
+				logger.info().append("Receive bit count: %d", receive_bit_count);
 
 				/*
 					b7,b6:
@@ -400,7 +400,7 @@ void z8530::Channel::write(bool data, uint8_t pointer, uint8_t value) {
 	}
 }
 
-void z8530::Channel::set_dcd(bool level) {
+void z8530::Channel::set_dcd(const bool level) {
 	if(dcd_ == level) return;
 	dcd_ = level;
 

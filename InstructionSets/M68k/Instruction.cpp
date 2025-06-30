@@ -12,10 +12,8 @@
 
 using namespace InstructionSet::M68k;
 
-std::string Preinstruction::operand_description(int index, int opcode) const {
+std::string Preinstruction::operand_description(const int index, const int opcode) const {
 	switch(mode(index)) {
-		default:	assert(false);
-
 		case AddressingMode::None:
 			return "";
 
@@ -54,12 +52,17 @@ std::string Preinstruction::operand_description(int index, int opcode) const {
 				return "Q";
 			}
 			return std::to_string(int(quick(uint16_t(opcode), operation)));
+
+		// TODO: 68020+ modes.
+		default: break;
 	}
+	assert(false);
+	return "[TODO]";
 }
 
 namespace {
 
-const char *_to_string(Operation operation, bool is_quick) {
+const char *_to_string(const Operation operation, const bool is_quick) {
 	switch(operation) {
 		case Operation::Undefined:		return "None";
 		case Operation::NOP:			return "NOP";
@@ -295,11 +298,11 @@ const char *_to_string(Operation operation, bool is_quick) {
 
 }
 
-const char *InstructionSet::M68k::to_string(Operation operation) {
+const char *InstructionSet::M68k::to_string(const Operation operation) {
 	return _to_string(operation, false);
 }
 
-std::string Preinstruction::to_string(int opcode) const {
+std::string Preinstruction::to_string(const int opcode) const {
 	if(operation == Operation::Undefined) return "None";
 
 	const char *const instruction = _to_string(operation, mode<0>() == AddressingMode::Quick);

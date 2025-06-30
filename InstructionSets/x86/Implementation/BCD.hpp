@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "../AccessType.hpp"
+#include "InstructionSets/x86/AccessType.hpp"
 
-#include "../../../Numeric/RegisterSizes.hpp"
+#include "Numeric/RegisterSizes.hpp"
 
 namespace InstructionSet::x86::Primitive {
 
@@ -38,7 +38,7 @@ void aaas(
 template <typename ContextT>
 void aad(
 	CPU::RegisterPair16 &ax,
-	uint8_t imm,
+	const uint8_t imm,
 	ContextT &context
 ) {
 	/*
@@ -59,7 +59,7 @@ void aad(
 template <typename ContextT>
 void aam(
 	CPU::RegisterPair16 &ax,
-	uint8_t imm,
+	const uint8_t imm,
 	ContextT &context
 ) {
 	/*
@@ -75,8 +75,13 @@ void aam(
 		If ... an immediate value of 0 is used, it will cause a #DE (divide error) exception.
 	*/
 	if(!imm) {
-		interrupt(Interrupt::DivideError, context);
-		return;
+		constexpr auto exception = Exception::exception<Vector::DivideError>();
+		if constexpr (uses_8086_exceptions(ContextT::model)) {
+			interrupt(exception, context);
+			return;
+		} else {
+			throw exception;
+		}
 	}
 
 	ax.halves.high = ax.halves.low / imm;

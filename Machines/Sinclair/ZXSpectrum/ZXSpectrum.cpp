@@ -10,35 +10,35 @@
 
 #include "State.hpp"
 #include "Video.hpp"
-#include "../Keyboard/Keyboard.hpp"
+#include "Machines/Sinclair/Keyboard/Keyboard.hpp"
 
-#include "../../../Activity/Source.hpp"
-#include "../../MachineTypes.hpp"
+#include "Activity/Source.hpp"
+#include "Machines/MachineTypes.hpp"
 
-#include "../../../Processors/Z80/Z80.hpp"
+#include "Processors/Z80/Z80.hpp"
 
-#include "../../../Components/AudioToggle/AudioToggle.hpp"
-#include "../../../Components/AY38910/AY38910.hpp"
+#include "Components/AudioToggle/AudioToggle.hpp"
+#include "Components/AY38910/AY38910.hpp"
 
 // TODO: possibly there's a better factoring than this, but for now
 // just grab the CPC's version of an FDC.
-#include "../../AmstradCPC/FDC.hpp"
+#include "Machines/AmstradCPC/FDC.hpp"
 
-#include "../../../Outputs/Log.hpp"
+#include "Outputs/Log.hpp"
 
-#include "../../../Outputs/Speaker/Implementation/CompoundSource.hpp"
-#include "../../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
-#include "../../../Outputs/Speaker/Implementation/BufferSource.hpp"
+#include "Outputs/Speaker/Implementation/CompoundSource.hpp"
+#include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
+#include "Outputs/Speaker/Implementation/BufferSource.hpp"
 
-#include "../../../Storage/Tape/Tape.hpp"
-#include "../../../Storage/Tape/Parsers/Spectrum.hpp"
+#include "Storage/Tape/Tape.hpp"
+#include "Storage/Tape/Parsers/Spectrum.hpp"
 
-#include "../../../Analyser/Static/ZXSpectrum/Target.hpp"
+#include "Analyser/Static/ZXSpectrum/Target.hpp"
 
-#include "../../Utility/MemoryFuzzer.hpp"
-#include "../../Utility/Typer.hpp"
+#include "Machines/Utility/MemoryFuzzer.hpp"
+#include "Machines/Utility/Typer.hpp"
 
-#include "../../../ClockReceiver/JustInTime.hpp"
+#include "ClockReceiver/JustInTime.hpp"
 
 #include <array>
 
@@ -126,6 +126,7 @@ template<Model model> class ConcreteMachine:
 	public MachineTypes::AudioProducer,
 	public MachineTypes::JoystickMachine,
 	public MachineTypes::MappedKeyboardMachine,
+	public MachineTypes::MediaChangeObserver,
 	public MachineTypes::MediaTarget,
 	public MachineTypes::ScanProducer,
 	public MachineTypes::TimedMachine,
@@ -541,7 +542,7 @@ template<Model model> class ConcreteMachine:
 						// b6: tape input
 
 						*cycle.value &= keyboard_.read(address);
-						*cycle.value &= tape_player_.get_input() ? 0xbf : 0xff;
+						*cycle.value &= tape_player_.input() ? 0xbf : 0xff;
 
 						// Add Joystick input on top.
 						if(!(address&0x1000)) *cycle.value &= static_cast<Joystick *>(joysticks_[0].get())->get_sinclair(0);
@@ -681,7 +682,7 @@ template<Model model> class ConcreteMachine:
 		bool insert_media(const Analyser::Static::Media &media) override {
 			// If there are any tapes supplied, use the first of them.
 			if(!media.tapes.empty()) {
-				tape_player_.set_tape(media.tapes.front());
+				tape_player_.set_tape(media.tapes.front(), TargetPlatform::ZXSpectrum);
 				set_use_fast_tape();
 			}
 
@@ -694,6 +695,12 @@ template<Model model> class ConcreteMachine:
 			}
 
 			return !media.tapes.empty() || (!media.disks.empty() && model == Model::Plus3);
+		}
+
+		ChangeEffect effect_for_file_did_change(const std::string &file_name) const override {
+			const auto disk = fdc_->disk();
+			return disk && disk->represents(file_name) && disk->has_written() ?
+				ChangeEffect::None : ChangeEffect::RestartMachine;
 		}
 
 		// MARK: - ClockingHint::Observer.
@@ -716,12 +723,12 @@ template<Model model> class ConcreteMachine:
 		}
 
 		bool get_tape_is_playing() final {
-			return tape_player_.get_motor_control();
+			return tape_player_.motor_control();
 		}
 
 		// MARK: - Configuration options.
 
-		std::unique_ptr<Reflection::Struct> get_options() override {
+		std::unique_ptr<Reflection::Struct> get_options() const override {
 			auto options = std::make_unique<Options>(Configurable::OptionsType::UserFriendly);	// OptionsType is arbitrary, but not optional.
 			options->automatic_tape_motor_control = use_automatic_tape_motor_control_;
 			options->quickload = allow_fast_tape_hack_;
@@ -921,7 +928,7 @@ template<Model model> class ConcreteMachine:
 			if(!(flags & 1)) return false;
 
 			const uint8_t block_type = uint8_t(z80_.value_of(Register::ADash));
-			const auto block = parser.find_block(tape_player_.get_tape());
+			const auto block = parser.find_block(*tape_player_.serialiser());
 			if(!block || block_type != (*block).type) return false;
 
 			uint16_t length = z80_.value_of(Register::DE);
@@ -930,7 +937,7 @@ template<Model model> class ConcreteMachine:
 			flags = 0x93;
 			uint8_t parity = 0x00;
 			while(length--) {
-				auto next = parser.get_byte(tape_player_.get_tape());
+				auto next = parser.get_byte(*tape_player_.serialiser());
 				if(!next) {
 					flags &= ~1;
 					break;
@@ -941,7 +948,7 @@ template<Model model> class ConcreteMachine:
 				++target;
 			}
 
-			auto stored_parity = parser.get_byte(tape_player_.get_tape());
+			auto stored_parity = parser.get_byte(*tape_player_.serialiser());
 			if(!stored_parity) {
 				flags &= ~1;
 			} else {

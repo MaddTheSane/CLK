@@ -12,8 +12,8 @@
 #include <memory>
 #include <vector>
 
-#include "../../Storage.hpp"
-#include "../../../Numeric/LFSR.hpp"
+#include "Storage/Storage.hpp"
+#include "Numeric/LFSR.hpp"
 #include "Track.hpp"
 
 namespace Storage::Disk {
@@ -49,7 +49,7 @@ struct PCMSegment {
 		Constructs an instance of PCMSegment with the specified @c length_of_a_bit
 		and @c data.
 	*/
-	PCMSegment(Time length_of_a_bit, const std::vector<bool> &data)
+	PCMSegment(const Time length_of_a_bit, const std::vector<bool> &data)
 		: length_of_a_bit(length_of_a_bit), data(data) {}
 
 	/*!
@@ -57,7 +57,7 @@ struct PCMSegment {
 		long and @c data is populated from the supplied @c source by serialising it
 		from MSB to LSB for @c number_of_bits.
 	*/
-	PCMSegment(size_t number_of_bits, const uint8_t *source)
+	PCMSegment(const size_t number_of_bits, const uint8_t *source)
 		: data(number_of_bits, false) {
 		for(size_t c = 0; c < number_of_bits; ++c) {
 			if((source[c >> 3] >> (7 ^ (c & 7)))&1) {
@@ -71,7 +71,7 @@ struct PCMSegment {
 		specified by @c length_of_a_bit, and @c data is populated from the supplied
 		@c source by serialising it from MSB to LSB for @c number_of_bits.
 	*/
-	PCMSegment(Time length_of_a_bit, size_t number_of_bits, const uint8_t *source)
+	PCMSegment(const Time length_of_a_bit, const size_t number_of_bits, const uint8_t *const source)
 		: PCMSegment(number_of_bits, source) {
 		this->length_of_a_bit = length_of_a_bit;
 	}
@@ -81,7 +81,7 @@ struct PCMSegment {
 		specified by @c length_of_a_bit, and @c data is populated from the supplied
 		@c source by serialising it from MSB to LSB for @c number_of_bits.
 	*/
-	PCMSegment(Time length_of_a_bit, size_t number_of_bits, const std::vector<uint8_t> &source) :
+	PCMSegment(const Time length_of_a_bit, const size_t number_of_bits, const std::vector<uint8_t> &source) :
 		PCMSegment(length_of_a_bit, number_of_bits, source.data()) {}
 
 	/*!
@@ -89,7 +89,7 @@ struct PCMSegment {
 		long and @c data is populated from the supplied @c source by serialising it
 		from MSB to LSB for @c number_of_bits.
 	*/
-	PCMSegment(size_t number_of_bits, const std::vector<uint8_t> &source) :
+	PCMSegment(const size_t number_of_bits, const std::vector<uint8_t> &source) :
 		PCMSegment(number_of_bits, source.data()) {}
 
 	/*!
@@ -127,7 +127,7 @@ struct PCMSegment {
 		If @c msb_first is @c false then each byte is expected to be deserialised from
 		LSB to MSB.
 	*/
-	std::vector<uint8_t> byte_data(bool msb_first = true) const {
+	std::vector<uint8_t> byte_data(const bool msb_first = true) const {
 		std::vector<uint8_t> bytes((data.size() + 7) >> 3);
 		size_t pointer = 0;
 		const size_t pointer_mask = msb_first ? 7 : 0;
@@ -151,54 +151,55 @@ struct PCMSegment {
 	Provides a stream of events by inspecting a PCMSegment.
 */
 class PCMSegmentEventSource {
-	public:
-		/*!
-			Constructs a @c PCMSegmentEventSource that will derive events from @c segment.
-			The event source is initially @c reset.
-		*/
-		PCMSegmentEventSource(const PCMSegment &);
+public:
+	/*!
+		Constructs a @c PCMSegmentEventSource that will derive events from @c segment.
+		The event source is initially @c reset.
+	*/
+	PCMSegmentEventSource(const PCMSegment &);
 
-		/*!
-			Copy constructor; produces a segment event source with the same underlying segment
-			but a unique pointer into it.
-		*/
-		PCMSegmentEventSource(const PCMSegmentEventSource &);
+	/*!
+		Copy constructor; produces a segment event source with the same underlying segment
+		but a unique pointer into it.
+	*/
+	PCMSegmentEventSource(const PCMSegmentEventSource &);
+	PCMSegmentEventSource &operator =(const PCMSegmentEventSource &);
 
-		/*!
-			@returns the next event that will occur in this event stream.
-		*/
-		Track::Event get_next_event();
+	/*!
+		@returns the next event that will occur in this event stream.
+	*/
+	Track::Event get_next_event();
 
-		/*!
-			Resets the event source to the beginning of its event stream, exactly as if
-			it has just been constructed.
-		*/
-		void reset();
+	/*!
+		Resets the event source to the beginning of its event stream, exactly as if
+		it has just been constructed.
+	*/
+	void reset();
 
-		/*!
-			Seeks as close to @c time_from_start as the event source can manage while not
-			exceeding it.
+	/*!
+		Seeks as close to @c time_from_start as the event source can manage while not
+		exceeding it.
 
-			@returns the time the source is now at.
-		*/
-		float seek_to(float time_from_start);
+		@returns the time the source is now at.
+	*/
+	float seek_to(const float time_from_start);
 
-		/*!
-			@returns the total length of the stream of data that the source will provide.
-		*/
-		Time get_length();
+	/*!
+		@returns the total length of the stream of data that the source will provide.
+	*/
+	Time get_length();
 
-		/*!
-			@returns a reference to the underlying segment.
-		*/
-		const PCMSegment &segment() const;
-		PCMSegment &segment();
+	/*!
+		@returns a reference to the underlying segment.
+	*/
+	const PCMSegment &segment() const;
+	PCMSegment &segment();
 
-	private:
-		std::shared_ptr<PCMSegment> segment_;
-		std::size_t bit_pointer_;
-		Track::Event next_event_;
-		Numeric::LFSR<uint64_t> lfsr_;
+private:
+	std::shared_ptr<PCMSegment> segment_;
+	std::size_t bit_pointer_;
+	Track::Event next_event_;
+	Numeric::LFSR<uint64_t> lfsr_;
 };
 
 }

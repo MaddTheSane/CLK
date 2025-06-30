@@ -12,25 +12,28 @@
 #include "Tape.hpp"
 #include "Target.hpp"
 
+#include "Numeric/StringSimilarity.hpp"
+
 #include <algorithm>
+#include <map>
 
 using namespace Analyser::Static::Acorn;
 
 static std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>>
-		AcornCartridgesFrom(const std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>> &cartridges) {
+AcornCartridgesFrom(const std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>> &cartridges) {
 	std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>> acorn_cartridges;
 
 	for(const auto &cartridge : cartridges) {
 		const auto &segments = cartridge->get_segments();
 
-		// only one mapped item is allowed
+		// Only one mapped item is allowed.
 		if(segments.size() != 1) continue;
 
-		// which must be 8 or 16 kb in size
+		// Cartridges must be 8 or 16 kb in size.
 		const Storage::Cartridge::Cartridge::Segment &segment = segments.front();
 		if(segment.data.size() != 0x4000 && segment.data.size() != 0x2000) continue;
 
-		// is a copyright string present?
+		// Check copyright string.
 		const uint8_t copyright_offset = segment.data[7];
 		if(
 			segment.data[copyright_offset] != 0x00 ||
@@ -39,16 +42,16 @@ static std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>>
 			segment.data[copyright_offset+3] != 0x29
 		) continue;
 
-		// is the language entry point valid?
+		// Check language entry point.
 		if(!(
 			(segment.data[0] == 0x00 && segment.data[1] == 0x00 && segment.data[2] == 0x00) ||
 			(segment.data[0] != 0x00 && segment.data[2] >= 0x80 && segment.data[2] < 0xc0)
 			)) continue;
 
-		// is the service entry point valid?
+		// Check service entry point.
 		if(!(segment.data[5] >= 0x80 && segment.data[5] < 0xc0)) continue;
 
-		// probability of a random binary blob that isn't an Acorn ROM proceeding to here:
+		// Probability of a random binary blob that isn't an Acorn ROM proceeding to here:
 		//		1/(2^32) *
 		//		( ((2^24)-1)/(2^24)*(1/4)		+		1/(2^24)	) *
 		//		1/4
@@ -59,58 +62,66 @@ static std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>>
 	return acorn_cartridges;
 }
 
-Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(const Media &media, const std::string &, TargetPlatform::IntType) {
-	auto target8bit = std::make_unique<Target>();
-	auto targetArchimedes = std::make_unique<Analyser::Static::Target>(Machine::Archimedes);
+Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(
+	const Media &media,
+	const std::string &file_name,
+	TargetPlatform::IntType,
+	bool
+) {
+	auto target8bit = std::make_unique<ElectronTarget>();
+	auto targetArchimedes = std::make_unique<ArchimedesTarget>();
 
 	// Copy appropriate cartridges to the 8-bit target.
 	target8bit->media.cartridges = AcornCartridgesFrom(media.cartridges);
 
-	// If there are any tapes, attempt to get data from the first.
+	// If there are tapes, attempt to get data from the first.
 	if(!media.tapes.empty()) {
 		std::shared_ptr<Storage::Tape::Tape> tape = media.tapes.front();
-		std::vector<File> files = GetFiles(tape);
-		tape->reset();
+		auto serialiser = tape->serialiser();
+		std::vector<File> files = GetFiles(*serialiser);
 
 		// continue if there are any files
 		if(!files.empty()) {
 			bool is_basic = true;
 
 			// If a file is execute-only, that means *RUN.
-			if(files.front().flags & File::Flags::ExecuteOnly) is_basic = false;
+			if(files.front().flags & File::Flags::ExecuteOnly) {
+				is_basic = false;
+			}
 
-			// check also for a continuous threading of BASIC lines; if none then this probably isn't BASIC code,
-			// so that's also justification to *RUN
-			std::size_t pointer = 0;
-			uint8_t *const data = &files.front().data[0];
-			const std::size_t data_size = files.front().data.size();
-			while(1) {
-				if(pointer >= data_size-1 || data[pointer] != 13) {
-					is_basic = false;
-					break;
+			// Check also for a continuous threading of BASIC lines; if none then this probably isn't BASIC code,
+			// so that's also justification to *RUN.
+			if(is_basic) {
+				std::size_t pointer = 0;
+				uint8_t *const data = &files.front().data[0];
+				const std::size_t data_size = files.front().data.size();
+				while(true) {
+					if(pointer >= data_size-1 || data[pointer] != 0x0d) {
+						is_basic = false;
+						break;
+					}
+					if((data[pointer+1]&0x7f) == 0x7f) break;
+					pointer += data[pointer+3];
 				}
-				if((data[pointer+1]&0x7f) == 0x7f) break;
-				pointer += data[pointer+3];
 			}
 
 			// Inspect first file. If it's protected or doesn't look like BASIC
 			// then the loading command is *RUN. Otherwise it's CHAIN"".
 			target8bit->loading_command = is_basic ? "CHAIN\"\"\n" : "*RUN\n";
-
 			target8bit->media.tapes = media.tapes;
 		}
 	}
 
 	if(!media.disks.empty()) {
-		// TODO: below requires an [8-bit compatible] 'Hugo' ADFS catalogue, disallowing
-		// [Archimedes-exclusive] 'Nick' catalogues.
-		//
-		// Would be better to form the appropriate target in the latter case.
 		std::shared_ptr<Storage::Disk::Disk> disk = media.disks.front();
 		std::unique_ptr<Catalogue> dfs_catalogue, adfs_catalogue;
+
+		// Get any sort of catalogue that can be found.
 		dfs_catalogue = GetDFSCatalogue(disk);
 		if(dfs_catalogue == nullptr) adfs_catalogue = GetADFSCatalogue(disk);
-		if(dfs_catalogue || (adfs_catalogue && adfs_catalogue->is_hugo)) {
+
+		// 8-bit options: DFS and Hugo-style ADFS.
+		if(dfs_catalogue || (adfs_catalogue && !adfs_catalogue->has_large_sectors && adfs_catalogue->is_hugo)) {
 			// Accept the disk and determine whether DFS or ADFS ROMs are implied.
 			// Use the Pres ADFS if using an ADFS, as it leaves Page at &EOO.
 			target8bit->media.disks = media.disks;
@@ -118,7 +129,7 @@ Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(const Media &me
 			target8bit->has_pres_adfs = bool(adfs_catalogue);
 
 			// Check whether a simple shift+break will do for loading this disk.
-			Catalogue::BootOption bootOption = (dfs_catalogue ?: adfs_catalogue)->bootOption;
+			const auto bootOption = (dfs_catalogue ?: adfs_catalogue)->bootOption;
 			if(bootOption != Catalogue::BootOption::None) {
 				target8bit->should_shift_restart = true;
 			} else {
@@ -144,7 +155,42 @@ Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(const Media &me
 				}
 			}
 		} else if(adfs_catalogue) {
+			// Archimedes options, implicitly: ADFS, non-Hugo.
 			targetArchimedes->media.disks = media.disks;
+
+			// Also look for the best possible startup program name, if it can be discerned.
+			std::multimap<double, std::string, std::greater<double>> options;
+			for(const auto &file: adfs_catalogue->files) {
+				// Skip non-Pling files.
+				if(file.name[0] != '!') continue;
+
+				// Take whatever else comes with a preference for things that don't
+				// have 'boot' or 'read' in them (the latter of which will tend to be
+				// read_me or read_this or similar).
+				constexpr char read[] = "read";
+				constexpr char boot[] = "boot";
+				const auto has = [&](const char *begin, const char *end) {
+					return  std::search(
+						file.name.begin(), file.name.end(),
+						begin, end - 1, // i.e. don't compare the trailing NULL.
+						[](char lhs, char rhs) {
+							return std::tolower(lhs) == rhs;
+						}
+					) != file.name.end();
+				};
+				const auto has_read = has(std::begin(read), std::end(read));
+				const auto has_boot = has(std::begin(boot), std::end(boot));
+
+				const auto probability =
+					Numeric::similarity(file.name, adfs_catalogue->name) +
+					Numeric::similarity(file.name, file_name) -
+					((has_read || has_boot) ? 0.2 : 0.0);
+				options.emplace(probability, file.name);
+			}
+
+			if(!options.empty()) {
+				targetArchimedes->main_program = options.begin()->second;
+			}
 		}
 	}
 

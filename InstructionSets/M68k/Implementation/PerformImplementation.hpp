@@ -8,30 +8,33 @@
 
 #pragma once
 
-#include "../../../Numeric/Carry.hpp"
-#include "../ExceptionVectors.hpp"
+#include "Numeric/Carry.hpp"
+#include "InstructionSets/M68k/ExceptionVectors.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <cmath>
 
 namespace InstructionSet::M68k {
 
 /// Sign-extend @c x to 32 bits and return as an unsigned 32-bit int.
-inline uint32_t u_extend16(uint16_t x)	{	return uint32_t(int16_t(x));	}
+inline uint32_t u_extend16(const uint16_t x)	{	return uint32_t(int16_t(x));	}
 
 /// Sign-extend @c x to 32 bits and return as a signed 32-bit int.
-inline int32_t s_extend16(uint16_t x)	{	return int32_t(int16_t(x));		}
+inline int32_t s_extend16(const uint16_t x)		{	return int32_t(int16_t(x));		}
 
 namespace Primitive {
 
 /// Performs an add or subtract (as per @c is_add) between @c source and @c destination,
 /// updating @c status. @c is_extend indicates whether this is an extend operation (e.g. ADDX)
 /// or a plain one (e.g. ADD).
-template <bool is_add, bool is_extend, typename IntT>
-static void add_sub(IntT source, IntT &destination, Status &status) {
+template <Numeric::Operation operation, bool is_extend, typename IntT>
+static void add_sub(const IntT source, IntT &destination, Status &status) {
 	static_assert(!std::numeric_limits<IntT>::is_signed);
 
+	static_assert(operation == Numeric::Operation::Add || operation == Numeric::Operation::Subtract);
+	constexpr bool is_add = operation == Numeric::Operation::Add;
 	IntT result = is_add ?
 		destination + source :
 		destination - source;
@@ -59,7 +62,7 @@ static void add_sub(IntT source, IntT &destination, Status &status) {
 		status.zero_result = Status::FlagT(result);
 	}
 	status.set_negative(result);
-	status.overflow_flag = Numeric::overflow<is_add>(destination, source, result);
+	status.overflow_flag = Numeric::overflow<operation>(destination, source, result);
 	destination = result;
 }
 
@@ -67,7 +70,7 @@ static void add_sub(IntT source, IntT &destination, Status &status) {
 ///
 /// @discussion The slightly awkward abandonment of source, destination permits the use of this for both
 /// SBCD and NBCD.
-inline void sbcd(uint8_t rhs, uint8_t lhs, uint8_t &destination, Status &status) {
+inline void sbcd(const uint8_t rhs, const uint8_t lhs, uint8_t &destination, Status &status) {
 	const int extend = (status.extend_flag ? 1 : 0);
 	const int unadjusted_result = lhs - rhs - extend;
 
@@ -92,7 +95,7 @@ inline void sbcd(uint8_t rhs, uint8_t lhs, uint8_t &destination, Status &status)
 /// Perform the bitwise operation defined by @c operation on @c source and @c destination and update @c status.
 /// Bitwise operations are any of the byte, word or long versions of AND, OR and EOR.
 template <Operation operation, typename IntT>
-void bitwise(IntT source, IntT &destination, Status &status) {
+void bitwise(const IntT source, IntT &destination, Status &status) {
 	static_assert(
 		operation == Operation::ANDb ||	operation == Operation::ANDw || operation == Operation::ANDl ||
 		operation == Operation::ORb ||	operation == Operation::ORw || operation == Operation::ORl ||
@@ -117,23 +120,31 @@ void bitwise(IntT source, IntT &destination, Status &status) {
 
 /// Compare of @c source to @c destination, setting zero, carry, negative and overflow flags.
 template <typename IntT>
-void compare(IntT source, IntT destination, Status &status) {
+void compare(const IntT source, const IntT destination, Status &status) {
 	const IntT result = destination - source;
 	status.carry_flag = result > destination;
 	status.set_neg_zero(result);
-	status.overflow_flag = Numeric::overflow<false>(destination, source, result);
+	status.overflow_flag = Numeric::overflow<Numeric::Operation::Subtract>(destination, source, result);
 }
 
 /// @returns the name of the bit to be used as a mask for BCLR, BCHG, BSET or BTST for
 /// @c instruction given @c source.
-inline uint32_t mask_bit(const Preinstruction &instruction, uint32_t source) {
+inline uint32_t mask_bit(const Preinstruction &instruction, const uint32_t source) {
 	return source & (instruction.mode<1>() == AddressingMode::DataRegisterDirect ? 31 : 7);
 }
 
-/// Perform a BCLR, BCHG or BSET as specified by @c operation and described by @c instruction, @c source and @c destination, updating @c destination and @c status.
+/// Perform a BCLR, BCHG or BSET as specified by @c operation and described by @c instruction, @c source
+/// and @c destination, updating @c destination and @c status.
+///
 /// Also makes an appropriate notification to the @c flow_controller.
 template <Operation operation, typename FlowController>
-void bit_manipulate(const Preinstruction &instruction, uint32_t source, uint32_t &destination, Status &status, FlowController &flow_controller) {
+void bit_manipulate(
+	const Preinstruction &instruction,
+	const uint32_t source,
+	uint32_t &destination,
+	Status &status,
+	FlowController &flow_controller
+) {
 	static_assert(
 		operation == Operation::BCLR ||
 		operation == Operation::BCHG ||
@@ -157,7 +168,7 @@ template <typename IntT> void clear(IntT &destination, Status &status) {
 
 /// Perform an ANDI, EORI or ORI to either SR or CCR, notifying @c flow_controller if appropriate.
 template <Operation operation, typename FlowController>
-void apply_sr_ccr(uint16_t source, Status &status, FlowController &flow_controller) {
+void apply_sr_ccr(const uint16_t source, Status &status, FlowController &flow_controller) {
 	static_assert(
 		operation == Operation::ANDItoSR ||	operation == Operation::ANDItoCCR ||
 		operation == Operation::EORItoSR ||	operation == Operation::EORItoCCR ||
@@ -195,7 +206,7 @@ void apply_sr_ccr(uint16_t source, Status &status, FlowController &flow_controll
 
 /// Perform a MULU or MULS between @c source and @c destination, updating @c status and notifying @c flow_controller.
 template <bool is_mulu, typename FlowController>
-void multiply(uint16_t source, uint32_t &destination, Status &status, FlowController &flow_controller) {
+void multiply(const uint16_t source, uint32_t &destination, Status &status, FlowController &flow_controller) {
 	if constexpr (is_mulu) {
 		destination = source * uint16_t(destination);
 	} else {
@@ -213,7 +224,7 @@ void multiply(uint16_t source, uint32_t &destination, Status &status, FlowContro
 
 /// Announce a DIVU or DIVS to @c flow_controller.
 template <bool is_divu, bool did_overflow, typename IntT, typename FlowController>
-void did_divide(IntT dividend, IntT divisor, FlowController &flow_controller) {
+void did_divide(const IntT dividend, const IntT divisor, FlowController &flow_controller) {
 	if constexpr (is_divu) {
 		flow_controller.template did_divu<did_overflow>(dividend, divisor);
 	} else {
@@ -223,7 +234,7 @@ void did_divide(IntT dividend, IntT divisor, FlowController &flow_controller) {
 
 /// Perform a DIVU or DIVS between @c source and @c destination, updating @c status and notifying @c flow_controller.
 template <bool is_divu, typename Int16, typename Int32, typename FlowController>
-void divide(uint16_t source, uint32_t &destination, Status &status, FlowController &flow_controller) {
+void divide(const uint16_t source, uint32_t &destination, Status &status, FlowController &flow_controller) {
 	status.carry_flag = 0;
 
 	const auto dividend = Int32(destination);
@@ -254,7 +265,7 @@ void divide(uint16_t source, uint32_t &destination, Status &status, FlowControll
 }
 
 /// Move @c source to @c destination, updating @c status.
-template <typename IntT> void move(IntT source, IntT &destination, Status &status) {
+template <typename IntT> void move(const IntT source, IntT &destination, Status &status) {
 	destination = source;
 	status.set_neg_zero(destination);
 	status.overflow_flag = status.carry_flag = 0;
@@ -271,26 +282,30 @@ template <bool is_extend, typename IntT> void negative(IntT &source, Status &sta
 	}
 	status.extend_flag = status.carry_flag = result;	// i.e. any value other than 0 will result in carry.
 	status.set_negative(result);
-	status.overflow_flag = Numeric::overflow<false>(IntT(0), source, result);
+	status.overflow_flag = Numeric::overflow<Numeric::Operation::Subtract>(IntT(0), source, result);
 
 	source = result;
 }
 
 /// Perform TST.[b/l/w] with @c source, updating @c status.
-template <typename IntT> void test(IntT source, Status &status) {
+template <typename IntT> void test(const IntT source, Status &status) {
 	status.carry_flag = status.overflow_flag = 0;
 	status.set_neg_zero(source);
 }
 
 /// Decodes the proper shift distance from @c source, notifying the @c flow_controller.
-template <typename IntT, typename FlowController> int shift_count(uint8_t source, FlowController &flow_controller) {
+template <typename IntT, typename FlowController> int shift_count(
+	const uint8_t source,
+	FlowController &flow_controller
+) {
 	const int count = source & 63;
 	flow_controller.template did_shift<IntT>(count);
 	return count;
 }
 
 /// Perform an arithmetic or logical shift, i.e. any of LSL, LSR, ASL or ASR.
-template <Operation operation, typename IntT, typename FlowController> void shift(uint32_t source, IntT &destination, Status &status, FlowController &flow_controller) {
+template <Operation operation, typename IntT, typename FlowController>
+void shift(const uint32_t source, IntT &destination, Status &status, FlowController &flow_controller) {
 	static_assert(
 		operation == Operation::ASLb || operation == Operation::ASLw || operation == Operation::ASLl ||
 		operation == Operation::ASRb || operation == Operation::ASRw || operation == Operation::ASRl ||
@@ -347,7 +362,9 @@ template <Operation operation, typename IntT, typename FlowController> void shif
 						);	// e.g. shift = 1 => ~((0x80 >> 1) - 1) = ~(0x40 - 1) = ~0x3f = 0xc0, i.e. if shift is
 							// 1 then the top two bits are relevant to whether there was overflow. If they have the
 							// same value, i.e. are both 0 or are both 1, then there wasn't. Otherwise there was.
-						status.overflow_flag = (destination & affected_bits) && (destination & affected_bits) != affected_bits;
+						status.overflow_flag =
+							(destination & affected_bits) &&
+							(destination & affected_bits) != affected_bits;
 					}
 				}
 
@@ -384,7 +401,8 @@ template <Operation operation, typename IntT, typename FlowController> void shif
 }
 
 /// Perform a rotate without extend, i.e. any of RO[L/R].[b/w/l].
-template <Operation operation, typename IntT, typename FlowController> void rotate(uint32_t source, IntT &destination, Status &status, FlowController &flow_controller) {
+template <Operation operation, typename IntT, typename FlowController>
+void rotate(const uint32_t source, IntT &destination, Status &status, FlowController &flow_controller) {
 	static_assert(
 		operation == Operation::ROLb || operation == Operation::ROLw || operation == Operation::ROLl ||
 		operation == Operation::RORb || operation == Operation::RORw || operation == Operation::RORl
@@ -400,21 +418,11 @@ template <Operation operation, typename IntT, typename FlowController> void rota
 
 		switch(operation) {
 			case Operation::ROLb:	case Operation::ROLw:	case Operation::ROLl:
-				if(shift) {
-					destination = IntT(
-						(destination << shift) |
-						(destination >> (size - shift))
-					);
-				}
+				destination = std::rotl<IntT>(destination, shift);
 				status.carry_flag = Status::FlagT(destination & 1);
 			break;
 			case Operation::RORb:	case Operation::RORw:	case Operation::RORl:
-				if(shift) {
-					destination = IntT(
-						(destination >> shift) |
-						(destination << (size - shift))
-					);
-				}
+				destination = std::rotr<IntT>(destination, shift);
 				status.carry_flag = Status::FlagT(destination & Numeric::top_bit<IntT>());
 			break;
 		}
@@ -425,7 +433,8 @@ template <Operation operation, typename IntT, typename FlowController> void rota
 }
 
 /// Perform a rotate-through-extend, i.e. any of ROX[L/R].[b/w/l].
-template <Operation operation, typename IntT, typename FlowController> void rox(uint32_t source, IntT &destination, Status &status, FlowController &flow_controller) {
+template <Operation operation, typename IntT, typename FlowController>
+void rox(const uint32_t source, IntT &destination, Status &status, FlowController &flow_controller) {
 	static_assert(
 		operation == Operation::ROXLb || operation == Operation::ROXLw || operation == Operation::ROXLl ||
 		operation == Operation::ROXRb || operation == Operation::ROXRw || operation == Operation::ROXRl
@@ -496,8 +505,14 @@ template <
 	Model model,
 	typename FlowController,
 	Operation operation = Operation::Undefined
-> void perform(Preinstruction instruction, CPU::SlicedInt32 &src, CPU::SlicedInt32 &dest, Status &status, FlowController &flow_controller) {
-
+> void perform(
+	const Preinstruction instruction,
+	CPU::SlicedInt32 &src,
+	CPU::SlicedInt32 &dest,
+	Status &status,
+	FlowController &flow_controller
+) {
+	using NumOp = Numeric::Operation;
 	switch((operation != Operation::Undefined) ? operation : instruction.operation) {
 		/*
 			ABCD adds the lowest bytes from the source and destination using BCD arithmetic,
@@ -530,20 +545,20 @@ template <
 
 		// ADD and ADDA add two quantities, the latter sign extending and without setting any flags;
 		// ADDQ and SUBQ act as ADD and SUB, but taking the second argument from the instruction code.
-		case Operation::ADDb:	Primitive::add_sub<true, false>(src.b, dest.b, status);		break;
-		case Operation::SUBb:	Primitive::add_sub<false, false>(src.b, dest.b, status);	break;
-		case Operation::ADDXb:	Primitive::add_sub<true, true>(src.b, dest.b, status);		break;
-		case Operation::SUBXb:	Primitive::add_sub<false, true>(src.b, dest.b, status);		break;
+		case Operation::ADDb:	Primitive::add_sub<NumOp::Add, false>(src.b, dest.b, status);		break;
+		case Operation::SUBb:	Primitive::add_sub<NumOp::Subtract, false>(src.b, dest.b, status);	break;
+		case Operation::ADDXb:	Primitive::add_sub<NumOp::Add, true>(src.b, dest.b, status);		break;
+		case Operation::SUBXb:	Primitive::add_sub<NumOp::Subtract, true>(src.b, dest.b, status);	break;
 
-		case Operation::ADDw:	Primitive::add_sub<true, false>(src.w, dest.w, status);		break;
-		case Operation::SUBw:	Primitive::add_sub<false, false>(src.w, dest.w, status);	break;
-		case Operation::ADDXw:	Primitive::add_sub<true, true>(src.w, dest.w, status);		break;
-		case Operation::SUBXw:	Primitive::add_sub<false, true>(src.w, dest.w, status);		break;
+		case Operation::ADDw:	Primitive::add_sub<NumOp::Add, false>(src.w, dest.w, status);		break;
+		case Operation::SUBw:	Primitive::add_sub<NumOp::Subtract, false>(src.w, dest.w, status);	break;
+		case Operation::ADDXw:	Primitive::add_sub<NumOp::Add, true>(src.w, dest.w, status);		break;
+		case Operation::SUBXw:	Primitive::add_sub<NumOp::Subtract, true>(src.w, dest.w, status);	break;
 
-		case Operation::ADDl:	Primitive::add_sub<true, false>(src.l, dest.l, status);		break;
-		case Operation::SUBl:	Primitive::add_sub<false, false>(src.l, dest.l, status);	break;
-		case Operation::ADDXl:	Primitive::add_sub<true, true>(src.l, dest.l, status);		break;
-		case Operation::SUBXl:	Primitive::add_sub<false, true>(src.l, dest.l, status);		break;
+		case Operation::ADDl:	Primitive::add_sub<NumOp::Add, false>(src.l, dest.l, status);		break;
+		case Operation::SUBl:	Primitive::add_sub<NumOp::Subtract, false>(src.l, dest.l, status);	break;
+		case Operation::ADDXl:	Primitive::add_sub<NumOp::Add, true>(src.l, dest.l, status);		break;
+		case Operation::SUBXl:	Primitive::add_sub<NumOp::Subtract, true>(src.l, dest.l, status);	break;
 
 		case Operation::ADDAw:	dest.l += u_extend16(src.w);	break;
 		case Operation::ADDAl:	dest.l += src.l;				break;
@@ -554,9 +569,15 @@ template <
 		case Operation::BTST:
 			status.zero_result = dest.l & (1 << Primitive::mask_bit(instruction, src.l));
 		break;
-		case Operation::BCLR:	Primitive::bit_manipulate<Operation::BCLR>(instruction, src.l, dest.l, status, flow_controller);	break;
-		case Operation::BCHG:	Primitive::bit_manipulate<Operation::BCHG>(instruction, src.l, dest.l, status, flow_controller);	break;
-		case Operation::BSET:	Primitive::bit_manipulate<Operation::BSET>(instruction, src.l, dest.l, status, flow_controller);	break;
+		case Operation::BCLR:
+			Primitive::bit_manipulate<Operation::BCLR>(instruction, src.l, dest.l, status, flow_controller);
+		break;
+		case Operation::BCHG:
+			Primitive::bit_manipulate<Operation::BCHG>(instruction, src.l, dest.l, status, flow_controller);
+		break;
+		case Operation::BSET:
+			Primitive::bit_manipulate<Operation::BSET>(instruction, src.l, dest.l, status, flow_controller);
+		break;
 
 		case Operation::Bccb:
 			flow_controller.template complete_bcc<int8_t>(
@@ -703,12 +724,24 @@ template <
 			status.set_neg_zero(src.l);
 		break;
 
-		case Operation::ANDItoSR:	Primitive::apply_sr_ccr<Operation::ANDItoSR>(src.w, status, flow_controller);	break;
-		case Operation::EORItoSR:	Primitive::apply_sr_ccr<Operation::EORItoSR>(src.w, status, flow_controller);	break;
-		case Operation::ORItoSR:	Primitive::apply_sr_ccr<Operation::ORItoSR>(src.w, status, flow_controller);	break;
-		case Operation::ANDItoCCR:	Primitive::apply_sr_ccr<Operation::ANDItoCCR>(src.w, status, flow_controller);	break;
-		case Operation::EORItoCCR:	Primitive::apply_sr_ccr<Operation::EORItoCCR>(src.w, status, flow_controller);	break;
-		case Operation::ORItoCCR:	Primitive::apply_sr_ccr<Operation::ORItoCCR>(src.w, status, flow_controller);	break;
+		case Operation::ANDItoSR:
+			Primitive::apply_sr_ccr<Operation::ANDItoSR>(src.w, status, flow_controller);
+		break;
+		case Operation::EORItoSR:
+			Primitive::apply_sr_ccr<Operation::EORItoSR>(src.w, status, flow_controller);
+		break;
+		case Operation::ORItoSR:
+			Primitive::apply_sr_ccr<Operation::ORItoSR>(src.w, status, flow_controller);
+		break;
+		case Operation::ANDItoCCR:
+			Primitive::apply_sr_ccr<Operation::ANDItoCCR>(src.w, status, flow_controller);
+		break;
+		case Operation::EORItoCCR:
+			Primitive::apply_sr_ccr<Operation::EORItoCCR>(src.w, status, flow_controller);
+		break;
+		case Operation::ORItoCCR:
+			Primitive::apply_sr_ccr<Operation::ORItoCCR>(src.w, status, flow_controller);
+		break;
 
 		/*
 			Multiplications.
@@ -721,8 +754,12 @@ template <
 			Divisions.
 		*/
 
-		case Operation::DIVUw:	Primitive::divide<true, uint16_t, uint32_t>(src.w, dest.l, status, flow_controller);	break;
-		case Operation::DIVSw:	Primitive::divide<false, int16_t, int32_t>(src.w, dest.l, status, flow_controller);		break;
+		case Operation::DIVUw:
+			Primitive::divide<true, uint16_t, uint32_t>(src.w, dest.l, status, flow_controller);
+		break;
+		case Operation::DIVSw:
+			Primitive::divide<false, int16_t, int32_t>(src.w, dest.l, status, flow_controller);
+		break;
 
 		// TRAP, which is a nicer form of ILLEGAL.
 		case Operation::TRAP:

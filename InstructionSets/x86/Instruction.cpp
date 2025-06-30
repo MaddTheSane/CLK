@@ -8,7 +8,7 @@
 
 #include "Instruction.hpp"
 
-#include "../../Numeric/Carry.hpp"
+#include "Numeric/Carry.hpp"
 
 #include <cassert>
 #include <iomanip>
@@ -120,6 +120,7 @@ std::string InstructionSet::x86::to_string(Operation operation, DataSize size, M
 
 		case Operation::IN:		return "in";
 		case Operation::OUT:	return "out";
+		case Operation::OUTS:	return "outs";
 
 		case Operation::JO:		return "jo";
 		case Operation::JNO:	return "jno";
@@ -223,6 +224,7 @@ std::string InstructionSet::x86::to_string(Operation operation, DataSize size, M
 		case Operation::NOP:	return "nop";
 		case Operation::POP:	return "pop";
 		case Operation::POPF:	return "popf";
+		case Operation::PUSHA:	return "pusha";
 		case Operation::PUSH:	return "push";
 		case Operation::PUSHF:	return "pushf";
 		case Operation::RCL:	return "rcl";
@@ -261,6 +263,9 @@ std::string InstructionSet::x86::to_string(Operation operation, DataSize size, M
 			} else {
 				return "bound";
 			}
+
+		case Operation::LMSW:	return "lmsw";
+		case Operation::SMSW:	return "smsw";
 
 		case Operation::Invalid:	return "invalid";
 
@@ -365,10 +370,10 @@ std::string to_hex(IntT value) {
 
 }
 
-template <bool is_32bit>
+template <InstructionType type>
 std::string InstructionSet::x86::to_string(
 	DataPointer pointer,
-	Instruction<is_32bit> instruction,
+	Instruction<type> instruction,
 	int offset_length,
 	int immediate_length,
 	DataSize operation_size
@@ -457,9 +462,9 @@ std::string InstructionSet::x86::to_string(
 	return operand;
 };
 
-template<bool is_32bit>
+template <InstructionType type>
 std::string InstructionSet::x86::to_string(
-	std::pair<int, Instruction<is_32bit>> instruction,
+	std::pair<int, Instruction<type>> instruction,
 	Model model,
 	int offset_length,
 	int immediate_length
@@ -487,7 +492,7 @@ std::string InstructionSet::x86::to_string(
 		case Operation::OUTS:
 		case Operation::OUTS_REP:
 			switch(instruction.second.data_segment()) {
-				default: 								break;
+				default:								break;
 				case Source::ES:	operation += "es ";	break;
 				case Source::CS:	operation += "cs ";	break;
 				case Source::DS:	operation += "ds ";	break;
@@ -611,7 +616,7 @@ std::string InstructionSet::x86::to_string(
 //);
 
 template std::string InstructionSet::x86::to_string(
-	std::pair<int, Instruction<false>> instruction,
+	std::pair<int, Instruction<InstructionType::Bits16>> instruction,
 	Model model,
 	int offset_length,
 	int immediate_length

@@ -8,13 +8,14 @@
 
 #pragma once
 
-#include "../Machines.hpp"
+#include "Analyser/Machines.hpp"
 
-#include "../../Storage/Cartridge/Cartridge.hpp"
-#include "../../Storage/Disk/Disk.hpp"
-#include "../../Storage/MassStorage/MassStorageDevice.hpp"
-#include "../../Storage/Tape/Tape.hpp"
-#include "../../Reflection/Struct.hpp"
+#include "Storage/Cartridge/Cartridge.hpp"
+#include "Storage/Disk/Disk.hpp"
+#include "Storage/MassStorage/MassStorageDevice.hpp"
+#include "Storage/Tape/Tape.hpp"
+#include "Storage/TargetPlatforms.hpp"
+#include "Reflection/Struct.hpp"
 
 #include <memory>
 #include <string>
@@ -64,9 +65,9 @@ struct Target {
 
 	Machine machine;
 	Media media;
-	float confidence = 0.0f;
+	float confidence = 0.5f;
 };
-typedef std::vector<std::unique_ptr<Target>> TargetList;
+using TargetList = std::vector<std::unique_ptr<Target>>;
 
 /*!
 	Attempts, through any available means, to return a list of potential targets for the file with the given name.

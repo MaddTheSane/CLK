@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "../../Components/8272/i8272.hpp"
+#include "Components/8272/i8272.hpp"
 
 namespace Amstrad {
 
@@ -17,32 +17,36 @@ namespace Amstrad {
 	exposes motor control, applying the same value to all drives.
 */
 class FDC: public Intel::i8272::i8272 {
-	private:
-		Intel::i8272::BusHandler bus_handler_;
+private:
+	Intel::i8272::BusHandler bus_handler_;
 
-	public:
-		FDC(Cycles clock_rate = Cycles(8000000)) :
-			i8272(bus_handler_, clock_rate)
-		{
-			emplace_drive(clock_rate.as<int>(), 300, 1);
-			set_drive(1);
-		}
+public:
+	FDC(const Cycles clock_rate = Cycles(8000000)) :
+		i8272(bus_handler_, clock_rate)
+	{
+		emplace_drive(clock_rate.as<int>(), 300, 1);
+		set_drive(1);
+	}
 
-		void set_motor_on(bool on) {
-			get_drive().set_motor_on(on);
-		}
+	void set_motor_on(const bool on) {
+		get_drive().set_motor_on(on);
+	}
 
-		void select_drive(int) {
-			// TODO: support more than one drive. (and in set_disk)
-		}
+	void select_drive(int) {
+		// TODO: support more than one drive. (and in set_disk)
+	}
 
-		void set_disk(std::shared_ptr<Storage::Disk::Disk> disk, int) {
-			get_drive().set_disk(disk);
-		}
+	void set_disk(std::shared_ptr<Storage::Disk::Disk> disk, int) {
+		get_drive().set_disk(disk);
+	}
 
-		void set_activity_observer(Activity::Observer *observer) {
-			get_drive().set_activity_observer(observer, "Drive 1", true);
-		}
+	const Storage::Disk::Disk *disk() const {
+		return get_drive().disk();
+	}
+
+	void set_activity_observer(Activity::Observer *const observer) {
+		get_drive().set_activity_observer(observer, "Drive 1", true);
+	}
 };
 
 }

@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "../StaticAnalyser.hpp"
-#include "../../../Storage/TargetPlatforms.hpp"
+#include "Analyser/Static/StaticAnalyser.hpp"
+#include "Storage/TargetPlatforms.hpp"
 #include <string>
 
 namespace Analyser::Static::Commodore {
 
-TargetList GetTargets(const Media &media, const std::string &file_name, TargetPlatform::IntType potential_platforms);
+TargetList GetTargets(const Media &, const std::string &, TargetPlatform::IntType, bool);
 
 }

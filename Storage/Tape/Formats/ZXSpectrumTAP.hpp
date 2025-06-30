@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "../Tape.hpp"
-#include "../../FileHolder.hpp"
+#include "Storage/Tape/Tape.hpp"
+#include "Storage/FileHolder.hpp"
 
 #include <cstdint>
 #include <string>
@@ -21,18 +21,23 @@ namespace Storage::Tape {
 	header and data blocks.
 */
 class ZXSpectrumTAP: public Tape {
-	public:
-		/*!
-			Constructs a @c ZXSpectrumTAP containing content from the file with name @c file_name.
+public:
+	/*!
+		Constructs a @c ZXSpectrumTAP containing content from the file with name @c file_name.
 
-			@throws ErrorNotZXSpectrumTAP if this file could not be opened and recognised as a valid Spectrum-format TAP.
-		*/
-		ZXSpectrumTAP(const std::string &file_name);
+		@throws ErrorNotZXSpectrumTAP if this file could not be opened and recognised as a valid Spectrum-format TAP.
+	*/
+	ZXSpectrumTAP(const std::string &file_name);
 
-		enum {
-			ErrorNotZXSpectrumTAP
-		};
+	enum {
+		ErrorNotZXSpectrumTAP
+	};
 
+private:
+	std::unique_ptr<FormatSerialiser> format_serialiser() const override;
+
+	struct Serialiser: public FormatSerialiser {
+		Serialiser(const std::string &file_name);
 	private:
 		Storage::FileHolder file_;
 
@@ -48,9 +53,11 @@ class ZXSpectrumTAP: public Tape {
 		void read_next_block();
 
 		// Implemented to satisfy @c Tape.
-		bool is_at_end() override;
-		void virtual_reset() override;
-		Pulse virtual_get_next_pulse() override;
+		bool is_at_end() const override;
+		void reset() override;
+		Pulse next_pulse() override;
+	};
+	std::string file_name_;
 };
 
 }

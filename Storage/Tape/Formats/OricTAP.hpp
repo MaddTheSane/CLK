@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "../Tape.hpp"
-#include "../../FileHolder.hpp"
+#include "Storage/Tape/Tape.hpp"
+#include "Storage/FileHolder.hpp"
 
 #include <cstdint>
 #include <string>
@@ -20,25 +20,30 @@ namespace Storage::Tape {
 	Provides a @c Tape containing an Oric-format tape image, which is a byte stream capture.
 */
 class OricTAP: public Tape {
-	public:
-		/*!
-			Constructs an @c OricTAP containing content from the file with name @c file_name.
+public:
+	/*!
+		Constructs an @c OricTAP containing content from the file with name @c file_name.
 
-			@throws ErrorNotOricTAP if this file could not be opened and recognised as a valid Oric-format TAP.
-		*/
-		OricTAP(const std::string &file_name);
+		@throws ErrorNotOricTAP if this file could not be opened and recognised as a valid Oric-format TAP.
+	*/
+	OricTAP(const std::string &file_name);
 
-		enum {
-			ErrorNotOricTAP
-		};
+	enum {
+		ErrorNotOricTAP
+	};
 
-		// implemented to satisfy @c Tape
-		bool is_at_end();
+private:
+	std::unique_ptr<FormatSerialiser> format_serialiser() const override;
+
+	struct Serialiser: public FormatSerialiser {
+		Serialiser(const std::string &file_name);
 
 	private:
+		bool is_at_end() const override;
+		void reset() override;
+		Pulse next_pulse() override;
+
 		Storage::FileHolder file_;
-		void virtual_reset();
-		Pulse virtual_get_next_pulse();
 
 		// byte serialisation and output
 		uint16_t current_value_;
@@ -50,6 +55,8 @@ class OricTAP: public Tape {
 		} phase_, next_phase_;
 		int phase_counter_;
 		uint16_t data_end_address_, data_start_address_;
+	};
+	std::string file_name_;
 };
 
 }

@@ -8,14 +8,16 @@
 
 #pragma once
 
-#include "../AccessType.hpp"
+#include "InstructionSets/x86/AccessType.hpp"
+
+#include <bit>
 
 namespace InstructionSet::x86::Primitive {
 
 template <typename IntT, typename ContextT>
 void rcl(
 	modify_t<IntT> destination,
-	uint8_t count,
+	const uint8_t count,
 	ContextT &context
 ) {
 	/*
@@ -76,7 +78,7 @@ void rcl(
 template <typename IntT, typename ContextT>
 void rcr(
 	modify_t<IntT> destination,
-	uint8_t count,
+	const uint8_t count,
 	ContextT &context
 ) {
 	/*
@@ -123,7 +125,7 @@ void rcr(
 template <typename IntT, typename ContextT>
 void rol(
 	modify_t<IntT> destination,
-	uint8_t count,
+	const uint8_t count,
 	ContextT &context
 ) {
 	/*
@@ -159,12 +161,7 @@ void rol(
 		// TODO: is this 8086-specific? i.e. do the other x86s also exit without affecting flags when temp_count = 0?
 		return;
 	}
-	if(temp_count) {
-		destination = IntT(
-			(destination << temp_count) |
-			(destination >> (Numeric::bit_size<IntT>() - temp_count))
-		);
-	}
+	destination = std::rotl<IntT>(destination, temp_count);
 
 	context.flags.template set_from<Flag::Carry>(destination & 1);
 	context.flags.template set_from<Flag::Overflow>(
@@ -175,7 +172,7 @@ void rol(
 template <typename IntT, typename ContextT>
 void ror(
 	modify_t<IntT> destination,
-	uint8_t count,
+	const uint8_t count,
 	ContextT &context
 ) {
 	/*
@@ -211,12 +208,7 @@ void ror(
 		// TODO: is this 8086-specific? i.e. do the other x86s also exit without affecting flags when temp_count = 0?
 		return;
 	}
-	if(temp_count) {
-		destination = IntT(
-			(destination >> temp_count) |
-			(destination << (Numeric::bit_size<IntT>() - temp_count))
-		);
-	}
+	destination = std::rotr<IntT>(destination, temp_count);
 
 	context.flags.template set_from<Flag::Carry>(destination & Numeric::top_bit<IntT>());
 	context.flags.template set_from<Flag::Overflow>(
@@ -283,7 +275,7 @@ void ror(
 template <typename IntT, typename ContextT>
 void sal(
 	modify_t<IntT> destination,
-	uint8_t count,
+	const uint8_t count,
 	ContextT &context
 ) {
 	switch(count) {
@@ -314,7 +306,7 @@ void sal(
 template <typename IntT, typename ContextT>
 void sar(
 	modify_t<IntT> destination,
-	uint8_t count,
+	const uint8_t count,
 	ContextT &context
 ) {
 	if(!count) {
@@ -337,7 +329,7 @@ void sar(
 template <typename IntT, typename ContextT>
 void shr(
 	modify_t<IntT> destination,
-	uint8_t count,
+	const uint8_t count,
 	ContextT &context
 ) {
 	if(!count) {

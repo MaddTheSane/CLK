@@ -41,74 +41,16 @@ FileHolder::FileHolder(const std::string &file_name, FileMode ideal_mode)
 	if(!file_) throw Error::CantOpen;
 }
 
-uint32_t FileHolder::get32le() {
-	uint32_t result = uint32_t(std::fgetc(file_));
-	result |= uint32_t(std::fgetc(file_)) << 8;
-	result |= uint32_t(std::fgetc(file_)) << 16;
-	result |= uint32_t(std::fgetc(file_)) << 24;
-
-	return result;
-}
-
-uint32_t FileHolder::get32be() {
-	uint32_t result = uint32_t(std::fgetc(file_)) << 24;
-	result |= uint32_t(std::fgetc(file_)) << 16;
-	result |= uint32_t(std::fgetc(file_)) << 8;
-	result |= uint32_t(std::fgetc(file_));
-
-	return result;
-}
-
-uint32_t FileHolder::get24le() {
-	uint32_t result = uint32_t(std::fgetc(file_));
-	result |= uint32_t(std::fgetc(file_)) << 8;
-	result |= uint32_t(std::fgetc(file_)) << 16;
-
-	return result;
-}
-
-uint32_t FileHolder::get24be() {
-	uint32_t result = uint32_t(std::fgetc(file_)) << 16;
-	result |= uint32_t(std::fgetc(file_)) << 8;
-	result |= uint32_t(std::fgetc(file_));
-
-	return result;
-}
-
-uint16_t FileHolder::get16le() {
-	uint16_t result = uint16_t(std::fgetc(file_));
-	result |= uint16_t(uint16_t(std::fgetc(file_)) << 8);
-
-	return result;
-}
-
-uint16_t FileHolder::get16be() {
-	uint16_t result = uint16_t(uint16_t(std::fgetc(file_)) << 8);
-	result |= uint16_t(std::fgetc(file_));
-
-	return result;
-}
-
-uint8_t FileHolder::get8() {
+uint8_t FileHolder::get() {
 	return uint8_t(std::fgetc(file_));
 }
 
-void FileHolder::put16be(uint16_t value) {
-	std::fputc(value >> 8, file_);
-	std::fputc(value, file_);
-}
-
-void FileHolder::put16le(uint16_t value) {
-	std::fputc(value, file_);
-	std::fputc(value >> 8, file_);
-}
-
-void FileHolder::put8(uint8_t value) {
+void FileHolder::put(uint8_t value) {
 	std::fputc(value, file_);
 }
 
 void FileHolder::putn(std::size_t repeats, uint8_t value) {
-	while(repeats--) put8(value);
+	while(repeats--) put(value);
 }
 
 std::vector<uint8_t> FileHolder::read(std::size_t size) {
@@ -133,7 +75,7 @@ void FileHolder::seek(long offset, int whence) {
 	std::fseek(file_, offset, whence);
 }
 
-long FileHolder::tell() {
+long FileHolder::tell() const {
 	return std::ftell(file_);
 }
 
@@ -141,12 +83,8 @@ void FileHolder::flush() {
 	std::fflush(file_);
 }
 
-bool FileHolder::eof() {
+bool FileHolder::eof() const {
 	return std::feof(file_);
-}
-
-FileHolder::BitStream FileHolder::get_bitstream(bool lsb_first) {
-	return BitStream(file_, lsb_first);
 }
 
 bool FileHolder::check_signature(const char *signature, std::size_t length) {
@@ -159,14 +97,19 @@ bool FileHolder::check_signature(const char *signature, std::size_t length) {
 	return true;
 }
 
-std::string FileHolder::extension() {
-	std::size_t pointer = name_.size() - 1;
-	while(pointer > 0 && name_[pointer] != '.') pointer--;
-	if(name_[pointer] == '.') pointer++;
+std::string FileHolder::extension() const {
+	const auto final_dot = name_.rfind('.');
+	if(final_dot == std::string::npos) {
+		return "";
+	}
 
-	std::string extension = name_.substr(pointer);
+	std::string extension = name_.substr(final_dot + 1);
 	std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 	return extension;
+}
+
+const std::string &FileHolder::name() const {
+	return name_;
 }
 
 void FileHolder::ensure_is_at_least_length(long length) {
@@ -178,14 +121,14 @@ void FileHolder::ensure_is_at_least_length(long length) {
 	}
 }
 
-bool FileHolder::get_is_known_read_only() {
+bool FileHolder::is_known_read_only() const {
 	return is_read_only_;
 }
 
-struct stat &FileHolder::stats() {
+const struct stat &FileHolder::stats() const {
 	return file_stats_;
 }
 
-std::mutex &FileHolder::get_file_access_mutex() {
+std::mutex &FileHolder::file_access_mutex() {
 	return file_access_mutex_;
 }

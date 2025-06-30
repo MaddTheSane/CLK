@@ -13,11 +13,11 @@
 #include <cstdio>
 #include <cstdint>
 
-#include "../6502Esque/6502Esque.hpp"
-#include "../6502Esque/Implementation/LazyFlags.hpp"
-#include "../../Numeric/Carry.hpp"
-#include "../../Numeric/RegisterSizes.hpp"
-#include "../../ClockReceiver/ClockReceiver.hpp"
+#include "Processors/6502Esque/6502Esque.hpp"
+#include "Processors/6502Esque/Implementation/LazyFlags.hpp"
+#include "Numeric/Carry.hpp"
+#include "Numeric/RegisterSizes.hpp"
+#include "ClockReceiver/ClockReceiver.hpp"
 
 namespace CPU::MOS6502 {
 
@@ -38,10 +38,10 @@ enum Personality {
 	PWDC65C02,			// like the Rockwell, but with STP and WAI
 };
 
-constexpr bool has_decimal_mode(Personality p)	{	return p >= Personality::P6502;				}
-constexpr bool is_65c02(Personality p)			{	return p >= Personality::PSynertek65C02;	}
-constexpr bool has_bbrbbsrmbsmb(Personality p)	{	return p >= Personality::PRockwell65C02;	}
-constexpr bool has_stpwai(Personality p)		{	return p >= Personality::PWDC65C02;			}
+constexpr bool has_decimal_mode(const Personality p)	{	return p >= Personality::P6502;				}
+constexpr bool is_65c02(const Personality p)			{	return p >= Personality::PSynertek65C02;	}
+constexpr bool has_bbrbbsrmbsmb(const Personality p)	{	return p >= Personality::PRockwell65C02;	}
+constexpr bool has_stpwai(const Personality p)			{	return p >= Personality::PWDC65C02;			}
 
 /*!
 	An opcode that is guaranteed to cause a 6502 to jam.
@@ -142,28 +142,28 @@ class ProcessorBase: public ProcessorStorage {
 	can produce a minor runtime performance improvement.
 */
 template <Personality personality, typename BusHandler, bool uses_ready_line> class Processor: public ProcessorBase {
-	public:
-		/*!
-			Constructs an instance of the 6502 that will use @c bus_handler for all bus communications.
-		*/
-		Processor(BusHandler &bus_handler) : ProcessorBase(personality), bus_handler_(bus_handler) {}
+public:
+	/*!
+		Constructs an instance of the 6502 that will use @c bus_handler for all bus communications.
+	*/
+	Processor(BusHandler &bus_handler) : ProcessorBase(personality), bus_handler_(bus_handler) {}
 
-		/*!
-			Runs the 6502 for a supplied number of cycles.
+	/*!
+		Runs the 6502 for a supplied number of cycles.
 
-			@param cycles The number of cycles to run the 6502 for.
-		*/
-		void run_for(const Cycles cycles);
+		@param cycles The number of cycles to run the 6502 for.
+	*/
+	void run_for(const Cycles cycles);
 
-		/*!
-			Sets the current level of the RDY line.
+	/*!
+		Sets the current level of the RDY line.
 
-			@param active @c true if the line is logically active; @c false otherwise.
-		*/
-		void set_ready_line(bool active);
+		@param active @c true if the line is logically active; @c false otherwise.
+	*/
+	void set_ready_line(bool active);
 
-	private:
-		BusHandler &bus_handler_;
+private:
+	BusHandler &bus_handler_;
 };
 
 #include "Implementation/6502Implementation.hpp"

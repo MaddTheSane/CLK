@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "../DiskImage.hpp"
-#include "../../../FileHolder.hpp"
+#include "Storage/Disk/DiskImage/DiskImage.hpp"
+#include "Storage/FileHolder.hpp"
 
 #include <string>
 
@@ -20,31 +20,31 @@ namespace Storage::Disk {
 	a record of IDAM locations.
 */
 class DMK: public DiskImage {
-	public:
-		/*!
-			Construct a @c DMK containing content from the file with name @c file_name.
+public:
+	/*!
+		Construct a @c DMK containing content from the file with name @c file_name.
 
-			@throws Error::InvalidFormat if this file doesn't appear to be a DMK.
-		*/
-		DMK(const std::string &file_name);
+		@throws Error::InvalidFormat if this file doesn't appear to be a DMK.
+	*/
+	DMK(const std::string &file_name);
 
-		// implemented to satisfy @c Disk
-		HeadPosition get_maximum_head_position() final;
-		int get_head_count() final;
-		bool get_is_read_only() final;
+	HeadPosition maximum_head_position() const;
+	int head_count() const;
+	bool is_read_only() const;
+	bool represents(const std::string &) const;
 
-		std::shared_ptr<::Storage::Disk::Track> get_track_at_position(::Storage::Disk::Track::Address address) final;
+	std::unique_ptr<Track> track_at_position(Track::Address) const;
 
-	private:
-		FileHolder file_;
-		long get_file_offset_for_position(Track::Address address);
+private:
+	mutable FileHolder file_;
+	long get_file_offset_for_position(Track::Address address) const;
 
-		bool is_read_only_;
-		int head_position_count_;
-		int head_count_;
+	bool is_read_only_;
+	int head_position_count_;
+	int head_count_;
 
-		long track_length_;
-		bool is_purely_single_density_;
+	long track_length_;
+	bool is_purely_single_density_;
 };
 
 }

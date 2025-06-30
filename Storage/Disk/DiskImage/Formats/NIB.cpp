@@ -8,12 +8,10 @@
 
 #include "NIB.hpp"
 
-#include "../../Track/PCMTrack.hpp"
-#include "../../Track/TrackSerialiser.hpp"
-#include "../../Encodings/AppleGCR/Encoder.hpp"
-
-#include "../../Encodings/AppleGCR/Encoder.hpp"
-#include "../../Encodings/AppleGCR/SegmentParser.hpp"
+#include "Storage/Disk/Track/PCMTrack.hpp"
+#include "Storage/Disk/Track/TrackSerialiser.hpp"
+#include "Storage/Disk/Encodings/AppleGCR/Encoder.hpp"
+#include "Storage/Disk/Encodings/AppleGCR/SegmentParser.hpp"
 
 #include <vector>
 
@@ -36,25 +34,36 @@ NIB::NIB(const std::string &file_name) :
 	// A real NIB should have every single top bit set. Yes, 1/8th of the
 	// file size is a complete waste. But it provides a hook for validation.
 	while(true) {
-		uint8_t next = file_.get8();
+		uint8_t next = file_.get();
 		if(file_.eof()) break;
 		if(!(next & 0x80)) throw Error::InvalidFormat;
 	}
 }
 
-HeadPosition NIB::get_maximum_head_position() {
+HeadPosition NIB::maximum_head_position() const {
 	return HeadPosition(number_of_tracks);
 }
 
-bool NIB::get_is_read_only() {
-	return file_.get_is_known_read_only();
+bool NIB::is_read_only() const {
+	return file_.is_known_read_only();
 }
 
-long NIB::file_offset(Track::Address address) {
+bool NIB::represents(const std::string &name) const {
+	return name == file_.name();
+}
+
+long NIB::file_offset(const Track::Address address) const {
 	return long(address.position.as_int()) * track_length;
 }
 
-std::shared_ptr<::Storage::Disk::Track> NIB::get_track_at_position(::Storage::Disk::Track::Address address) {
+Track::Address NIB::canonical_address(const Track::Address address) const {
+	return Track::Address(
+		address.head,
+		HeadPosition(address.position.as_int())
+	);
+}
+
+std::unique_ptr<Track> NIB::track_at_position(const Track::Address address) const {
 	static constexpr size_t MinimumSyncByteCount = 4;
 
 	// NIBs contain data for a fixed quantity of integer-position tracks underneath a single head only.
@@ -70,10 +79,7 @@ std::shared_ptr<::Storage::Disk::Track> NIB::get_track_at_position(::Storage::Di
 	const long offset = file_offset(address);
 	std::vector<uint8_t> track_data;
 	{
-		std::lock_guard lock_guard(file_.get_file_access_mutex());
-		if(cached_offset_ == offset && cached_track_) {
-			return cached_track_;
-		}
+		std::lock_guard lock_guard(file_.file_access_mutex());
 		file_.seek(offset, SEEK_SET);
 		track_data = file_.read(track_length);
 	}
@@ -132,13 +138,11 @@ std::shared_ptr<::Storage::Disk::Track> NIB::get_track_at_position(::Storage::Di
 		}
 	}
 
-	std::lock_guard lock_guard(file_.get_file_access_mutex());
-	cached_offset_ = offset;
-	cached_track_ = std::make_shared<PCMTrack>(segment);
-	return cached_track_;
+	std::lock_guard lock_guard(file_.file_access_mutex());
+	return std::make_unique<PCMTrack>(segment);
 }
 
-void NIB::set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tracks) {
+void NIB::set_tracks(const std::map<Track::Address, std::unique_ptr<Track>> &tracks) {
 	std::map<Track::Address, std::vector<uint8_t>> tracks_by_address;
 
 	// Convert to a map from address to a vector of data that contains the NIB representation
@@ -181,10 +185,10 @@ void NIB::set_tracks(const std::map<Track::Address, std::shared_ptr<Track>> &tra
 	}
 
 	// Lock the file and spool out.
-	std::lock_guard lock_guard(file_.get_file_access_mutex());
+	std::lock_guard lock_guard(file_.file_access_mutex());
 	for(const auto &track: tracks_by_address) {
 		file_.seek(file_offset(track.first), SEEK_SET);
 		file_.write(track.second);
 	}
-	cached_track_ = nullptr;	// Conservative, but safe.
 }
+

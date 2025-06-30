@@ -8,18 +8,20 @@
 
 #include "DiskIIDrive.hpp"
 
+#include <bit>
+
 using namespace Apple::Disk;
 
-DiskIIDrive::DiskIIDrive(int input_clock_rate) :
+DiskIIDrive::DiskIIDrive(const int input_clock_rate) :
 	IWMDrive(input_clock_rate, 1) {
 	Drive::set_rotation_speed(300.0f);
 }
 
-void DiskIIDrive::set_enabled(bool enabled) {
+void DiskIIDrive::set_enabled(const bool enabled) {
 	set_motor_on(enabled);
 }
 
-void DiskIIDrive::set_control_lines(int lines) {
+void DiskIIDrive::set_control_lines(const int lines) {
 	// If the stepper magnet selections have changed, and any is on, see how
 	// that moves the head.
 	if(lines ^ stepper_mask_ && lines) {
@@ -29,7 +31,7 @@ void DiskIIDrive::set_control_lines(int lines) {
 		if(lines&2) direction += (((stepper_position_ - 2) + 4)&7) - 4;
 		if(lines&4) direction += (((stepper_position_ - 4) + 4)&7) - 4;
 		if(lines&8) direction += (((stepper_position_ - 6) + 4)&7) - 4;
-		const int bits_set = (lines&1) + ((lines >> 1)&1) + ((lines >> 2)&1) + ((lines >> 3)&1);
+		const int bits_set = std::popcount(uint8_t(lines));
 		direction /= bits_set;
 
 		// Compare to the stepper position to decide whether that pulls in the
@@ -41,5 +43,5 @@ void DiskIIDrive::set_control_lines(int lines) {
 }
 
 bool DiskIIDrive::read() {
-	return !!(stepper_mask_ & 2) || get_is_read_only();
+	return !!(stepper_mask_ & 2) || is_read_only();
 }

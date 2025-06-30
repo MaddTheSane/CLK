@@ -21,7 +21,6 @@ set(CLK_SOURCES
 	Analyser/Static/AtariST/StaticAnalyser.cpp
 	Analyser/Static/Coleco/StaticAnalyser.cpp
 	Analyser/Static/Commodore/Disk.cpp
-	Analyser/Static/Commodore/File.cpp
 	Analyser/Static/Commodore/StaticAnalyser.cpp
 	Analyser/Static/Commodore/Tape.cpp
 	Analyser/Static/Disassembler/6502.cpp
@@ -55,6 +54,7 @@ set(CLK_SOURCES
 	Components/DiskII/DiskIIDrive.cpp
 	Components/DiskII/IWM.cpp
 	Components/DiskII/MacintoshDoubleDensityDrive.cpp
+	Components/I2C/I2C.cpp
 	Components/KonamiSCC/KonamiSCC.cpp
 	Components/OPx/OPLL.cpp
 	Components/RP5C01/RP5C01.cpp
@@ -71,6 +71,7 @@ set(CLK_SOURCES
 	InstructionSets/x86/Decoder.cpp
 	InstructionSets/x86/Instruction.cpp
 
+	Machines/Acorn/Archimedes/Archimedes.cpp
 	Machines/Acorn/Electron/Electron.cpp
 	Machines/Acorn/Electron/Keyboard.cpp
 	Machines/Acorn/Electron/Plus3.cpp
@@ -117,6 +118,8 @@ set(CLK_SOURCES
 	Machines/Atari/ST/Video.cpp
 	Machines/ColecoVision/ColecoVision.cpp
 	Machines/Commodore/1540/Implementation/C1540.cpp
+	Machines/Commodore/Plus4/Keyboard.cpp
+	Machines/Commodore/Plus4/Plus4.cpp
 	Machines/Commodore/SerialBus.cpp
 	Machines/Commodore/Vic-20/Keyboard.cpp
 	Machines/Commodore/Vic-20/Vic20.cpp
@@ -192,6 +195,7 @@ set(CLK_SOURCES
 	Storage/Disk/DiskImage/Formats/HFE.cpp
 	Storage/Disk/DiskImage/Formats/IMD.cpp
 	Storage/Disk/DiskImage/Formats/IPF.cpp
+	Storage/Disk/DiskImage/Formats/JFD.cpp
 	Storage/Disk/DiskImage/Formats/MFMSectorDump.cpp
 	Storage/Disk/DiskImage/Formats/MSA.cpp
 	Storage/Disk/DiskImage/Formats/MacintoshIMG.cpp

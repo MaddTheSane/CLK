@@ -8,9 +8,9 @@
 
 #include "DMK.hpp"
 
-#include "../../Encodings/MFM/Constants.hpp"
-#include "../../Encodings/MFM/Encoder.hpp"
-#include "../../Track/PCMTrack.hpp"
+#include "Storage/Disk/Encodings/MFM/Constants.hpp"
+#include "Storage/Disk/Encodings/MFM/Encoder.hpp"
+#include "Storage/Disk/Track/PCMTrack.hpp"
 
 using namespace Storage::Disk;
 
@@ -36,20 +36,20 @@ DMK::DMK(const std::string &file_name) :
 	file_(file_name) {
 	// Determine whether this DMK represents a read-only disk (whether intentionally,
 	// or by virtue of filesystem placement).
-	uint8_t read_only_byte = file_.get8();
+	uint8_t read_only_byte = file_.get();
 	if(read_only_byte != 0x00 && read_only_byte != 0xff) throw Error::InvalidFormat;
-	is_read_only_ = (read_only_byte == 0xff) || file_.get_is_known_read_only();
+	is_read_only_ = (read_only_byte == 0xff) || file_.is_known_read_only();
 
 	// Read track count and size.
-	head_position_count_ = int(file_.get8());
-	track_length_ = long(file_.get16le());
+	head_position_count_ = int(file_.get());
+	track_length_ = long(file_.get_le<uint16_t>());
 
 	// Track length must be at least 0x80, as that's the size of the IDAM
 	// table before track contents.
 	if(track_length_ < 0x80) throw Error::InvalidFormat;
 
 	// Read the file flags and apply them.
-	uint8_t flags = file_.get8();
+	uint8_t flags = file_.get();
 	head_count_ = 2 - ((flags & 0x10) >> 4);
 	head_position_count_ /= head_count_;
 	is_purely_single_density_ = !!(flags & 0x40);
@@ -57,36 +57,36 @@ DMK::DMK(const std::string &file_name) :
 	// Skip to the end of the header and check that this is
 	// "in the emulator's native format".
 	file_.seek(0xc, SEEK_SET);
-	uint32_t format = file_.get32le();
+	const auto format = file_.get_le<uint32_t>();
 	if(format) throw Error::InvalidFormat;
 }
 
-HeadPosition DMK::get_maximum_head_position() {
+HeadPosition DMK::maximum_head_position() const {
 	return HeadPosition(head_position_count_);
 }
 
-int DMK::get_head_count() {
+int DMK::head_count() const {
 	return head_count_;
 }
 
-bool DMK::get_is_read_only() {
+bool DMK::is_read_only() const {
 	return true;
 	// Given that track serialisation is not yet implemented, treat all DMKs as read-only.
 //	return is_read_only_;
 }
 
-long DMK::get_file_offset_for_position(Track::Address address) {
+long DMK::get_file_offset_for_position(const Track::Address address) const {
 	return (address.head*head_count_ + address.position.as_int()) * track_length_ + 16;
 }
 
-std::shared_ptr<::Storage::Disk::Track> DMK::get_track_at_position(::Storage::Disk::Track::Address address) {
+std::unique_ptr<::Storage::Disk::Track> DMK::track_at_position(const ::Storage::Disk::Track::Address address) const {
 	file_.seek(get_file_offset_for_position(address), SEEK_SET);
 
 	// Read the IDAM table.
 	uint16_t idam_locations[64];
 	std::size_t idam_count = 0;
 	for(std::size_t c = 0; c < sizeof(idam_locations) / sizeof(*idam_locations); ++c) {
-		idam_locations[idam_count] = file_.get16le();
+		idam_locations[idam_count] = file_.get_le<uint16_t>();
 		if((idam_locations[idam_count] & 0x7fff) >= 128) {
 			idam_count++;
 		}
@@ -179,5 +179,9 @@ std::shared_ptr<::Storage::Disk::Track> DMK::get_track_at_position(::Storage::Di
 		idam_pointer++;
 	}
 
-	return std::make_shared<PCMTrack>(segments);
+	return std::make_unique<PCMTrack>(segments);
+}
+
+bool DMK::represents(const std::string &name) const {
+	return name == file_.name();
 }

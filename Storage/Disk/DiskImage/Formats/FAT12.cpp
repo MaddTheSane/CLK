@@ -8,7 +8,7 @@
 
 #include "FAT12.hpp"
 
-#include "Utility/ImplicitSectors.hpp"
+#include "Storage/Disk/DiskImage/Formats/Utility/ImplicitSectors.hpp"
 
 using namespace Storage::Disk;
 
@@ -22,12 +22,12 @@ FAT12::FAT12(const std::string &file_name) :
 
 	// Inspect the FAT.
 	file_.seek(11, SEEK_SET);
-	sector_size_ = file_.get16le();
+	sector_size_ = file_.get_le<uint16_t>();
 	file_.seek(19, SEEK_SET);
-	const uint16_t total_sectors = file_.get16le();
+	const auto total_sectors = file_.get_le<uint16_t>();
 	file_.seek(24, SEEK_SET);
-	sector_count_ = file_.get16le();
-	head_count_ = file_.get16le();
+	sector_count_ = file_.get_le<uint16_t>();
+	head_count_ = file_.get_le<uint16_t>();
 
 	// Throw if there would seemingly be an incomplete track.
 	if(file_size != total_sectors*sector_size_) throw Error::InvalidFormat;
@@ -49,14 +49,14 @@ FAT12::FAT12(const std::string &file_name) :
 	);
 }
 
-HeadPosition FAT12::get_maximum_head_position() {
+HeadPosition FAT12::maximum_head_position() const {
 	return HeadPosition(track_count_);
 }
 
-int FAT12::get_head_count() {
+int FAT12::head_count() const {
 	return head_count_;
 }
 
-long FAT12::get_file_offset_for_position(Track::Address address) {
+long FAT12::get_file_offset_for_position(Track::Address address) const {
 	return (address.position.as_int() * head_count_ + address.head) * sector_size_ * sector_count_;
 }

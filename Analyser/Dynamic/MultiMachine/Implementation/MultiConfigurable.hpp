@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "../../../../Machines/DynamicMachine.hpp"
-#include "../../../../Configurable/Configurable.hpp"
+#include "Machines/DynamicMachine.hpp"
+#include "Configurable/Configurable.hpp"
 
 #include <memory>
 #include <vector>
@@ -23,15 +23,15 @@ namespace Analyser::Dynamic {
 	order of delivered messages.
 */
 class MultiConfigurable: public Configurable::Device {
-	public:
-		MultiConfigurable(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &machines);
+public:
+	MultiConfigurable(const std::vector<std::unique_ptr<::Machine::DynamicMachine>> &);
 
-		// Below is the standard Configurable::Device interface; see there for documentation.
-		void set_options(const std::unique_ptr<Reflection::Struct> &options) final;
-		std::unique_ptr<Reflection::Struct> get_options() final;
+	// Below is the standard Configurable::Device interface; see there for documentation.
+	void set_options(const std::unique_ptr<Reflection::Struct> &) final;
+	std::unique_ptr<Reflection::Struct> get_options() const final;
 
-	private:
-		std::vector<Configurable::Device *> devices_;
+private:
+	std::vector<Configurable::Device *> devices_;
 };
 
 }

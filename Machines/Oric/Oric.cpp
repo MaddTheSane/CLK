@@ -14,28 +14,29 @@
 #include "Microdisc.hpp"
 #include "Video.hpp"
 
-#include "../../Activity/Source.hpp"
-#include "../MachineTypes.hpp"
+#include "Activity/Source.hpp"
+#include "Machines/MachineTypes.hpp"
 
-#include "../Utility/MemoryFuzzer.hpp"
-#include "../Utility/StringSerialiser.hpp"
+#include "Machines/Utility/MemoryFuzzer.hpp"
+#include "Machines/Utility/StringSerialiser.hpp"
 
-#include "../../Processors/6502Esque/6502Selector.hpp"
-#include "../../Components/6522/6522.hpp"
-#include "../../Components/AY38910/AY38910.hpp"
-#include "../../Components/DiskII/DiskII.hpp"
+#include "Processors/6502Esque/6502Selector.hpp"
+#include "Components/6522/6522.hpp"
+#include "Components/AY38910/AY38910.hpp"
+#include "Components/DiskII/DiskII.hpp"
 
-#include "../../Storage/Tape/Tape.hpp"
-#include "../../Storage/Tape/Parsers/Oric.hpp"
+#include "Storage/Tape/Tape.hpp"
+#include "Storage/Tape/Parsers/Oric.hpp"
 
-#include "../../ClockReceiver/ForceInline.hpp"
-#include "../../Configurable/StandardOptions.hpp"
-#include "../../Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
+#include "ClockReceiver/ForceInline.hpp"
+#include "Configurable/StandardOptions.hpp"
+#include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
 
-#include "../../Analyser/Static/Oric/Target.hpp"
+#include "Analyser/Static/Oric/Target.hpp"
 
-#include "../../ClockReceiver/JustInTime.hpp"
+#include "ClockReceiver/JustInTime.hpp"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -57,16 +58,18 @@ class Joystick: public Inputs::ConcreteJoystick {
 			}) {}
 
 		void did_set_input(const Input &digital_input, bool is_active) final {
-#define APPLY(b)	if(is_active) state_ &= ~b; else state_ |= b;
+			const auto apply = [&](uint8_t bit) {
+				if(is_active) state_ &= ~bit; else state_ |= bit;
+			};
+
 			switch(digital_input.type) {
 				default: return;
-				case Input::Right:	APPLY(0x02);	break;
-				case Input::Left:	APPLY(0x01);	break;
-				case Input::Down:	APPLY(0x08);	break;
-				case Input::Up:		APPLY(0x10);	break;
-				case Input::Fire:	APPLY(0x20);	break;
+				case Input::Right:	apply(0x02);	break;
+				case Input::Left:	apply(0x01);	break;
+				case Input::Down:	apply(0x08);	break;
+				case Input::Up:		apply(0x10);	break;
+				case Input::Fire:	apply(0x20);	break;
 			}
-#undef APPLY
 		}
 
 		uint8_t get_state() {
@@ -165,7 +168,7 @@ class TapePlayer: public Storage::Tape::BinaryTapePlayer {
 			@returns The next byte from the tape.
 		*/
 		uint8_t get_next_byte(bool use_fast_encoding) {
-			return uint8_t(parser_.get_next_byte(get_tape(), use_fast_encoding));
+			return uint8_t(parser_.get_next_byte(*serialiser(), use_fast_encoding));
 		}
 
 	private:
@@ -190,7 +193,7 @@ class VIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 			Reponds to the 6522's control line output change signal; on an Oric A2 is connected to
 			the AY's BDIR, and B2 is connected to the AY's A2.
 		*/
-		void set_control_line_output(MOS::MOS6522::Port port, MOS::MOS6522::Line line, bool value) {
+		template <MOS::MOS6522::Port port, MOS::MOS6522::Line line> void set_control_line_output(const bool value) {
 			if(line) {
 				if(port) ay_bdir_ = value; else ay_bc1_ = value;
 				update_ay();
@@ -202,7 +205,7 @@ class VIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 			Reponds to changes in the 6522's port output. On an Oric port B sets the tape motor control
 			and the keyboard's active row. Port A is connected to the AY's data bus.
 		*/
-		void set_port_output(MOS::MOS6522::Port port, uint8_t value, uint8_t) {
+		template <MOS::MOS6522::Port port> void set_port_output(uint8_t value, uint8_t) {
 			if(port) {
 				keyboard_.set_active_row(value);
 				tape_player_.set_motor_control(value & 0x40);
@@ -216,7 +219,7 @@ class VIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 		/*!
 			Provides input data for the 6522. Port B reads the keyboard, and port A reads from the AY.
 		*/
-		uint8_t get_port_input(MOS::MOS6522::Port port) {
+		template <MOS::MOS6522::Port port> uint8_t get_port_input() const {
 			if(port) {
 				uint8_t column = ay8910_.get_port_output(false) ^ 0xff;
 				return keyboard_.query_column(column) ? 0x08 : 0x00;
@@ -282,7 +285,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 	public:
 		ConcreteMachine(const Analyser::Static::Oric::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
 				m6502_(*this),
-				video_(ram_),
+				video_(ram_.data()),
 				ay8910_(GI::AY38910::Personality::AY38910, audio_queue_),
 				speaker_(ay8910_),
 				via_port_handler_(audio_queue_, ay8910_, speaker_, tape_player_, keyboard_),
@@ -299,9 +302,9 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 			// sort of assumes it, but also the BD-500 never explicitly sets PAL mode
 			// so I can't have any switch-to-NTSC bytes in the display area. Hence:
 			// disallow all atributes.
-			Memory::Fuzz(ram_, sizeof(ram_));
-			for(size_t c = 0; c < sizeof(ram_); ++c) {
-				ram_[c] |= 0x40;
+			Memory::Fuzz(ram_);
+			for(auto &c: ram_) {
+				c |= 0x40;
 			}
 
 			::ROM::Request request = ::ROM::Request(::ROM::Name::OricColourROM, true);
@@ -437,7 +440,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 			bool inserted = false;
 
 			if(!media.tapes.empty()) {
-				tape_player_.set_tape(media.tapes.front());
+				tape_player_.set_tape(media.tapes.front(), TargetPlatform::Oric);
 				inserted = true;
 			}
 
@@ -457,7 +460,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 		// to satisfy CPU::MOS6502::BusHandler
 		forceinline Cycles perform_bus_operation(CPU::MOS6502::BusOperation operation, uint16_t address, uint8_t *value) {
 			if(address > ram_top_) {
-				if(!isWriteOperation(operation)) *value = paged_rom_[address - ram_top_ - 1];
+				if(!is_write(operation)) *value = paged_rom_[address - ram_top_ - 1];
 
 				// 024D = 0 => fast; otherwise slow
 				// E6C9 = read byte: return byte in A
@@ -466,7 +469,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 					use_fast_tape_hack_ &&
 					operation == CPU::MOS6502::BusOperation::ReadOpcode &&
 					tape_player_.has_tape() &&
-					!tape_player_.get_tape()->is_at_end()) {
+					!tape_player_.serialiser()->is_at_end()) {
 
 					uint8_t next_byte = tape_player_.get_next_byte(!ram_[tape_speed_address_]);
 					m6502_.set_value_of(CPU::MOS6502Esque::A, next_byte);
@@ -476,39 +479,39 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 			} else {
 				if((address & 0xff00) == 0x0300) {
 					if(address < 0x0310 || (disk_interface == DiskInterface::None)) {
-						if(!isWriteOperation(operation)) *value = via_.read(address);
+						if(!is_write(operation)) *value = via_.read(address);
 						else via_.write(address, *value);
 					} else {
 						switch(disk_interface) {
 							default: break;
 							case DiskInterface::BD500:
-								if(!isWriteOperation(operation)) *value = bd500_.read(address);
+								if(!is_write(operation)) *value = bd500_.read(address);
 								else bd500_.write(address, *value);
 							break;
 							case DiskInterface::Jasmin:
 								if(address >= 0x3f4) {
-									if(!isWriteOperation(operation)) *value = jasmin_.read(address);
+									if(!is_write(operation)) *value = jasmin_.read(address);
 									else jasmin_.write(address, *value);
 								}
 							break;
 							case DiskInterface::Microdisc:
 								switch(address) {
 									case 0x0310: case 0x0311: case 0x0312: case 0x0313:
-										if(!isWriteOperation(operation)) *value = microdisc_.read(address);
+										if(!is_write(operation)) *value = microdisc_.read(address);
 										else microdisc_.write(address, *value);
 									break;
 									case 0x314: case 0x315: case 0x316: case 0x317:
-										if(!isWriteOperation(operation)) *value = microdisc_.get_interrupt_request_register();
+										if(!is_write(operation)) *value = microdisc_.get_interrupt_request_register();
 										else microdisc_.set_control_register(*value);
 									break;
 									case 0x318: case 0x319: case 0x31a: case 0x31b:
-										if(!isWriteOperation(operation)) *value = microdisc_.get_data_request_register();
+										if(!is_write(operation)) *value = microdisc_.get_data_request_register();
 									break;
 								}
 							break;
 							case DiskInterface::Pravetz:
 								if(address >= 0x0320) {
-									if(!isWriteOperation(operation)) *value = pravetz_rom_[pravetz_rom_base_pointer_ + (address & 0xff)];
+									if(!is_write(operation)) *value = pravetz_rom_[pravetz_rom_base_pointer_ + (address & 0xff)];
 									else {
 										switch(address) {
 											case 0x380:	case 0x381:	case 0x382:	case 0x383:
@@ -519,13 +522,13 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 									}
 								} else {
 									const int disk_value = diskii_->read_address(address);
-									if(!isWriteOperation(operation) && disk_value != Apple::DiskII::DidNotLoad) *value = uint8_t(disk_value);
+									if(!is_write(operation) && disk_value != Apple::DiskII::DidNotLoad) *value = uint8_t(disk_value);
 								}
 							break;
 						}
 					}
 				} else {
-					if(!isWriteOperation(operation))
+					if(!is_write(operation))
 						*value = ram_[address];
 					else {
 						if(address >= 0x9800 && address <= 0xc000) video_.flush();
@@ -574,7 +577,9 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 				break;
 			}
 
-			video_ += Cycles(1);
+			if(video_ += Cycles(1)) {
+				set_via_port_b_input();
+			}
 			return Cycles(1);
 		}
 
@@ -619,9 +624,17 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 		}
 
 		// to satisfy Storage::Tape::BinaryTapePlayer::Delegate
-		void tape_did_change_input(Storage::Tape::BinaryTapePlayer *tape_player) final {
+		void tape_did_change_input(Storage::Tape::BinaryTapePlayer *) final {
+			set_via_port_b_input();
+		}
+
+		void set_via_port_b_input() {
 			// set CB1
-			via_.set_control_line_input(MOS::MOS6522::Port::B, MOS::MOS6522::Line::One, !tape_player->get_input());
+			via_.set_control_line_input<MOS::MOS6522::Port::B, MOS::MOS6522::Line::One>(
+				tape_player_.motor_control() ?
+					!tape_player_.input() :
+					!video_->vsync()
+			);
 		}
 
 		// for Utility::TypeRecipient::Delegate
@@ -663,7 +676,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 		}
 
 		// MARK: - Configuration options.
-		std::unique_ptr<Reflection::Struct> get_options() final {
+		std::unique_ptr<Reflection::Struct> get_options() const final {
 			auto options = std::make_unique<Options>(Configurable::OptionsType::UserFriendly);
 			options->output = get_video_signal_configurable();
 			options->quickload = use_fast_tape_hack_;
@@ -702,7 +715,7 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 
 		// RAM and ROM
 		std::vector<uint8_t> rom_, disk_rom_;
-		uint8_t ram_[65536];
+		std::array<uint8_t, 65536> ram_{};
 
 		// ROM bookkeeping
 		uint16_t tape_get_byte_address_ = 0, tape_speed_address_ = 0;
@@ -795,24 +808,28 @@ template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS
 
 using namespace Oric;
 
+namespace {
+
+template <CPU::MOS6502Esque::Type processor>
+std::unique_ptr<Machine> machine(const Analyser::Static::Oric::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) {
+	switch(target.disk_interface) {
+		default:						return std::make_unique<ConcreteMachine<DiskInterface::None, processor>>(target, rom_fetcher);
+		case DiskInterface::Microdisc:	return std::make_unique<ConcreteMachine<DiskInterface::Microdisc, processor>>(target, rom_fetcher);
+		case DiskInterface::Pravetz:	return std::make_unique<ConcreteMachine<DiskInterface::Pravetz, processor>>(target, rom_fetcher);
+		case DiskInterface::Jasmin:		return std::make_unique<ConcreteMachine<DiskInterface::Jasmin, processor>>(target, rom_fetcher);
+		case DiskInterface::BD500:		return std::make_unique<ConcreteMachine<DiskInterface::BD500, processor>>(target, rom_fetcher);
+	}
+}
+
+}
+
 std::unique_ptr<Machine> Machine::Oric(const Analyser::Static::Target *target_hint, const ROMMachine::ROMFetcher &rom_fetcher) {
 	auto *const oric_target = dynamic_cast<const Analyser::Static::Oric::Target *>(target_hint);
 
-#define DiskInterfaceSwitch(processor) \
-	switch(oric_target->disk_interface) {	\
-		default:						return std::make_unique<ConcreteMachine<DiskInterface::None, processor>>(*oric_target, rom_fetcher);		\
-		case DiskInterface::Microdisc:	return std::make_unique<ConcreteMachine<DiskInterface::Microdisc, processor>>(*oric_target, rom_fetcher);	\
-		case DiskInterface::Pravetz:	return std::make_unique<ConcreteMachine<DiskInterface::Pravetz, processor>>(*oric_target, rom_fetcher);	\
-		case DiskInterface::Jasmin:		return std::make_unique<ConcreteMachine<DiskInterface::Jasmin, processor>>(*oric_target, rom_fetcher);	\
-		case DiskInterface::BD500:		return std::make_unique<ConcreteMachine<DiskInterface::BD500, processor>>(*oric_target, rom_fetcher);		\
-	}
-
 	switch(oric_target->processor) {
-		case Processor::WDC65816:	DiskInterfaceSwitch(CPU::MOS6502Esque::Type::TWDC65816);
-		case Processor::MOS6502:	DiskInterfaceSwitch(CPU::MOS6502Esque::Type::T6502);
+		case Processor::WDC65816:	return machine<CPU::MOS6502Esque::Type::TWDC65816>(*oric_target, rom_fetcher);
+		case Processor::MOS6502:	return machine<CPU::MOS6502Esque::Type::T6502>(*oric_target, rom_fetcher);
 	}
-
-#undef DiskInterfaceSwitch
 
 	return nullptr;
 }

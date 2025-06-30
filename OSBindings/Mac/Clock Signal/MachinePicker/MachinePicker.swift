@@ -64,6 +64,9 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 	@IBOutlet var oricModelTypeButton: NSPopUpButton!
 	@IBOutlet var oricDiskInterfaceButton: NSPopUpButton!
 
+	// MARK: - Plus 4 properties
+	@IBOutlet var plus4HasC1541Button: NSButton!
+
 	// MARK: - PC compatible properties
 	@IBOutlet var pcVideoAdaptorButton: NSPopUpButton!
 	@IBOutlet var pcSpeedButton: NSPopUpButton!
@@ -156,6 +159,9 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 		oricDiskInterfaceButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.oricDiskInterface"))
 		oricModelTypeButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.oricModel"))
 
+		// Plus 4 settings
+		plus4HasC1541Button.state = standardUserDefaults.bool(forKey: "new.plus4C1541") ? .on : .off
+
 		// PC settings
 		pcVideoAdaptorButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.pcVideoAdaptor"))
 		pcSpeedButton.selectItem(withTag: standardUserDefaults.integer(forKey: "new.pcSpeed"))
@@ -227,6 +233,9 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 		standardUserDefaults.set(oricDiskInterfaceButton.selectedTag(), forKey: "new.oricDiskInterface")
 		standardUserDefaults.set(oricModelTypeButton.selectedTag(), forKey: "new.oricModel")
 
+		// Plus 4 settings
+		standardUserDefaults.set(plus4HasC1541Button.state == .on, forKey: "new.plus4C1541")
+
 		// PC settings
 		standardUserDefaults.set(pcVideoAdaptorButton.selectedTag(), forKey: "new.pcVideoAdaptor")
 		standardUserDefaults.set(pcSpeedButton.selectedTag(), forKey: "new.pcSpeed")
@@ -275,7 +284,11 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 		switch machineSelector.selectedTabViewItem!.identifier as! String {
 
 			case "amiga":
-				return CSStaticAnalyser(amigaModel: .A500, chipMemorySize: Kilobytes(amigaChipRAMButton.selectedTag()), fastMemorySize: Kilobytes(amigaFastRAMButton.selectedTag()))
+				return CSStaticAnalyser(
+					amigaModel: .A500,
+					chipMemorySize: Kilobytes(amigaChipRAMButton.selectedTag()),
+					fastMemorySize: Kilobytes(amigaFastRAMButton.selectedTag())
+				)
 
 			case "appleii":
 				var model: CSMachineAppleIIModel = .appleII
@@ -295,7 +308,11 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 					default:	diskController = .none
 				}
 
-				return CSStaticAnalyser(appleIIModel: model, diskController: diskController, hasMockingboard: appleIIMockingboardButton.state == .on)
+				return CSStaticAnalyser(
+					appleIIModel: model,
+					diskController: diskController,
+					hasMockingboard: appleIIMockingboardButton.state == .on
+				)
 
 			case "appleiigs":
 				var model: CSMachineAppleIIgsModel = .ROM00
@@ -309,9 +326,16 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 				let memorySize = Kilobytes(appleIIgsMemorySizeButton.selectedTag())
 				return CSStaticAnalyser(appleIIgsModel: model, memorySize: memorySize)
 
+			case "archimedes":
+				return CSStaticAnalyser(archimedesModel: .firstGeneration)
+
 			case "atarist":
 				let memorySize = Kilobytes(atariSTMemorySizeButton.selectedTag())
-				return CSStaticAnalyser(atariSTModel: .model512k, memorySize: memorySize)
+				return CSStaticAnalyser(atariSTMemorySize: memorySize)
+
+			case "c16plus4":
+				let hasC1541 = plus4HasC1541Button.state == .on
+				return CSStaticAnalyser(commodoreTEDModel: .C16, hasC1541: hasC1541)
 
 			case "cpc":
 				switch cpcModelTypeButton.selectedTag() {
@@ -368,7 +392,13 @@ class MachinePicker: NSObject, NSTableViewDataSource, NSTableViewDelegate {
 					default:	dos = .dosNone
 				}
 
-				return CSStaticAnalyser(enterpriseModel: model, speed: speed, exosVersion: exos, basicVersion: basic, dos: dos)
+				return CSStaticAnalyser(
+					enterpriseModel: model,
+					speed: speed,
+					exosVersion: exos,
+					basicVersion: basic,
+					dos: dos
+				)
 
 			case "mac":
 				switch macintoshModelTypeButton.selectedTag() {

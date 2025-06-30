@@ -9,6 +9,8 @@
 import AudioToolbox
 import Cocoa
 import QuartzCore
+import System
+
 
 class MachineDocument:
 	NSDocument,
@@ -63,10 +65,30 @@ class MachineDocument:
 		return "MachineDocument"
 	}
 
+	var fileObserver: CSFileContentChangeObserver?
 	override func read(from url: URL, ofType typeName: String) throws {
 		if let analyser = CSStaticAnalyser(fileAt: url) {
 			self.displayName = analyser.displayName
 			self.configureAs(analyser)
+			self.fileObserver = CSFileContentChangeObserver.init(url: url, handler: {
+				if let machine = self.machine {
+					DispatchQueue.main.async {
+						switch(machine.effectForFile(atURLDidChange: url)) {
+							case .reinsertMedia:	self.insertFile(url)
+							case .restartMachine:
+								let target = CSStaticAnalyser(fileAt: url)
+								if let target = target {
+									self.audioQueue = nil
+									machine.substitute(target)
+									self.optionsController?.establishStoredOptions()
+								}
+
+							case .none:				fallthrough
+							@unknown default:		break
+						}
+					}
+				}
+			})
 		} else {
 			throw NSError(domain: "MachineDocument", code: -1, userInfo: nil)
 		}
@@ -111,6 +133,7 @@ class MachineDocument:
 		volumeSlider.floatValue = pow(2.0, userDefaultsVolume())
 
 		volumeView.layer!.cornerRadius = 5.0
+		scanTargetView.responderDelegate = self
 	}
 
 	private var missingROMs: String = ""
@@ -191,7 +214,8 @@ class MachineDocument:
 
 			// Attach an options panel if one is available.
 			if let optionsNibName = self.machineDescription?.optionsNibName {
-				Bundle.main.loadNibNamed(optionsNibName, owner: self, topLevelObjects: nil)
+				let didLoad = Bundle.main.loadNibNamed(optionsNibName, owner: self, topLevelObjects: nil)
+				assert(didLoad)
 				if let optionsController = self.optionsController {
 					optionsController.machine = machine
 					optionsController.establishStoredOptions()
@@ -226,7 +250,6 @@ class MachineDocument:
 			setupActivityDisplay()
 
 			machine.delegate = self
-			scanTargetView.responderDelegate = self
 
 			// If this machine has a mouse, enable mouse capture; also indicate whether usurption
 			// of the command key is desired.
@@ -242,6 +265,7 @@ class MachineDocument:
 
 			// Start forwarding best-effort updates.
 			machine.start()
+			optionsFader?.showTransiently(for: 1.0)
 		}
 	}
 
@@ -779,16 +803,20 @@ class MachineDocument:
 
 	// MARK: - In-window panels (i.e. options, volume).
 
-	private var optionsFader: ViewFader! = nil
+	private var optionsFader: ViewFader? = nil
 
-	internal func scanTargetViewDidShowOSMouseCursor(_ view: CSScanTargetView) {
-		// The OS mouse cursor became visible, so show the volume controls.
-		optionsFader.animateIn()
+	internal func scanTargetView(_ view: CSScanTargetView, shouldTrackMousovers subview: NSView) -> Bool {
+		return subview == self.volumeView || subview == self.optionsView
+	}
+
+	internal func scanTargetViewDidMouseoverSubviews(_ view: CSScanTargetView) {
+		// The OS mouse cursor became visible, so show the options.
+		optionsFader?.animateIn()
 	}
 
 	internal func scanTargetViewWouldHideOSMouseCursor(_ view: CSScanTargetView) {
-		// The OS mouse cursor will be hidden, so hide the volume controls.
-		optionsFader.animateOut(delay: 0.0)
+		// The OS mouse cursor will be hidden, so hide the options if visible.
+		optionsFader?.animateOut(delay: 0.0)
 	}
 
 	// MARK: - Helpers for fading things in and out.

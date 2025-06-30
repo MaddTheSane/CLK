@@ -322,7 +322,7 @@ void MainWindow::launchMachine() {
 		if(speaker) {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 			QAudioDevice device(QMediaDevices::defaultAudioOutput());
-			if(true) {  // TODO: how to check that audio output is available in Qt6?
+			if(true) {	// TODO: how to check that audio output is available in Qt6?
 				QAudioFormat idealFormat = device.preferredFormat();
 #else
 			const QAudioDeviceInfo &defaultDeviceInfo = QAudioDeviceInfo::defaultOutputDevice();
@@ -412,13 +412,13 @@ void MainWindow::launchMachine() {
 #endif
 		inputMenu->addAction(asJoystickAction);
 
-		connect(asKeyboardAction, &QAction::triggered, this, [=] {
+		connect(asKeyboardAction, &QAction::triggered, this, [=, this] {
 			keyboardInputMode = KeyboardInputMode::Keyboard;
 			asKeyboardAction->setChecked(true);
 			asJoystickAction->setChecked(false);
 		});
 
-		connect(asJoystickAction, &QAction::triggered, this, [=] {
+		connect(asJoystickAction, &QAction::triggered, this, [=, this] {
 			keyboardInputMode = KeyboardInputMode::Joystick;
 			asKeyboardAction->setChecked(false);
 			asJoystickAction->setChecked(true);
@@ -439,6 +439,10 @@ void MainWindow::launchMachine() {
 
 		case Analyser::Machine::Atari2600:
 			addAtari2600Menu();
+		break;
+
+		case Analyser::Machine::Archimedes:
+			addEnhancementsMenu(settingsPrefix, true, false);
 		break;
 
 		case Analyser::Machine::AtariST:
@@ -554,7 +558,7 @@ void MainWindow::addDisplayMenu(const std::string &machinePrefix, const std::str
 		if(!action) continue;
 
 		action->setChecked(displaySelection == defaultDisplay);
-		connect(action, &QAction::triggered, this, [=] {
+		connect(action, &QAction::triggered, this, [=, this] {
 			for(auto otherAction: {compositeColourAction, compositeMonochromeAction, sVideoAction, rgbAction}) {
 				if(otherAction && otherAction != action) otherAction->setChecked(false);
 			}
@@ -592,7 +596,7 @@ void MainWindow::addEnhancementsItems(const std::string &machinePrefix, QMenu *m
 		}																							\
 		action->setChecked(Reflection::get<bool>(*options, setting) ? Qt::Checked : Qt::Unchecked);	\
 																									\
-		connect(action, &QAction::triggered, this, [=] {											\
+		connect(action, &QAction::triggered, this, [=, this] {										\
 			std::lock_guard lock_guard(machineMutex);												\
 			auto options = machine->configurable_device()->get_options();							\
 			Reflection::set(*options, setting, action->isChecked());								\
@@ -624,7 +628,7 @@ void MainWindow::addZX8081Menu(const std::string &machinePrefix) {
 	// Add the start/stop items.
 	startTapeAction = new QAction(tr("Start Tape"), this);
 	controlsMenu->addAction(startTapeAction);
-	connect(startTapeAction, &QAction::triggered, this, [=] {
+	connect(startTapeAction, &QAction::triggered, this, [=, this] {
 		std::lock_guard lock_guard(machineMutex);
 		static_cast<Sinclair::ZX8081::Machine *>(machine->raw_pointer())->set_tape_is_playing(true);
 		updateTapeControls();
@@ -632,7 +636,7 @@ void MainWindow::addZX8081Menu(const std::string &machinePrefix) {
 
 	stopTapeAction = new QAction(tr("Stop Tape"), this);
 	controlsMenu->addAction(stopTapeAction);
-	connect(stopTapeAction, &QAction::triggered, this, [=] {
+	connect(stopTapeAction, &QAction::triggered, this, [=, this] {
 		std::lock_guard lock_guard(machineMutex);
 		static_cast<Sinclair::ZX8081::Machine *>(machine->raw_pointer())->set_tape_is_playing(false);
 		updateTapeControls();
@@ -640,7 +644,7 @@ void MainWindow::addZX8081Menu(const std::string &machinePrefix) {
 
 	updateTapeControls();
 
-	connect(automaticTapeControlAction, &QAction::triggered, this, [=] {
+	connect(automaticTapeControlAction, &QAction::triggered, this, [=, this] {
 		updateTapeControls();
 	});
 }
@@ -658,7 +662,7 @@ void MainWindow::addAtari2600Menu() {
 
 	QAction *const blackAndWhiteAction = new QAction(tr("Black and white"));
 	blackAndWhiteAction->setCheckable(true);
-	connect(blackAndWhiteAction, &QAction::triggered, this, [=] {
+	connect(blackAndWhiteAction, &QAction::triggered, this, [=, this] {
 		std::lock_guard lock_guard(machineMutex);
 		// TODO: is this switch perhaps misnamed?
 		static_cast<Atari2600::Machine *>(machine->raw_pointer())->set_switch_is_enabled(Atari2600SwitchColour, blackAndWhiteAction->isChecked());
@@ -667,7 +671,7 @@ void MainWindow::addAtari2600Menu() {
 
 	QAction *const leftDifficultyAction = new QAction(tr("Left Difficulty"));
 	leftDifficultyAction->setCheckable(true);
-	connect(leftDifficultyAction, &QAction::triggered, this, [=] {
+	connect(leftDifficultyAction, &QAction::triggered, this, [=, this] {
 		std::lock_guard lock_guard(machineMutex);
 		static_cast<Atari2600::Machine *>(machine->raw_pointer())->set_switch_is_enabled(Atari2600SwitchLeftPlayerDifficulty, leftDifficultyAction->isChecked());
 	});
@@ -675,7 +679,7 @@ void MainWindow::addAtari2600Menu() {
 
 	QAction *const rightDifficultyAction = new QAction(tr("Right Difficulty"));
 	rightDifficultyAction->setCheckable(true);
-	connect(rightDifficultyAction, &QAction::triggered, this, [=] {
+	connect(rightDifficultyAction, &QAction::triggered, this, [=, this] {
 		std::lock_guard lock_guard(machineMutex);
 		static_cast<Atari2600::Machine *>(machine->raw_pointer())->set_switch_is_enabled(Atari2600SwitchRightPlayerDifficulty, rightDifficultyAction->isChecked());
 	});
@@ -685,13 +689,13 @@ void MainWindow::addAtari2600Menu() {
 
 	QAction *const gameSelectAction = new QAction(tr("Game Select"));
 	controlsMenu->addAction(gameSelectAction);
-	connect(gameSelectAction, &QAction::triggered, this, [=] {
+	connect(gameSelectAction, &QAction::triggered, this, [=, this] {
 		toggleAtari2600Switch(Atari2600SwitchSelect);
 	});
 
 	QAction *const gameResetAction = new QAction(tr("Game Reset"));
 	controlsMenu->addAction(gameResetAction);
-	connect(gameSelectAction, &QAction::triggered, this, [=] {
+	connect(gameSelectAction, &QAction::triggered, this, [=, this] {
 		toggleAtari2600Switch(Atari2600SwitchReset);
 	});
 }
@@ -713,7 +717,7 @@ void MainWindow::addAppleIIMenu() {
 	// Add an additional tick box, for square pixels.
 	QAction *const squarePixelsAction = new QAction(tr("Square Pixels"));
 	squarePixelsAction->setCheckable(true);
-	connect(squarePixelsAction, &QAction::triggered, this, [=] {
+	connect(squarePixelsAction, &QAction::triggered, this, [=, this] {
 		std::lock_guard lock_guard(machineMutex);
 
 		// Apply the new setting to the machine.
@@ -791,9 +795,7 @@ void MainWindow::dropEvent(QDropEvent* event) {
 				const auto contents = fileContentsAndClose(file);
 				if(!contents) continue;
 
-
-				CRC::CRC32 generator;
-				const uint32_t crc = generator.compute_crc(*contents);
+				const uint32_t crc = CRC::CRC32::crc_of(*contents);
 
 				std::optional<ROM::Description> target_rom = ROM::Description::from_crc(crc);
 				if(target_rom) {
@@ -804,7 +806,7 @@ void MainWindow::dropEvent(QDropEvent* event) {
 						dir.mkpath(".");
 
 					// Write into place.
-					const std::string destination =  QDir::toNativeSeparators(QString::fromStdString(path+ "/" + target_rom->file_names[0])).toStdString();
+					const std::string destination = QDir::toNativeSeparators(QString::fromStdString(path+ "/" + target_rom->file_names[0])).toStdString();
 					FILE *const target = fopen(destination.c_str(), "wb");
 					fwrite(contents->data(), 1, contents->size(), target);
 					fclose(target);
@@ -1010,12 +1012,14 @@ void MainWindow::startMachine() {
 	TEST(appleII);
 	TEST(appleIIgs);
 	TEST(amstradCPC);
+	TEST(archimedes);
 	TEST(atariST);
 	TEST(electron);
 	TEST(enterprise);
 	TEST(macintosh);
 	TEST(msx);
 	TEST(oric);
+	TEST(plus4);
 	TEST(pc);
 	TEST(spectrum);
 	TEST(vic20);
@@ -1100,6 +1104,12 @@ void MainWindow::start_amstradCPC() {
 	launchTarget(std::move(target));
 }
 
+void MainWindow::start_archimedes() {
+	using Target = Analyser::Static::Acorn::ArchimedesTarget;
+	auto target = std::make_unique<Target>();
+	launchTarget(std::move(target));
+}
+
 void MainWindow::start_atariST() {
 	using Target = Analyser::Static::AtariST::Target;
 	auto target = std::make_unique<Target>();
@@ -1114,7 +1124,7 @@ void MainWindow::start_atariST() {
 }
 
 void MainWindow::start_electron() {
-	using Target = Analyser::Static::Acorn::Target;
+	using Target = Analyser::Static::Acorn::ElectronTarget;
 	auto target = std::make_unique<Target>();
 
 	target->has_dfs = ui->electronDFSCheckBox->isChecked();
@@ -1222,8 +1232,8 @@ void MainWindow::start_pc() {
 	auto target = std::make_unique<Target>();
 
 	switch(ui->pcSpeedComboBox->currentIndex()) {
-			default:	target->speed = Target::Speed::ApproximatelyOriginal;	break;
-			case 1:		target->speed = Target::Speed::Fast;						break;
+			default:	target->model = Analyser::Static::PCCompatible::Model::XT;		break;
+			case 1:		target->model = Analyser::Static::PCCompatible::Model::TurboXT;	break;
 	}
 
 	switch(ui->pcVideoAdaptorComboBox->currentIndex()) {
@@ -1250,8 +1260,15 @@ void MainWindow::start_spectrum() {
 	launchTarget(std::move(target));
 }
 
+void MainWindow::start_plus4() {
+	using Target = Analyser::Static::Commodore::Plus4Target;
+	auto target = std::make_unique<Target>();
+	target->has_c1541 = ui->plus4C1541CheckBox->isChecked();
+	launchTarget(std::move(target));
+}
+
 void MainWindow::start_vic20() {
-	using Target = Analyser::Static::Commodore::Target;
+	using Target = Analyser::Static::Commodore::Vic20Target;
 	auto target = std::make_unique<Target>();
 
 	switch(ui->vic20RegionComboBox->currentIndex()) {

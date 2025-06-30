@@ -51,23 +51,23 @@ using namespace Storage::Tape;
 */
 
 namespace {
-	const uint8_t header_signature[8] = {0x1f, 0xa6, 0xde, 0xba, 0xcc, 0x13, 0x7d, 0x74};
+const uint8_t header_signature[8] = {0x1f, 0xa6, 0xde, 0xba, 0xcc, 0x13, 0x7d, 0x74};
 
-	#define TenX(x) {x, x, x, x, x, x, x, x, x, x}
-	const uint8_t binary_signature[] = TenX(0xd0);
-	const uint8_t basic_signature[] = TenX(0xd3);
-	const uint8_t ascii_signature[] = TenX(0xea);
+template <uint8_t x> const uint8_t signature[] = {x, x, x, x, x, x, x, x, x, x};
+const auto binary_signature = signature<0xd0>;
+const auto basic_signature = signature<0xd3>;
+const auto ascii_signature = signature<0xea>;
 }
 
 CAS::CAS(const std::string &file_name) {
-	Storage::FileHolder file(file_name);
+	Storage::FileHolder file(file_name, FileHolder::FileMode::Read);
 
 	enum class Mode {
 		Seeking,
 		ASCII,
 		Binary,
 		BASIC
-	} parsing_mode_ = Mode::Seeking;
+	} parsing_mode = Mode::Seeking;
 
 	while(true) {
 		// Churn through the file until the next header signature is found.
@@ -102,19 +102,19 @@ CAS::CAS(const std::string &file_name) {
 		const bool is_basic		= !std::memcmp(type.data(), basic_signature, type.size());
 		const bool is_ascii		= !std::memcmp(type.data(), ascii_signature, type.size());
 
-		switch(parsing_mode_) {
+		switch(parsing_mode) {
 			case Mode::Seeking: {
 				if(is_ascii || is_binary || is_basic) {
 					file.seek(header_position + 8, SEEK_SET);
 					chunks_.emplace_back(!chunks_.empty(), true, file.read(10 + 6));
 
-					if(is_ascii)	parsing_mode_ = Mode::ASCII;
-					if(is_binary)	parsing_mode_ = Mode::Binary;
-					if(is_basic)	parsing_mode_ = Mode::BASIC;
+					if(is_ascii)	parsing_mode = Mode::ASCII;
+					if(is_binary)	parsing_mode = Mode::Binary;
+					if(is_basic)	parsing_mode = Mode::BASIC;
 				} else {
 					// Raw data appears now. Grab its length and keep going.
 					file.seek(header_position + 8, SEEK_SET);
-					const uint16_t length = file.get16le();
+					const auto length = file.get_le<uint16_t>();
 
 					file.seek(header_position + 8, SEEK_SET);
 					chunks_.emplace_back(false, false, file.read(size_t(length) + 2));
@@ -125,7 +125,7 @@ CAS::CAS(const std::string &file_name) {
 				// Keep reading ASCII in 256-byte segments until a non-ASCII chunk arrives.
 				if(is_binary || is_basic || is_ascii) {
 					file.seek(header_position, SEEK_SET);
-					parsing_mode_ = Mode::Seeking;
+					parsing_mode = Mode::Seeking;
 				} else {
 					file.seek(header_position + 8, SEEK_SET);
 					chunks_.emplace_back(false, false, file.read(256));
@@ -136,14 +136,14 @@ CAS::CAS(const std::string &file_name) {
 				// Get the start and end addresses in order to figure out how much data
 				// is here.
 				file.seek(header_position + 8, SEEK_SET);
-				const uint16_t start_address = file.get16le();
-				const uint16_t end_address = file.get16le();
+				const auto start_address = file.get_le<uint16_t>();
+				const auto end_address = file.get_le<uint16_t>();
 
 				file.seek(header_position + 8, SEEK_SET);
 				const auto length = end_address - start_address + 1;
 				chunks_.emplace_back(false, false, file.read(size_t(length) + 6));
 
-				parsing_mode_ = Mode::Seeking;
+				parsing_mode = Mode::Seeking;
 			} break;
 
 			case Mode::BASIC: {
@@ -152,7 +152,7 @@ CAS::CAS(const std::string &file_name) {
 				file.seek(header_position + 8, SEEK_SET);
 				uint16_t address = 0x8001;	// the BASIC start address.
 				while(true) {
-					const uint16_t next_line_address = file.get16le();
+					const auto next_line_address = file.get_le<uint16_t>();
 					if(!next_line_address || file.eof()) break;
 					file.seek(next_line_address - address - 2, SEEK_CUR);
 					address = next_line_address;
@@ -162,24 +162,30 @@ CAS::CAS(const std::string &file_name) {
 				// Create the chunk and return to regular parsing.
 				file.seek(header_position + 8, SEEK_SET);
 				chunks_.emplace_back(false, false, file.read(size_t(length)));
-				parsing_mode_ = Mode::Seeking;
+				parsing_mode = Mode::Seeking;
 			} break;
 		}
 	}
 }
 
-bool CAS::is_at_end() {
+std::unique_ptr<FormatSerialiser> CAS::format_serialiser() const {
+	return std::make_unique<Serialiser>(chunks_);
+}
+
+CAS::Serialiser::Serialiser(const std::vector<Chunk> &chunks) : chunks_(chunks) {}
+
+bool CAS::Serialiser::is_at_end() const {
 	return phase_ == Phase::EndOfFile;
 }
 
-void CAS::virtual_reset() {
+void CAS::Serialiser::reset() {
 	phase_ = Phase::Header;
 	chunk_pointer_ = 0;
 	distance_into_phase_ = 0;
 	distance_into_bit_ = 0;
 }
 
-Tape::Pulse CAS::virtual_get_next_pulse() {
+Pulse CAS::Serialiser::next_pulse() {
 	Pulse pulse;
 	pulse.length.clock_rate = 9600;
 	// Clock rate is four times the baud rate (of 2400), because the quickest thing that might need
