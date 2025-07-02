@@ -64,7 +64,7 @@ static NSDictionary<NSString *, NSString *> *mainProgramsBySHA1 = @{
 		for(int c = 0; c < CC_SHA1_DIGEST_LENGTH; c++) [sha1 appendFormat:@"%02x", sha1Bytes[c]];
 
 		// Get analysed target and correct answer per list above.
-		auto targets = Analyser::Static::GetTargets([fullPath UTF8String]);
+		auto targets = Analyser::Static::GetTargets([fullPath fileSystemRepresentation]);
 		NSString *const mainProgram = mainProgramsBySHA1[sha1];
 		if(!mainProgram) {
 			NSLog(@"Not checking %@ with SHA1 %@", testFile, sha1);

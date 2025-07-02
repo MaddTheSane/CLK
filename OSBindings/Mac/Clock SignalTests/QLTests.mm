@@ -105,7 +105,7 @@ private:
 	ROM::Request request(rom_name);
 	const auto roms = CSROMFetcher()(request);
 	NSString *const traceLocation = [[NSBundle bundleForClass:[self class]] pathForResource:@"qltrace" ofType:@".txt.gz"];
-	_machine = std::make_unique<QL>(roms.find(rom_name)->second, traceLocation.UTF8String);
+	_machine = std::make_unique<QL>(roms.find(rom_name)->second, traceLocation.fileSystemRepresentation);
 
 	// This is how many cycles it takes to exhaust the supplied trace file.
 	_machine->run_for(HalfCycles(23923180));

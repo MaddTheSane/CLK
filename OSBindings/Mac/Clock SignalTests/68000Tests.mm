@@ -224,7 +224,7 @@
 	// Perform an audit of implemented instructions.
 	CPU::MC68000::ProcessorStorageTests storage_tests(
 		_machine->processor(),
-		[[NSBundle bundleForClass:[self class]] pathForResource:@"OPCLOGR2" ofType:@"BIN"].UTF8String
+		[[NSBundle bundleForClass:[self class]] pathForResource:@"OPCLOGR2" ofType:@"BIN"].fileSystemRepresentation
 	);
 
 	// This is a list of instructions nominated as valid with OPCLOGR2.BIN but with no obvious decoding —

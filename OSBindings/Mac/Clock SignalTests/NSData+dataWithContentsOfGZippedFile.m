@@ -13,7 +13,7 @@
 @implementation NSData (dataWithContentsOfGZippedFile)
 
 + (instancetype)dataWithContentsOfGZippedFile:(NSString *)path {
-	gzFile compressedFile = gzopen([path UTF8String], "rb");
+	gzFile compressedFile = gzopen([path fileSystemRepresentation], "rb");
 	if(!compressedFile) {
 		return nil;
 	}

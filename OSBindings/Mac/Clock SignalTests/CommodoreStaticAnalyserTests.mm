@@ -61,7 +61,7 @@ struct HitRate {
 			NSString *const fullPath = [items objectAtIndex:index];
 
 			NSLog(@"Starting %@", fullPath);
-			const auto list = Analyser::Static::GetTargets(fullPath.UTF8String);
+			const auto list = Analyser::Static::GetTargets(fullPath.fileSystemRepresentation);
 			NSLog(@"Ending %@", fullPath);
 			if(list.empty()) {
 				return;

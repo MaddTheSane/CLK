@@ -429,7 +429,7 @@ void print_transactions(FILE *target, const std::vector<Transaction> &transactio
 	for(const auto &pair: opcodesByOperation) {
 		NSLog(@"Generating %s", pair.first);
 		NSString *const targetName = [NSString stringWithFormat:@"%@%s.json", tempDir, pair.first];
-		FILE *const target = fopen(targetName.UTF8String, "wt");
+		FILE *const target = fopen(targetName.fileSystemRepresentation, "wt");
 
 		const bool force_addresses_even = decoder.decode(pair.second[0]).operation == InstructionSet::M68k::Operation::UNLINK;
 		bool is_first_test = true;

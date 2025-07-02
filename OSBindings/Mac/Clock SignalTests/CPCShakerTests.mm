@@ -164,7 +164,7 @@ private:
 
 - (void)testCSLPath:(NSString *)path name:(NSString *)name {
 	using namespace Storage::Automation;
-	const auto steps = CSL::parse([[path stringByAppendingPathComponent:name] UTF8String]);
+	const auto steps = CSL::parse([[path stringByAppendingPathComponent:name] fileSystemRepresentation]);
 
 	ScanTarget scan_target;
 	SSMDelegate ssm_delegate(scan_target);
@@ -186,7 +186,7 @@ private:
 			lazy_machine->scan_producer()->set_scan_target(&scan_target);
 
 			if(diskPath) {
-				const auto media = Analyser::Static::GetMedia(diskPath.UTF8String);
+				const auto media = Analyser::Static::GetMedia(diskPath.fileSystemRepresentation);
 				lazy_machine->media_target()->insert_media(media);
 			}
 		}
@@ -238,7 +238,7 @@ private:
 				XCTAssertNotNil(diskPath);
 
 				if(lazy_machine) {
-					const auto media = Analyser::Static::GetMedia(diskPath.UTF8String);
+					const auto media = Analyser::Static::GetMedia(diskPath.fileSystemRepresentation);
 					machine().media_target()->insert_media(media);
 				}
 			} break;

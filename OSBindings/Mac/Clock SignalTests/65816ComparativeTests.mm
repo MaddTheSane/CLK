@@ -190,7 +190,7 @@ template <CPU::MOS6502Esque::Type type> void generate() {
 			has_emulation ?
 				[NSString stringWithFormat:@"%@%02x.%c.json", tempDir, opcode, is_emulated ? 'e' : 'n'] :
 				[NSString stringWithFormat:@"%@%02x.json", tempDir, opcode];
-		FILE *const target = fopen(targetName.UTF8String, "wt");
+		FILE *const target = fopen(targetName.fileSystemRepresentation, "wt");
 
 		bool is_first_test = true;
 		fprintf(target, "[");
