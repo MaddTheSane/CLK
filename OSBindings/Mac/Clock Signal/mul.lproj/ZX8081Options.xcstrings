@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "cTq-f9-Gzx.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Play Tape\"; ObjectID = \"cTq-f9-Gzx\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Play Tape"
+          }
+        }
+      }
+    },
+    "CzC-YT-lgA.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Control Tape Motor Automatically\"; ObjectID = \"CzC-YT-lgA\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Control Tape Motor Automatically"
+          }
+        }
+      }
+    },
+    "w0l-ha-esm.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Load Tapes Quickly\"; ObjectID = \"w0l-ha-esm\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Load Tapes Quickly"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

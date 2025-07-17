@@ -1,0 +1,66 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "0DC-Xk-VFt.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Select\"; ObjectID = \"0DC-Xk-VFt\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Select"
+          }
+        }
+      }
+    },
+    "IxG-1J-fdG.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Black and White\"; ObjectID = \"IxG-1J-fdG\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Black and White"
+          }
+        }
+      }
+    },
+    "Q2e-Fa-VyK.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Right Player Difficulty\"; ObjectID = \"Q2e-Fa-VyK\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Right Player Difficulty"
+          }
+        }
+      }
+    },
+    "W9s-t2-TJ5.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Reset\"; ObjectID = \"W9s-t2-TJ5\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reset"
+          }
+        }
+      }
+    },
+    "YOY-n5-F4C.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Left Player Difficulty\"; ObjectID = \"YOY-n5-F4C\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Left Player Difficulty"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

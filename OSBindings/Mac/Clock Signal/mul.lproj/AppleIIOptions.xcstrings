@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "gOu-dv-tre.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Colour\"; ObjectID = \"gOu-dv-tre\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Colour"
+          }
+        }
+      }
+    },
+    "h9q-Wb-em8.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Use Square Pixels\"; ObjectID = \"h9q-Wb-em8\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use Square Pixels"
+          }
+        }
+      }
+    },
+    "qhQ-ab-jRo.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Monochrome\"; ObjectID = \"qhQ-ab-jRo\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Monochrome"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

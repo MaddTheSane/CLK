@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -1147,7 +1147,6 @@
 		4BD91D732401960C007BDC91 /* STX.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4B7BA03323C58B1E00B98D9E /* STX.cpp */; };
 		4BD91D772401C2B8007BDC91 /* PatrikRakTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD91D762401C2B8007BDC91 /* PatrikRakTests.swift */; };
 		4BD971392BFC3D9D00C907AA /* ArchimedesStaticAnalyserTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = 4BD971382BFC3D9C00C907AA /* ArchimedesStaticAnalyserTests.mm */; };
-		4BDA00DA22E60EE300AC3CD0 /* ROMRequester.xib in Resources */ = {isa = PBXBuildFile; fileRef = 4BDA00D922E60EE300AC3CD0 /* ROMRequester.xib */; };
 		4BDA00DD22E622C200AC3CD0 /* ROMImages in Resources */ = {isa = PBXBuildFile; fileRef = 4BC9DF441D044FCA00F44158 /* ROMImages */; };
 		4BDA00E022E644AF00AC3CD0 /* CSROMReceiverView.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BDA00DF22E644AF00AC3CD0 /* CSROMReceiverView.m */; };
 		4BDA00E422E663B900AC3CD0 /* NSData+CRC32.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BDA00E222E663B900AC3CD0 /* NSData+CRC32.m */; };
@@ -1214,6 +1213,7 @@
 		4BFEA2EF2682A7B900EBF94C /* Dave.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4BFEA2ED2682A7B900EBF94C /* Dave.cpp */; };
 		4BFEA2F02682A7B900EBF94C /* Dave.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4BFEA2ED2682A7B900EBF94C /* Dave.cpp */; };
 		4BFF1D3D2235C3C100838EA1 /* EmuTOSTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = 4BFF1D3C2235C3C100838EA1 /* EmuTOSTests.mm */; };
+		5547EB4F2E28D26800560AFB /* ROMRequester.xib in Resources */ = {isa = PBXBuildFile; fileRef = 5547EB4E2E28D26800560AFB /* ROMRequester.xib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1357,7 +1357,7 @@
 		4B08A2761EE39306008B7065 /* TestMachine.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TestMachine.h; sourceTree = "<group>"; };
 		4B08A2771EE39306008B7065 /* TestMachine.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = TestMachine.mm; sourceTree = "<group>"; };
 		4B08A2791EE3957B008B7065 /* TestMachine+ForSubclassEyesOnly.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "TestMachine+ForSubclassEyesOnly.h"; sourceTree = "<group>"; };
-		4B08A56820D72BEF0016CE5A /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/Activity.xib"; sourceTree = SOURCE_ROOT; };
+		4B08A56820D72BEF0016CE5A /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/Activity.xib"; sourceTree = "<group>"; };
 		4B0ACC00237756EC008902D0 /* Line.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Line.cpp; sourceTree = "<group>"; };
 		4B0ACC01237756EC008902D0 /* Line.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Line.hpp; sourceTree = "<group>"; };
 		4B0ACC0623775819008902D0 /* AtariST.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AtariST.cpp; sourceTree = "<group>"; };
@@ -1432,7 +1432,7 @@
 		4B1497871EE4A1DA00CE2596 /* ZX80O81P.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = ZX80O81P.hpp; sourceTree = "<group>"; };
 		4B14978D1EE4B4D200CE2596 /* CSZX8081.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CSZX8081.h; sourceTree = "<group>"; };
 		4B14978E1EE4B4D200CE2596 /* CSZX8081.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = CSZX8081.mm; sourceTree = "<group>"; };
-		4B1497971EE4B97F00CE2596 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/ZX8081Options.xib"; sourceTree = SOURCE_ROOT; };
+		4B1497971EE4B97F00CE2596 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/ZX8081Options.xib; sourceTree = "<group>"; };
 		4B15A9FA208249BB005E6C8D /* StaticAnalyser.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = StaticAnalyser.cpp; path = AppleII/StaticAnalyser.cpp; sourceTree = "<group>"; };
 		4B15A9FB208249BB005E6C8D /* StaticAnalyser.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = StaticAnalyser.hpp; path = AppleII/StaticAnalyser.hpp; sourceTree = "<group>"; };
 		4B1667F61FFF1E2400A16032 /* Konami.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Konami.hpp; sourceTree = "<group>"; };
@@ -1479,7 +1479,7 @@
 		4B262BFF29691F55002EC0F7 /* PersonalityTraits.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = PersonalityTraits.hpp; sourceTree = "<group>"; };
 		4B2A1CD92BA775C5004496CE /* I2C.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = I2C.cpp; sourceTree = "<group>"; };
 		4B2A1CDA2BA775C5004496CE /* I2C.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = I2C.hpp; sourceTree = "<group>"; };
-		4B2A332C1DB86821002876E3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/OricOptions.xib"; sourceTree = SOURCE_ROOT; };
+		4B2A332C1DB86821002876E3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/OricOptions.xib"; sourceTree = "<group>"; };
 		4B2A3B5A29993DFA007CE366 /* Storage.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Storage.hpp; sourceTree = "<group>"; };
 		4B2A3B5B29995FF6007CE366 /* LineBuffer.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LineBuffer.hpp; sourceTree = "<group>"; };
 		4B2A53901D117D36003C6002 /* CSAudioQueue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CSAudioQueue.h; sourceTree = "<group>"; };
@@ -1593,7 +1593,7 @@
 		4B47770A268FBE4D005C2340 /* FAT.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = FAT.hpp; path = Parsers/FAT.hpp; sourceTree = "<group>"; };
 		4B47770C26900685005C2340 /* EnterpriseDaveTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = EnterpriseDaveTests.mm; sourceTree = "<group>"; };
 		4B47F6C4241C87A100ED06F7 /* Struct.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Struct.cpp; sourceTree = "<group>"; };
-		4B49F0A823346F7A0045E6A6 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/MacintoshOptions.xib"; sourceTree = SOURCE_ROOT; };
+		4B49F0A823346F7A0045E6A6 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/MacintoshOptions.xib"; sourceTree = "<group>"; };
 		4B4A762E1DB1A3FA007AAE2E /* AY38910.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AY38910.cpp; sourceTree = "<group>"; };
 		4B4A762F1DB1A3FA007AAE2E /* AY38910.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = AY38910.hpp; sourceTree = "<group>"; };
 		4B4B1A3A200198C900A0F866 /* KonamiSCC.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = KonamiSCC.cpp; sourceTree = "<group>"; };
@@ -1650,8 +1650,8 @@
 		4B5FADBF1DE3BF2B00AEC565 /* Microdisc.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Microdisc.hpp; sourceTree = "<group>"; };
 		4B622AE3222E0AD5008B59F2 /* DisplayMetrics.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = DisplayMetrics.cpp; sourceTree = "<group>"; };
 		4B622AE4222E0AD5008B59F2 /* DisplayMetrics.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = DisplayMetrics.hpp; sourceTree = "<group>"; };
-		4B643F381D77AD1900D431D6 /* CSStaticAnalyser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = CSStaticAnalyser.h; path = StaticAnalyser/CSStaticAnalyser.h; sourceTree = "<group>"; };
-		4B643F391D77AD1900D431D6 /* CSStaticAnalyser.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = CSStaticAnalyser.mm; path = StaticAnalyser/CSStaticAnalyser.mm; sourceTree = "<group>"; };
+		4B643F381D77AD1900D431D6 /* CSStaticAnalyser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CSStaticAnalyser.h; sourceTree = "<group>"; };
+		4B643F391D77AD1900D431D6 /* CSStaticAnalyser.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = CSStaticAnalyser.mm; sourceTree = "<group>"; };
 		4B643F3C1D77AE5C00D431D6 /* CSMachine+Target.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "CSMachine+Target.h"; sourceTree = "<group>"; };
 		4B643F3E1D77B88000D431D6 /* DocumentController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DocumentController.swift; sourceTree = "<group>"; };
 		4B644ED023F0FB55006C0CC5 /* ScanSynchroniser.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = ScanSynchroniser.hpp; sourceTree = "<group>"; };
@@ -1780,7 +1780,7 @@
 		4B8805FA1DCFF807003085B1 /* Oric.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = Oric.hpp; path = Parsers/Oric.hpp; sourceTree = "<group>"; };
 		4B882F582C2F9C6900D84031 /* CPCShakerTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = CPCShakerTests.mm; sourceTree = "<group>"; };
 		4B882F5A2C2F9C7700D84031 /* Shaker */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Shaker; sourceTree = "<group>"; };
-		4B89449220194A47007DE474 /* CSStaticAnalyser+TargetVector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "CSStaticAnalyser+TargetVector.h"; path = "StaticAnalyser/CSStaticAnalyser+TargetVector.h"; sourceTree = "<group>"; };
+		4B89449220194A47007DE474 /* CSStaticAnalyser+TargetVector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CSStaticAnalyser+TargetVector.h"; sourceTree = "<group>"; };
 		4B8944E4201967B4007DE474 /* ConfidenceSummary.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = ConfidenceSummary.hpp; sourceTree = "<group>"; };
 		4B8944E5201967B4007DE474 /* ConfidenceSource.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = ConfidenceSource.hpp; sourceTree = "<group>"; };
 		4B8944E6201967B4007DE474 /* ConfidenceCounter.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ConfidenceCounter.cpp; sourceTree = "<group>"; };
@@ -1888,9 +1888,9 @@
 		4B8DF6192550D91600F3433C /* CPUMOV.sfc */ = {isa = PBXFileReference; lastKnownFileType = file; path = CPUMOV.sfc; sourceTree = "<group>"; };
 		4B8E4ECD1DCE483D003716C3 /* KeyboardMachine.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = KeyboardMachine.hpp; sourceTree = "<group>"; };
 		4B8EF6071FE5AF830076CCDD /* LowpassSpeaker.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = LowpassSpeaker.hpp; sourceTree = "<group>"; };
-		4B8FE2141DA19D5F0090D3CE /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/Atari2600Options.xib"; sourceTree = SOURCE_ROOT; };
-		4B8FE2161DA19D5F0090D3CE /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/MachineDocument.xib"; sourceTree = SOURCE_ROOT; };
-		4B8FE2181DA19D5F0090D3CE /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/QuickLoadCompositeOptions.xib"; sourceTree = SOURCE_ROOT; };
+		4B8FE2141DA19D5F0090D3CE /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/Atari2600Options.xib"; sourceTree = "<group>"; };
+		4B8FE2161DA19D5F0090D3CE /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/MachineDocument.xib"; sourceTree = "<group>"; };
+		4B8FE2181DA19D5F0090D3CE /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/QuickLoadCompositeOptions.xib"; sourceTree = "<group>"; };
 		4B8FE21F1DA19D7C0090D3CE /* Atari2600OptionsController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Atari2600OptionsController.swift; sourceTree = "<group>"; };
 		4B8FE2211DA19FB20090D3CE /* MachineController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MachineController.swift; sourceTree = "<group>"; };
 		4B8FE2251DA1DE2D0090D3CE /* NSBundle+DataResource.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSBundle+DataResource.h"; sourceTree = "<group>"; };
@@ -2332,7 +2332,7 @@
 		4BC57CD72436A61300FBC404 /* State.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = State.hpp; sourceTree = "<group>"; };
 		4BC57CD82436A62900FBC404 /* State.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = State.cpp; sourceTree = "<group>"; };
 		4BC5C3DF22C994CC00795658 /* 68000MoveTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = 68000MoveTests.mm; sourceTree = "<group>"; };
-		4BC5FC2F20CDDDEE00410AA0 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/AppleIIOptions.xib"; sourceTree = SOURCE_ROOT; };
+		4BC5FC2F20CDDDEE00410AA0 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/AppleIIOptions.xib"; sourceTree = "<group>"; };
 		4BC6236A26F178DA00F83DFE /* DMADevice.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = DMADevice.hpp; sourceTree = "<group>"; };
 		4BC6236B26F4224300F83DFE /* Copper.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Copper.hpp; sourceTree = "<group>"; };
 		4BC6236C26F4235400F83DFE /* Copper.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Copper.cpp; sourceTree = "<group>"; };
@@ -2396,7 +2396,7 @@
 		4BD4A8CF1E077FD20020D856 /* PCMTrackTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = PCMTrackTests.mm; sourceTree = "<group>"; };
 		4BD5D2672199148100DDF17D /* ScanTargetGLSLFragments.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ScanTargetGLSLFragments.cpp; sourceTree = "<group>"; };
 		4BD601A920D89F2A00CBCE57 /* Log.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Log.hpp; sourceTree = "<group>"; };
-		4BD61663206B2AC700236112 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/QuickLoadOptions.xib"; sourceTree = SOURCE_ROOT; };
+		4BD61663206B2AC700236112 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/QuickLoadOptions.xib"; sourceTree = "<group>"; };
 		4BD67DC9209BE4D600AB2146 /* StaticAnalyser.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = StaticAnalyser.hpp; sourceTree = "<group>"; };
 		4BD67DCA209BE4D600AB2146 /* StaticAnalyser.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = StaticAnalyser.cpp; sourceTree = "<group>"; };
 		4BD67DCE209BF27B00AB2146 /* Encoder.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Encoder.cpp; sourceTree = "<group>"; };
@@ -2405,7 +2405,6 @@
 		4BD91D762401C2B8007BDC91 /* PatrikRakTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PatrikRakTests.swift; sourceTree = "<group>"; };
 		4BD971382BFC3D9C00C907AA /* ArchimedesStaticAnalyserTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = ArchimedesStaticAnalyserTests.mm; sourceTree = "<group>"; };
 		4BD9713A2BFD7E7100C907AA /* StringSimilarity.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = StringSimilarity.hpp; sourceTree = "<group>"; };
-		4BDA00D922E60EE300AC3CD0 /* ROMRequester.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = ROMRequester.xib; sourceTree = "<group>"; };
 		4BDA00DE22E644AF00AC3CD0 /* CSROMReceiverView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CSROMReceiverView.h; sourceTree = "<group>"; };
 		4BDA00DF22E644AF00AC3CD0 /* CSROMReceiverView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CSROMReceiverView.m; sourceTree = "<group>"; };
 		4BDA00E222E663B900AC3CD0 /* NSData+CRC32.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSData+CRC32.m"; sourceTree = "<group>"; };
@@ -2467,7 +2466,7 @@
 		4BEE1499227FC0EA00133682 /* IWM.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = IWM.hpp; sourceTree = "<group>"; };
 		4BEE1EBF22B5E236000A26A6 /* MacGCRTests.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = MacGCRTests.mm; sourceTree = "<group>"; };
 		4BEE4BD325A26E2B00011BD2 /* x86DecoderTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = x86DecoderTests.mm; sourceTree = "<group>"; };
-		4BEEE6BC20DC72EA003723BF /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Clock Signal/Base.lproj/CompositeOptions.xib"; sourceTree = SOURCE_ROOT; };
+		4BEEE6BC20DC72EA003723BF /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = "Base.lproj/CompositeOptions.xib"; sourceTree = "<group>"; };
 		4BEF6AA81D35CE9E00E73575 /* DigitalPhaseLockedLoopBridge.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DigitalPhaseLockedLoopBridge.h; sourceTree = "<group>"; };
 		4BEF6AA91D35CE9E00E73575 /* DigitalPhaseLockedLoopBridge.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = DigitalPhaseLockedLoopBridge.mm; sourceTree = "<group>"; };
 		4BEF6AAB1D35D1C400E73575 /* DPLLTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DPLLTests.swift; sourceTree = "<group>"; };
@@ -2501,6 +2500,18 @@
 		4BFEA2EE2682A7B900EBF94C /* Dave.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Dave.hpp; sourceTree = "<group>"; };
 		4BFEA2F12682A90200EBF94C /* Sizes.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Sizes.hpp; sourceTree = "<group>"; };
 		4BFF1D3C2235C3C100838EA1 /* EmuTOSTests.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = EmuTOSTests.mm; sourceTree = "<group>"; };
+		5547EB432E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/OricOptions.xcstrings; sourceTree = "<group>"; };
+		5547EB442E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/QuickLoadCompositeOptions.xcstrings; sourceTree = "<group>"; };
+		5547EB452E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/QuickLoadOptions.xcstrings; sourceTree = "<group>"; };
+		5547EB462E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/ZX8081Options.xcstrings; sourceTree = "<group>"; };
+		5547EB472E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/AppleIIOptions.xcstrings; sourceTree = "<group>"; };
+		5547EB482E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/CompositeOptions.xcstrings; sourceTree = "<group>"; };
+		5547EB492E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/MacintoshOptions.xcstrings; sourceTree = "<group>"; };
+		5547EB4A2E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/MainMenu.xcstrings; sourceTree = "<group>"; };
+		5547EB4B2E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/Atari2600Options.xcstrings; sourceTree = "<group>"; };
+		5547EB4C2E28D23400560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/MachinePicker.xcstrings; sourceTree = "<group>"; };
+		5547EB4D2E28D26800560AFB /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/ROMRequester.xib; sourceTree = "<group>"; };
+		5547EB502E28D26800560AFB /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/ROMRequester.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -3472,7 +3483,7 @@
 				4B643F391D77AD1900D431D6 /* CSStaticAnalyser.mm */,
 				4B89449220194A47007DE474 /* CSStaticAnalyser+TargetVector.h */,
 			);
-			name = StaticAnalyser;
+			path = StaticAnalyser;
 			sourceTree = "<group>";
 		};
 		4B643F3D1D77B88000D431D6 /* Document Controller */ = {
@@ -5264,7 +5275,7 @@
 		4BDA00DB22E60EE900AC3CD0 /* ROMRequester */ = {
 			isa = PBXGroup;
 			children = (
-				4BDA00D922E60EE300AC3CD0 /* ROMRequester.xib */,
+				5547EB4E2E28D26800560AFB /* ROMRequester.xib */,
 				4BDA00DE22E644AF00AC3CD0 /* CSROMReceiverView.h */,
 				4BDA00DF22E644AF00AC3CD0 /* CSROMReceiverView.m */,
 			);
@@ -5603,7 +5614,7 @@
 				4B79E4451E3AF38600141F11 /* floppy35.png in Resources */,
 				4BEDA3BD25B25563000C2DBD /* README.md in Resources */,
 				4B55DD8420DF06680043F2E5 /* MachinePicker.xib in Resources */,
-				4BDA00DA22E60EE300AC3CD0 /* ROMRequester.xib in Resources */,
+				5547EB4F2E28D26800560AFB /* ROMRequester.xib in Resources */,
 				4BC5FC3020CDDDEF00410AA0 /* AppleIIOptions.xib in Resources */,
 				4B1EDB451E39A0AC009D6819 /* chip.png in Resources */,
 				4B2A332D1DB86821002876E3 /* OricOptions.xib in Resources */,
@@ -6867,36 +6878,44 @@
 				4B08A56820D72BEF0016CE5A /* Base */,
 			);
 			name = Activity.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4B1497961EE4B97F00CE2596 /* ZX8081Options.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
 				4B1497971EE4B97F00CE2596 /* Base */,
+				5547EB462E28D23400560AFB /* mul */,
 			);
 			name = ZX8081Options.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4B2A332B1DB86821002876E3 /* OricOptions.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
 				4B2A332C1DB86821002876E3 /* Base */,
+				5547EB432E28D23400560AFB /* mul */,
 			);
 			name = OricOptions.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4B49F0A723346F7A0045E6A6 /* MacintoshOptions.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
 				4B49F0A823346F7A0045E6A6 /* Base */,
+				5547EB492E28D23400560AFB /* mul */,
 			);
 			name = MacintoshOptions.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4B55DD8120DF06680043F2E5 /* MachinePicker.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
 				4B55DD8220DF06680043F2E5 /* Base */,
+				5547EB4C2E28D23400560AFB /* mul */,
 			);
 			name = MachinePicker.xib;
 			sourceTree = "<group>";
@@ -6905,8 +6924,10 @@
 			isa = PBXVariantGroup;
 			children = (
 				4B8FE2141DA19D5F0090D3CE /* Base */,
+				5547EB4B2E28D23400560AFB /* mul */,
 			);
 			name = Atari2600Options.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4B8FE2151DA19D5F0090D3CE /* MachineDocument.xib */ = {
@@ -6915,20 +6936,24 @@
 				4B8FE2161DA19D5F0090D3CE /* Base */,
 			);
 			name = MachineDocument.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4B8FE2171DA19D5F0090D3CE /* QuickLoadCompositeOptions.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
 				4B8FE2181DA19D5F0090D3CE /* Base */,
+				5547EB442E28D23400560AFB /* mul */,
 			);
 			name = QuickLoadCompositeOptions.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4BB73EAA1B587A5100552FC2 /* MainMenu.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
 				4BB73EAB1B587A5100552FC2 /* Base */,
+				5547EB4A2E28D23400560AFB /* mul */,
 			);
 			name = MainMenu.xib;
 			sourceTree = "<group>";
@@ -6937,24 +6962,39 @@
 			isa = PBXVariantGroup;
 			children = (
 				4BC5FC2F20CDDDEE00410AA0 /* Base */,
+				5547EB472E28D23400560AFB /* mul */,
 			);
 			name = AppleIIOptions.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4BD61662206B2AC700236112 /* QuickLoadOptions.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
 				4BD61663206B2AC700236112 /* Base */,
+				5547EB452E28D23400560AFB /* mul */,
 			);
 			name = QuickLoadOptions.xib;
+			path = ..;
 			sourceTree = "<group>";
 		};
 		4BEEE6BB20DC72EA003723BF /* CompositeOptions.xib */ = {
 			isa = PBXVariantGroup;
 			children = (
 				4BEEE6BC20DC72EA003723BF /* Base */,
+				5547EB482E28D23400560AFB /* mul */,
 			);
 			name = CompositeOptions.xib;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		5547EB4E2E28D26800560AFB /* ROMRequester.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				5547EB4D2E28D26800560AFB /* Base */,
+				5547EB502E28D26800560AFB /* mul */,
+			);
+			name = ROMRequester.xib;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */

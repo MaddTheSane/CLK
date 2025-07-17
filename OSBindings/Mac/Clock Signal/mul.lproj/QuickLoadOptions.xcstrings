@@ -1,0 +1,18 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "tD6-UB-ESB.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Load Quickly\"; ObjectID = \"tD6-UB-ESB\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Load Quickly"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

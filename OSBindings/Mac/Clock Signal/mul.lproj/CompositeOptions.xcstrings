@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "fFm-fS-rWG.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Television\"; ObjectID = \"fFm-fS-rWG\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Television"
+          }
+        }
+      }
+    },
+    "Mtc-Ht-iY8.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"S-Video\"; ObjectID = \"Mtc-Ht-iY8\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "S-Video"
+          }
+        }
+      }
+    },
+    "tJM-kX-gaK.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"RGB Monitor\"; ObjectID = \"tJM-kX-gaK\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "RGB Monitor"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

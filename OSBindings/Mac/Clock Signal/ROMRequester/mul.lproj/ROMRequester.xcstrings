@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "8jl-xs-LjP.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Multiline Label\"; ObjectID = \"8jl-xs-LjP\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Multiline Label"
+          }
+        }
+      }
+    },
+    "itJ-2T-0ia.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Clock Signal requires you to provide images of the system ROMs for this machine. They will be stored permanently; you need do this only once.  Please drag and drop over this text\"; ObjectID = \"itJ-2T-0ia\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Clock Signal requires you to provide images of the system ROMs for this machine. They will be stored permanently; you need do this only once.  Please drag and drop over this text"
+          }
+        }
+      }
+    },
+    "oS1-Pk-LsO.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Cancel\"; ObjectID = \"oS1-Pk-LsO\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cancel"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

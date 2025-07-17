@@ -1,0 +1,18 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "alI-Mw-35c.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Start Quickly\"; ObjectID = \"alI-Mw-35c\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start Quickly"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

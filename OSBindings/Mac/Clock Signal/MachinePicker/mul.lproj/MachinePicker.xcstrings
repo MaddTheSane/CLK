@@ -1,0 +1,1710 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "0TS-DO-O9h.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"ROM 03\"; ObjectID = \"0TS-DO-O9h\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ROM 03"
+          }
+        }
+      }
+    },
+    "0Zf-ll-t4F.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"8 mb\"; ObjectID = \"0Zf-ll-t4F\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "8 mb"
+          }
+        }
+      }
+    },
+    "1HK-zJ-udx.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"16 kb\"; ObjectID = \"1HK-zJ-udx\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "16 kb"
+          }
+        }
+      }
+    },
+    "1jS-Lz-FRj.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Microdisc\"; ObjectID = \"1jS-Lz-FRj\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Microdisc"
+          }
+        }
+      }
+    },
+    "2LO-US-byb.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"ROM 00\"; ObjectID = \"2LO-US-byb\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ROM 00"
+          }
+        }
+      }
+    },
+    "3Tw-Hk-rP2.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Archimedes\"; ObjectID = \"3Tw-Hk-rP2\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Archimedes"
+          }
+        }
+      }
+    },
+    "4Sa-jR-xOd.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Unexpanded\"; ObjectID = \"4Sa-jR-xOd\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unexpanded"
+          }
+        }
+      }
+    },
+    "5N6-tD-uN7.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"4 Mhz\"; ObjectID = \"5N6-tD-uN7\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "4 Mhz"
+          }
+        }
+      }
+    },
+    "6SR-DY-zdI.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"MSX\"; ObjectID = \"6SR-DY-zdI\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MSX"
+          }
+        }
+      }
+    },
+    "7kj-PC-c6s.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Thirteen Sector\"; ObjectID = \"7kj-PC-c6s\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thirteen Sector"
+          }
+        }
+      }
+    },
+    "7P2-aF-6fp.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Version 1.1\"; ObjectID = \"7P2-aF-6fp\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Version 1.1"
+          }
+        }
+      }
+    },
+    "7QC-Ij-hES.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Unexpanded\"; ObjectID = \"7QC-Ij-hES\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unexpanded"
+          }
+        }
+      }
+    },
+    "7x0-gL-mKG.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Swedish (PAL)\"; ObjectID = \"7x0-gL-mKG\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Swedish (PAL)"
+          }
+        }
+      }
+    },
+    "7Zs-HM-qwH.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"1 mb\"; ObjectID = \"7Zs-HM-qwH\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 mb"
+          }
+        }
+      }
+    },
+    "8cB-MZ-g3U.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"PC Compatible\"; ObjectID = \"8cB-MZ-g3U\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "PC Compatible"
+          }
+        }
+      }
+    },
+    "8E5-8M-aTA.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"32 kb\"; ObjectID = \"8E5-8M-aTA\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "32 kb"
+          }
+        }
+      }
+    },
+    "8fG-eg-UOc.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"MSX 2\"; ObjectID = \"8fG-eg-UOc\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MSX 2"
+          }
+        }
+      }
+    },
+    "8rP-2w-PdU.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"EXDOS\"; ObjectID = \"8rP-2w-PdU\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "EXDOS"
+          }
+        }
+      }
+    },
+    "8zk-1k-5AC.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Commodore TED\"; ObjectID = \"8zk-1k-5AC\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Commodore TED"
+          }
+        }
+      }
+    },
+    "32m-Vs-dPO.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Choose a machine\"; ObjectID = \"32m-Vs-dPO\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose a machine"
+          }
+        }
+      }
+    },
+    "45i-0n-gau.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"European (PAL)\"; ObjectID = \"45i-0n-gau\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "European (PAL)"
+          }
+        }
+      }
+    },
+    "53v-92-jmf.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Model:\"; ObjectID = \"53v-92-jmf\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Model:"
+          }
+        }
+      }
+    },
+    "84E-wf-572.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"1 mb\"; ObjectID = \"84E-wf-572\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 mb"
+          }
+        }
+      }
+    },
+    "a4I-vG-yCp.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Memory Size:\"; ObjectID = \"a4I-vG-yCp\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Memory Size:"
+          }
+        }
+      }
+    },
+    "a6Y-mx-yFn.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Atari ST\"; ObjectID = \"a6Y-mx-yFn\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Atari ST"
+          }
+        }
+      }
+    },
+    "ai1-oR-X6Y.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"BASIC:\"; ObjectID = \"ai1-oR-X6Y\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "BASIC:"
+          }
+        }
+      }
+    },
+    "Al3-A0-tvw.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Enterprise 256\"; ObjectID = \"Al3-A0-tvw\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enterprise 256"
+          }
+        }
+      }
+    },
+    "AMt-WU-a0H.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Apple IIe\"; ObjectID = \"AMt-WU-a0H\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple IIe"
+          }
+        }
+      }
+    },
+    "bFk-nC-Txe.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"+2a\"; ObjectID = \"bFk-nC-Txe\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "+2a"
+          }
+        }
+      }
+    },
+    "bVT-qO-U7n.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"6 Mhz\"; ObjectID = \"bVT-qO-U7n\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "6 Mhz"
+          }
+        }
+      }
+    },
+    "bWl-oP-jGn.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"16 kb\"; ObjectID = \"bWl-oP-jGn\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "16 kb"
+          }
+        }
+      }
+    },
+    "CB3-nA-VTM.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Attach disk drive\"; ObjectID = \"CB3-nA-VTM\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Attach disk drive"
+          }
+        }
+      }
+    },
+    "CGU-gd-xov.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Jasmin\"; ObjectID = \"CGU-gd-xov\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Jasmin"
+          }
+        }
+      }
+    },
+    "cyO-PU-hSU.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Vic-20\"; ObjectID = \"cyO-PU-hSU\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vic-20"
+          }
+        }
+      }
+    },
+    "DjG-qd-BYh.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Attach MSX-MUSIC\"; ObjectID = \"DjG-qd-BYh\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Attach MSX-MUSIC"
+          }
+        }
+      }
+    },
+    "dM6-25-GFA.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"None\"; ObjectID = \"dM6-25-GFA\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "e6x-TE-OC5.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Memory Size:\"; ObjectID = \"e6x-TE-OC5\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Memory Size:"
+          }
+        }
+      }
+    },
+    "edb-fl-C8Y.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"8DOS\"; ObjectID = \"edb-fl-C8Y\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "8DOS"
+          }
+        }
+      }
+    },
+    "eGk-Bj-IVT.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"None\"; ObjectID = \"eGk-Bj-IVT\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "F3g-Ya-ypU.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Region:\"; ObjectID = \"F3g-Ya-ypU\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Region:"
+          }
+        }
+      }
+    },
+    "FIO-ZR-rsA.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Chip Memory:\"; ObjectID = \"FIO-ZR-rsA\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chip Memory:"
+          }
+        }
+      }
+    },
+    "FlG-je-OOM.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"512k\"; ObjectID = \"FlG-je-OOM\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "512k"
+          }
+        }
+      }
+    },
+    "Fo7-NL-Kv5.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"16kb\"; ObjectID = \"Fo7-NL-Kv5\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "16kb"
+          }
+        }
+      }
+    },
+    "fOl-8Q-fsA.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Unexpanded\"; ObjectID = \"fOl-8Q-fsA\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unexpanded"
+          }
+        }
+      }
+    },
+    "G9U-vd-Cjk.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"MSX 1\"; ObjectID = \"G9U-vd-Cjk\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MSX 1"
+          }
+        }
+      }
+    },
+    "GJT-os-38F.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"2 mb\"; ObjectID = \"GJT-os-38F\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "2 mb"
+          }
+        }
+      }
+    },
+    "GsD-H6-Pwo.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"American (NTSC)\"; ObjectID = \"GsD-H6-Pwo\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "American (NTSC)"
+          }
+        }
+      }
+    },
+    "gUC-PN-zVL.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"EXOS:\"; ObjectID = \"gUC-PN-zVL\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "EXOS:"
+          }
+        }
+      }
+    },
+    "h9r-i6-66j.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Model:\"; ObjectID = \"h9r-i6-66j\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Model:"
+          }
+        }
+      }
+    },
+    "h83-cG-bYO.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"CPC664\"; ObjectID = \"h83-cG-bYO\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "CPC664"
+          }
+        }
+      }
+    },
+    "hEJ-yK-WZQ.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"8 kb\"; ObjectID = \"hEJ-yK-WZQ\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "8 kb"
+          }
+        }
+      }
+    },
+    "HQv-oF-k8b.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"ZX Spectrum\"; ObjectID = \"HQv-oF-k8b\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ZX Spectrum"
+          }
+        }
+      }
+    },
+    "igW-oa-8YI.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"CGA\"; ObjectID = \"igW-oa-8YI\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "CGA"
+          }
+        }
+      }
+    },
+    "IpZ-Wv-lEe.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Danish (PAL)\"; ObjectID = \"IpZ-Wv-lEe\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Danish (PAL)"
+          }
+        }
+      }
+    },
+    "j8p-uY-BhG.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Version 1.0\"; ObjectID = \"j8p-uY-BhG\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Version 1.0"
+          }
+        }
+      }
+    },
+    "JEz-eK-uWp.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Fill unused ROM banks with sideways RAM\"; ObjectID = \"JEz-eK-uWp\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fill unused ROM banks with sideways RAM"
+          }
+        }
+      }
+    },
+    "jGN-1a-biF.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Oric-1\"; ObjectID = \"jGN-1a-biF\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Oric-1"
+          }
+        }
+      }
+    },
+    "JId-Tp-LrE.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Model:\"; ObjectID = \"JId-Tp-LrE\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Model:"
+          }
+        }
+      }
+    },
+    "JmB-OF-xcM.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Amiga\"; ObjectID = \"JmB-OF-xcM\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Amiga"
+          }
+        }
+      }
+    },
+    "jMF-5n-E33.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"1 mb\"; ObjectID = \"jMF-5n-E33\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 mb"
+          }
+        }
+      }
+    },
+    "jNT-iG-JUR.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"American (NTSC)\"; ObjectID = \"jNT-iG-JUR\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "American (NTSC)"
+          }
+        }
+      }
+    },
+    "jwx-fZ-vXp.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"+3\"; ObjectID = \"jwx-fZ-vXp\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "+3"
+          }
+        }
+      }
+    },
+    "kbf-rc-Y4M.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Disk Controller:\"; ObjectID = \"kbf-rc-Y4M\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Disk Controller:"
+          }
+        }
+      }
+    },
+    "kiv-1P-FWc.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Model:\"; ObjectID = \"kiv-1P-FWc\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Model:"
+          }
+        }
+      }
+    },
+    "kUz-FG-lqW.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Enhanced IIe\"; ObjectID = \"kUz-FG-lqW\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enhanced IIe"
+          }
+        }
+      }
+    },
+    "Ky2-2D-wcY.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Version 1.0\"; ObjectID = \"Ky2-2D-wcY\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Version 1.0"
+          }
+        }
+      }
+    },
+    "kyq-LZ-O2M.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Japanese (NTSC)\"; ObjectID = \"kyq-LZ-O2M\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Japanese (NTSC)"
+          }
+        }
+      }
+    },
+    "LeD-N4-avf.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Turbo\"; ObjectID = \"LeD-N4-avf\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turbo"
+          }
+        }
+      }
+    },
+    "LgZ-9j-YQl.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"CPC6128\"; ObjectID = \"LgZ-9j-YQl\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "CPC6128"
+          }
+        }
+      }
+    },
+    "lkS-Rr-m1D.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Byte Drive 500\"; ObjectID = \"lkS-Rr-m1D\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Byte Drive 500"
+          }
+        }
+      }
+    },
+    "lmR-z3-xSm.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Macintosh\"; ObjectID = \"lmR-z3-xSm\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Macintosh"
+          }
+        }
+      }
+    },
+    "LVX-CI-lo9.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"512 kb\"; ObjectID = \"LVX-CI-lo9\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "512 kb"
+          }
+        }
+      }
+    },
+    "MnM-xo-4Qa.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Choose\"; ObjectID = \"MnM-xo-4Qa\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose"
+          }
+        }
+      }
+    },
+    "muc-z9-Vqc.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Electron\"; ObjectID = \"muc-z9-Vqc\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Electron"
+          }
+        }
+      }
+    },
+    "NFk-cp-DfS.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"DOS:\"; ObjectID = \"NFk-cp-DfS\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "DOS:"
+          }
+        }
+      }
+    },
+    "NSx-DC-p4M.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Oric\"; ObjectID = \"NSx-DC-p4M\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Oric"
+          }
+        }
+      }
+    },
+    "oEx-uN-LlH.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"ROM 01\"; ObjectID = \"oEx-uN-LlH\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ROM 01"
+          }
+        }
+      }
+    },
+    "oIy-If-5bQ.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"MDA\"; ObjectID = \"oIy-If-5bQ\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MDA"
+          }
+        }
+      }
+    },
+    "OLJ-nC-yyj.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Memory Size:\"; ObjectID = \"OLJ-nC-yyj\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Memory Size:"
+          }
+        }
+      }
+    },
+    "oqq-Tb-j6f.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Attach C-1541 disk drive\"; ObjectID = \"oqq-Tb-j6f\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Attach C-1541 disk drive"
+          }
+        }
+      }
+    },
+    "p5O-Jq-Tft.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Oric Atmos\"; ObjectID = \"p5O-Jq-Tft\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Oric Atmos"
+          }
+        }
+      }
+    },
+    "P59-QG-LOa.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Apple II\"; ObjectID = \"P59-QG-LOa\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple II"
+          }
+        }
+      }
+    },
+    "PEx-W6-eGK.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"64 kb\"; ObjectID = \"PEx-W6-eGK\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "64 kb"
+          }
+        }
+      }
+    },
+    "Pof-hj-SZQ.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \" At present only a 4mb 26-bit Archimedes is available.\"; ObjectID = \"Pof-hj-SZQ\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : " At present only a 4mb 26-bit Archimedes is available."
+          }
+        }
+      }
+    },
+    "PZE-8h-MNs.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"256 kb\"; ObjectID = \"PZE-8h-MNs\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "256 kb"
+          }
+        }
+      }
+    },
+    "QaV-Yr-k9o.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Sixteen Sector\"; ObjectID = \"QaV-Yr-k9o\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sixteen Sector"
+          }
+        }
+      }
+    },
+    "Qja-xZ-wVM.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Version 2.1\"; ObjectID = \"Qja-xZ-wVM\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Version 2.1"
+          }
+        }
+      }
+    },
+    "qoS-KO-iEZ.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"None\"; ObjectID = \"qoS-KO-iEZ\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "qV3-2P-3JW.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Model:\"; ObjectID = \"qV3-2P-3JW\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Model:"
+          }
+        }
+      }
+    },
+    "QvC-M9-y7g.title" : {
+      "comment" : "Class = \"NSWindow\"; title = \"Window\"; ObjectID = \"QvC-M9-y7g\";",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Window"
+          }
+        }
+      }
+    },
+    "qXc-wf-5jm.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Speed:\"; ObjectID = \"qXc-wf-5jm\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Speed:"
+          }
+        }
+      }
+    },
+    "R4W-s4-KFx.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Similar to Original\"; ObjectID = \"R4W-s4-KFx\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Similar to Original"
+          }
+        }
+      }
+    },
+    "R6T-hg-rOF.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Plus\"; ObjectID = \"R6T-hg-rOF\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plus"
+          }
+        }
+      }
+    },
+    "r7C-zE-gyj.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Model:\"; ObjectID = \"r7C-zE-gyj\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Model:"
+          }
+        }
+      }
+    },
+    "roH-nL-f8o.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Enterprise 128\"; ObjectID = \"roH-nL-f8o\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enterprise 128"
+          }
+        }
+      }
+    },
+    "ROV-EU-T3W.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Video Adaptor:\"; ObjectID = \"ROV-EU-T3W\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Video Adaptor:"
+          }
+        }
+      }
+    },
+    "Rpz-39-jyt.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Fast Memory:\"; ObjectID = \"Rpz-39-jyt\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fast Memory:"
+          }
+        }
+      }
+    },
+    "S0c-Jg-7Pu.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With Advanced Disk Filing System\"; ObjectID = \"S0c-Jg-7Pu\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With Advanced Disk Filing System"
+          }
+        }
+      }
+    },
+    "sAw-C9-Sf7.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Speed:\"; ObjectID = \"sAw-C9-Sf7\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Speed:"
+          }
+        }
+      }
+    },
+    "sdr-al-7mi.title" : {
+      "comment" : "Class = \"NSMenu\"; title = \"DOS\"; ObjectID = \"sdr-al-7mi\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "DOS"
+          }
+        }
+      }
+    },
+    "SFK-hS-tFC.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Disk Interface:\"; ObjectID = \"SFK-hS-tFC\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Disk Interface:"
+          }
+        }
+      }
+    },
+    "sub-rB-Req.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Cancel\"; ObjectID = \"sub-rB-Req\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "TME-cv-Jh1.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Version 2.1\"; ObjectID = \"TME-cv-Jh1\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Version 2.1"
+          }
+        }
+      }
+    },
+    "tMH-kF-GUz.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"ZX80\"; ObjectID = \"tMH-kF-GUz\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ZX80"
+          }
+        }
+      }
+    },
+    "tpW-5C-xKp.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With Disk Filing System\"; ObjectID = \"tpW-5C-xKp\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With Disk Filing System"
+          }
+        }
+      }
+    },
+    "tsq-YD-xw8.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Attach C-1540 disk drive\"; ObjectID = \"tsq-YD-xw8\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Attach C-1540 disk drive"
+          }
+        }
+      }
+    },
+    "u5E-8n-ghF.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Apple IIgs\"; ObjectID = \"u5E-8n-ghF\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple IIgs"
+          }
+        }
+      }
+    },
+    "u6z-2t-ly9.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Pravetz 8D\"; ObjectID = \"u6z-2t-ly9\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pravetz 8D"
+          }
+        }
+      }
+    },
+    "UHg-gU-Xnn.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"8 mb\"; ObjectID = \"UHg-gU-Xnn\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "8 mb"
+          }
+        }
+      }
+    },
+    "UpJ-qr-ymv.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"2 mb\"; ObjectID = \"UpJ-qr-ymv\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "2 mb"
+          }
+        }
+      }
+    },
+    "uTv-hH-mIC.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Machine:\"; ObjectID = \"uTv-hH-mIC\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Machine:"
+          }
+        }
+      }
+    },
+    "VBQ-JG-AeM.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Apple II\"; ObjectID = \"VBQ-JG-AeM\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple II"
+          }
+        }
+      }
+    },
+    "vNG-Tv-bDI.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Enterprise 64\"; ObjectID = \"vNG-Tv-bDI\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enterprise 64"
+          }
+        }
+      }
+    },
+    "vpo-D2-Tzo.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Has Mockingboard\"; ObjectID = \"vpo-D2-Tzo\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Has Mockingboard"
+          }
+        }
+      }
+    },
+    "VQH-nv-Pfm.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Use ZX81 ROM\"; ObjectID = \"VQH-nv-Pfm\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use ZX81 ROM"
+          }
+        }
+      }
+    },
+    "vrW-w8-IWl.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Text Cell\"; ObjectID = \"vrW-w8-IWl\";",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text Cell"
+          }
+        }
+      }
+    },
+    "VSM-l2-mWa.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"CPC464\"; ObjectID = \"VSM-l2-mWa\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "CPC464"
+          }
+        }
+      }
+    },
+    "Vvu-ua-pjg.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"+2\"; ObjectID = \"Vvu-ua-pjg\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "+2"
+          }
+        }
+      }
+    },
+    "w8h-lY-JLX.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"128kb\"; ObjectID = \"w8h-lY-JLX\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "128kb"
+          }
+        }
+      }
+    },
+    "WCG-6u-ANQ.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"128k\"; ObjectID = \"WCG-6u-ANQ\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "128k"
+          }
+        }
+      }
+    },
+    "WNJ-kT-TYn.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"64 kb\"; ObjectID = \"WNJ-kT-TYn\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "64 kb"
+          }
+        }
+      }
+    },
+    "Wnn-nQ-gZ6.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"ZX81\"; ObjectID = \"Wnn-nQ-gZ6\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ZX81"
+          }
+        }
+      }
+    },
+    "wpd-BF-y2L.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"4 mb\"; ObjectID = \"wpd-BF-y2L\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "4 mb"
+          }
+        }
+      }
+    },
+    "x4m-eh-Nif.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Region:\"; ObjectID = \"x4m-eh-Nif\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Region:"
+          }
+        }
+      }
+    },
+    "xAh-Ch-tby.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"European (PAL)\"; ObjectID = \"xAh-Ch-tby\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "European (PAL)"
+          }
+        }
+      }
+    },
+    "xaj-em-oZa.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"512ke\"; ObjectID = \"xaj-em-oZa\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "512ke"
+          }
+        }
+      }
+    },
+    "xas-28-obv.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"1 mb\"; ObjectID = \"xas-28-obv\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 mb"
+          }
+        }
+      }
+    },
+    "XhK-Jh-oTW.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"None\"; ObjectID = \"XhK-Jh-oTW\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "xks-Rv-Umd.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"48kb\"; ObjectID = \"xks-Rv-Umd\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "48kb"
+          }
+        }
+      }
+    },
+    "Xm1-7x-YVl.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Model:\"; ObjectID = \"Xm1-7x-YVl\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Model:"
+          }
+        }
+      }
+    },
+    "XTj-l7-KX3.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Version 2.0\"; ObjectID = \"XTj-l7-KX3\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Version 2.0"
+          }
+        }
+      }
+    },
+    "xTm-Oy-oz5.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"If you use File -> Open... to select a disk, tape or cartridge directly, the emulator will select and configure a machine for you.\"; ObjectID = \"xTm-Oy-oz5\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you use File -> Open... to select a disk, tape or cartridge directly, the emulator will select and configure a machine for you."
+          }
+        }
+      }
+    },
+    "yjF-XS-zx6.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With Advanced Plus 6 Utility ROM\"; ObjectID = \"yjF-XS-zx6\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With Advanced Plus 6 Utility ROM"
+          }
+        }
+      }
+    },
+    "Yme-Wn-Obh.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Apple II+\"; ObjectID = \"Yme-Wn-Obh\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple II+"
+          }
+        }
+      }
+    },
+    "z4b-oR-Yl2.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Memory Size:\"; ObjectID = \"z4b-oR-Yl2\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Memory Size:"
+          }
+        }
+      }
+    },
+    "Z77-x8-Hzh.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"4 mb\"; ObjectID = \"Z77-x8-Hzh\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "4 mb"
+          }
+        }
+      }
+    },
+    "ZBF-0r-RNK.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Memory:\"; ObjectID = \"ZBF-0r-RNK\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Memory:"
+          }
+        }
+      }
+    },
+    "ZdM-7u-VTq.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Japanese (NTSC)\"; ObjectID = \"ZdM-7u-VTq\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Japanese (NTSC)"
+          }
+        }
+      }
+    },
+    "Zev-ku-jDG.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"512 kb\"; ObjectID = \"Zev-ku-jDG\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "512 kb"
+          }
+        }
+      }
+    },
+    "ZGX-Fz-lFd.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Amstrad CPC\"; ObjectID = \"ZGX-Fz-lFd\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Amstrad CPC"
+          }
+        }
+      }
+    },
+    "zhO-EO-wUe.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Enterprise\"; ObjectID = \"zhO-EO-wUe\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enterprise"
+          }
+        }
+      }
+    },
+    "zV7-V8-c7s.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"None\"; ObjectID = \"zV7-V8-c7s\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
