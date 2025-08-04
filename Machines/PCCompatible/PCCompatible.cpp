@@ -30,6 +30,7 @@
 #include "InstructionSets/x86/Flags.hpp"
 #include "InstructionSets/x86/Instruction.hpp"
 #include "InstructionSets/x86/Perform.hpp"
+#include "InstructionSets/x86/Registers.hpp"
 
 #include "Components/8255/i8255.hpp"
 
@@ -507,7 +508,7 @@ class FlowController {
 	static constexpr auto x86_model = processor_model(model);
 
 public:
-	FlowController(Registers<x86_model> &registers, Segments<x86_model> &segments) :
+	FlowController(InstructionSet::x86::Registers<x86_model> &registers, Segments<x86_model, LinearMemory<x86_model>> &segments) :
 		registers_(registers), segments_(segments) {}
 
 	// Requirements for perform.
@@ -554,8 +555,8 @@ public:
 	}
 
 private:
-	Registers<x86_model> &registers_;
-	Segments<x86_model> &segments_;
+	InstructionSet::x86::Registers<x86_model> &registers_;
+	Segments<x86_model, LinearMemory<x86_model>> &segments_;
 	bool should_repeat_ = false;
 	bool halted_ = false;
 };
@@ -770,7 +771,7 @@ public:
 
 				// Signal interrupt.
 				context_.flow_controller.unhalt();
-				fault(Exception::interrupt(pics_.pic[0].acknowledge()));
+				InstructionSet::x86::fault(Exception::interrupt(pics_.pic[0].acknowledge()), context_);
 			}
 
 			// Do nothing if currently halted.
@@ -832,49 +833,11 @@ public:
 		}
 
 		// Execute it.
-		if constexpr (uses_8086_exceptions(x86_model)) {
-			InstructionSet::x86::perform(
-				decoded_.second,
-				context_
-			);
-		} else {
-			try {
-				InstructionSet::x86::perform(
-					decoded_.second,
-					context_
-				);
-				return;
-			} catch (const InstructionSet::x86::Exception exception) {
-				fault(exception);
-			}
-		}
-	}
-
-	void fault(const Exception exception) {
-		if constexpr (uses_8086_exceptions(x86_model)) {
-			InstructionSet::x86::interrupt(
-				exception,
-				context_
-			);
-			return;
-		}
-
-		if(
-			exception.code_type == Exception::CodeType::Internal &&
-			!posts_next_ip(InstructionSet::x86::Vector(exception.vector))
-		) {
-			context_.registers.ip() = decoded_ip_;
-		}
-
-		try {
-			InstructionSet::x86::interrupt(
-				exception,
-				context_
-			);
-		} catch (const InstructionSet::x86::Exception exception) {
-			// TODO: unsure about this. Probably just recurse?
-			printf("DOUBLE FAULT TODO!");
-		}
+		InstructionSet::x86::perform(
+			decoded_.second,
+			context_,
+			decoded_ip_
+		);
 	}
 
 	// MARK: - ScanProducer.
@@ -990,11 +953,11 @@ private:
 		}
 
 		InstructionSet::x86::Flags flags;
-		Registers<x86_model> registers;
+		InstructionSet::x86::Registers<x86_model> registers;
 
 		LinearMemory<x86_model> linear_memory;
-		Segments<x86_model> segments;
-		SegmentedMemory<x86_model> memory;
+		Segments<x86_model, LinearMemory<x86_model>> segments;
+		SegmentedMemory<x86_model, LinearMemory<x86_model>> memory;
 
 		FlowController<pc_model> flow_controller;
 		CPUControl<pc_model> cpu_control;
