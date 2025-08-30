@@ -179,7 +179,7 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate {
 	static constexpr size_t buffered_samples = 1024;
 	bool is_stereo = false;
 
-	void speaker_did_complete_samples(Outputs::Speaker::Speaker *, const std::vector<int16_t> &buffer) final {
+	void speaker_did_complete_samples(Outputs::Speaker::Speaker &, const std::vector<int16_t> &buffer) final {
 		std::lock_guard lock_guard(audio_buffer_mutex_);
 		const size_t buffer_size = buffered_samples * (is_stereo ? 2 : 1);
 		if(audio_buffer_.size() > buffer_size) {
@@ -241,7 +241,7 @@ public:
 		lights_.clear();
 
 		// Generate a bunch of LEDs for connected drives.
-		constexpr float height = 0.05f;
+		static constexpr float height = 0.05f;
 		const float width = height / aspect_ratio;
 		const float right_x = 1.0f - 2.0f * width;
 		float y = 1.0f - 2.0f * height;
