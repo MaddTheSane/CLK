@@ -332,7 +332,7 @@ class MachineDocument:
 	private func insertFile(_ URL: URL) {
 		// Try to insert media.
 		let mediaSet = CSMediaSet(fileAt: URL)
-		if !mediaSet.empty {
+		if !mediaSet.isEmpty {
 			mediaSet.apply(to: self.machine)
 			return
 		}
@@ -409,7 +409,7 @@ class MachineDocument:
 	/// Forwards mouse movement events to the mouse.
 	func mouseMoved(_ event: NSEvent) {
 		if let machine = self.machine {
-			machine.addMouseMotionX(event.deltaX, y: event.deltaY)
+			machine.addMouseMotion(x: event.deltaX, y: event.deltaY)
 		}
 	}
 

@@ -18,7 +18,7 @@
 namespace {
 
 NSString *directoryFor(const ROM::Description &description) {
-	return [@"ROMImages" stringByAppendingPathComponent:[NSString stringWithUTF8String:description.machine_name.c_str()]];
+	return [@"ROMImages" stringByAppendingPathComponent:@(description.machine_name.c_str())];
 }
 
 NSArray<NSURL *> *urlsFor(const ROM::Description &description, const std::string &file_name) {
@@ -28,7 +28,7 @@ NSArray<NSURL *> *urlsFor(const ROM::Description &description, const std::string
 
 	for(NSURL *supportURL in supportURLs) {
 		[urls addObject:[[supportURL URLByAppendingPathComponent:subdirectory]
-								URLByAppendingPathComponent:[NSString stringWithUTF8String:file_name.c_str()]]];
+								URLByAppendingPathComponent:@(file_name.c_str())]];
 	}
 
 	return urls;
@@ -42,7 +42,7 @@ BOOL CSInstallROM(NSURL *url) {
 
 	// Try for a direct CRC match.
 	std::optional<ROM::Description> target_description;
-	target_description = ROM::Description::from_crc(uint32_t(data.crc32.integerValue));
+	target_description = ROM::Description::from_crc(data.crc32.unsignedIntValue);
 
 	// See whether there's an acceptable trimming that creates a CRC match.
 	if(!target_description) {
@@ -51,7 +51,7 @@ BOOL CSInstallROM(NSURL *url) {
 			if(description.size > data.length) continue;
 
 			NSData *const trimmedData = [data subdataWithRange:NSMakeRange(0, description.size)];
-			if(description.crc32s.find(uint32_t(trimmedData.crc32.unsignedIntValue)) != description.crc32s.end()) {
+			if(description.crc32s.find(trimmedData.crc32.unsignedIntValue) != description.crc32s.end()) {
 				target_description = description;
 				break;
 			}
@@ -87,7 +87,7 @@ ROMMachine::ROMFetcher CSROMFetcher(ROM::Request *missing) {
 				// Failing that, check inside the application bundle.
 				if(!fileData) {
 					fileData = [[NSBundle mainBundle]
-						dataForResource:[NSString stringWithUTF8String:file_name.c_str()]
+						dataForResource:@(file_name.c_str())
 						withExtension:nil
 						subdirectory:directoryFor(description)];
 				}

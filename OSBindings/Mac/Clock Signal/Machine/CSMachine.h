@@ -7,6 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 
 #import "CSAudioQueue.h"
 #import "CSJoystickManager.h"
@@ -77,7 +78,7 @@ typedef NS_ENUM(NSInteger, CSMachineChangeEffect) {
 - (void)clearAllKeys;
 
 - (void)setMouseButton:(int)button isPressed:(BOOL)isPressed;
-- (void)addMouseMotionX:(CGFloat)deltaX y:(CGFloat)deltaY;
+- (void)addMouseMotionX:(CGFloat)deltaX y:(CGFloat)deltaY NS_SWIFT_NAME(addMouseMotion(x:y:));
 
 - (void)substitute:(nonnull CSStaticAnalyser *)machine;
 

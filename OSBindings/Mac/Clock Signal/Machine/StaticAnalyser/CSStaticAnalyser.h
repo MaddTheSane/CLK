@@ -172,7 +172,7 @@ typedef int Kilobytes;
 - (instancetype)initWithFileAtURL:(NSURL *)url;
 - (void)applyToMachine:(CSMachine *)machine;
 
-@property(nonatomic, readonly) BOOL empty;
+@property(nonatomic, readonly, getter=isEmpty) BOOL empty;
 
 @end
 
