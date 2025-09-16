@@ -52,7 +52,7 @@ class ConcreteMachine:
 	public Configurable::Device
 {
 private:
-	Log::Logger<Log::Source::Archimedes> logger;
+	using Logger = Log::Logger<Log::Source::Archimedes>;
 
 	// This fictitious clock rate just means '24 MIPS, please'; it's divided elsewhere.
 	static constexpr int ClockRate = 24'000'000;
@@ -117,7 +117,7 @@ public:
 	) : executor_(*this, *this, *this) {
 		set_clock_rate(ClockRate);
 
-		constexpr ROM::Name risc_os = ROM::Name::AcornRISCOS311;
+		static constexpr ROM::Name risc_os = ROM::Name::AcornRISCOS311;
 		ROM::Request request(risc_os);
 		auto roms = rom_fetcher(request);
 		if(!request.validate(roms)) {

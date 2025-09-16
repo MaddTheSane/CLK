@@ -34,6 +34,7 @@ enum class Source {
 	ARMVIDC,
 	AtariST,
 	AtariSTDMAController,
+	BBCMicro,
 	CommodoreStaticAnalyser,
 	CMOSRTC,
 	DirectAccessDevice,
@@ -123,6 +124,7 @@ constexpr const char *prefix(const Source source) {
 		case Source::ARMVIDC:					return "VIDC";
 		case Source::AtariST:					return "AtariST";
 		case Source::AtariSTDMAController:		return "DMA";
+		case Source::BBCMicro:					return "BBC";
 		case Source::CommodoreStaticAnalyser:	return "Commodore Static Analyser";
 		case Source::CMOSRTC:					return "CMOSRTC";
 		case Source::DirectAccessDevice:		return "Direct Access Device";
@@ -260,6 +262,8 @@ struct LogLine<source, false> {
 template <Source source>
 class Logger {
 public:
+	Logger() = delete;
+
 	static constexpr bool InfoEnabled = enabled_level(source) == EnabledLevel::ErrorsAndInfo;
 	static constexpr bool ErrorsEnabled = enabled_level(source) >= EnabledLevel::Errors;
 
