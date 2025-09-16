@@ -10,7 +10,7 @@
 
 #include "StaticAnalyser.hpp"
 
-@interface CSMachine(Target)
+@interface CSMachine(/*Target*/)
 
 - (void)applyMedia:(const Analyser::Static::Media &)media;
 
