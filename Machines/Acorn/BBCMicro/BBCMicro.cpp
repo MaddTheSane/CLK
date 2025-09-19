@@ -7,19 +7,27 @@
 //
 
 #include "BBCMicro.hpp"
+#include "Keyboard.hpp"
 
 #include "Machines/MachineTypes.hpp"
+#include "Machines/Utility/MemoryFuzzer.hpp"
+
+#include "Processors/6502/6502.hpp"
 
 #include "Components/6522/6522.hpp"
+#include "Components/6845/CRTC6845.hpp"
 #include "Components/SN76489/SN76489.hpp"
-#include "Processors/6502/6502.hpp"
+#include "Components/6850/6850.hpp"
+#include "Components/uPD7002/uPD7002.hpp"
 
 #include "Analyser/Static/Acorn/Target.hpp"
 #include "Outputs/Log.hpp"
 
+#include "Outputs/CRT/CRT.hpp"
 #include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
 #include "Concurrency/AsyncTaskQueue.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <cassert>
@@ -30,12 +38,15 @@ namespace BBCMicro {
 namespace {
 using Logger = Log::Logger<Log::Source::BBCMicro>;
 
+/*!
+	Combines an SN76489 with an appropriate asynchronous queue and filtering speaker.
+*/
 struct Audio {
 	Audio() :
-		sn76489_(TI::SN76489::Personality::SN76489, audio_queue_),
+		sn76489_(TI::SN76489::Personality::SN76489, audio_queue_, 2),
 		speaker_(sn76489_)
 	{
-		// I'm *VERY* unsure about this.
+		// Combined with the additional divider specified above, implies this chip is clocked at 4Mhz.
 		speaker_.set_input_rate(2'000'000.0f);
 	}
 
@@ -44,16 +55,16 @@ struct Audio {
 	}
 
 	TI::SN76489 *operator ->() {
-		flush();
+		speaker_.run_for(audio_queue_, time_since_update_.flush<Cycles>());
 		return &sn76489_;
 	}
 
-	void operator +=(const HalfCycles duration) {
-		speaker_.run_for(audio_queue_, time_since_update_.flush<Cycles>());
+	void operator +=(const Cycles duration) {
 		time_since_update_ += duration;
 	}
 
 	void flush() {
+		speaker_.run_for(audio_queue_, time_since_update_.flush<Cycles>());
 		audio_queue_.perform();
 	}
 
@@ -65,14 +76,48 @@ private:
 	Concurrency::AsyncTaskQueue<false> audio_queue_;
 	TI::SN76489 sn76489_;
 	Outputs::Speaker::PullLowpass<TI::SN76489> speaker_;
-	HalfCycles time_since_update_;
+	Cycles time_since_update_;
 };
 
+/*!
+	Models the user-port VIA.
+*/
 struct UserVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 };
+using UserVIA = MOS::MOS6522::MOS6522<UserVIAPortHandler>;
+
+/*!
+	Target for the video base address.
+*/
+struct VideoBaseAddress {
+	void set_video_base(const uint8_t code) {
+		switch(code) {
+			case 0b00:	video_base_ = 0x4000;	break;
+			case 0b01:	video_base_ = 0x6000;	break;
+			case 0b10:	video_base_ = 0x3000;	break;
+			case 0b11:	video_base_ = 0x5800;	break;
+		}
+	}
+
+protected:
+	uint16_t video_base_ = 0;
+};
+
+/*!
+	Models the system VIA, which connects to the SN76489 and the keyboard.
+*/
+struct SystemVIAPortHandler;
+using SystemVIA = MOS::MOS6522::MOS6522<SystemVIAPortHandler>;
 
 struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
-	SystemVIAPortHandler(Audio &audio) : audio_(audio) {}
+	SystemVIAPortHandler(Audio &audio, VideoBaseAddress &video_base, SystemVIA &via) :
+		audio_(audio), video_base_(video_base), via_(via)
+	{
+		// Set initial mode to mode 0.
+		set_key(7, true);
+		set_key(8, true);
+		set_key(9, true);
+	}
 
 	// CA2: key pressed;
 	// CA1: vertical sync;
@@ -82,24 +127,39 @@ struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 	template <MOS::MOS6522::Port port>
 	void set_port_output(const uint8_t value, uint8_t) {
 		if(port == MOS::MOS6522::Port::A) {
-			Logger::info().append("Port A write: %02x", value);
+			port_a_output_ = value;
+			update_ca2();
 			return;
 		}
 
 		// The addressable latch.
 		//
 		// B0: enable writes to the sound generator;
-		// B1, B2: read/write to the sound processor;
-		// B3: enable writes to the keyboard.
+		// B1, B2: read/write to the speech processor;
+		// B3: keyboard scanning mode; 1 => automatic; 0 => programmatic;
+		// B4/B5: hardware scrolling;
+		// B6/B7: keyboard LEDs.
 		const auto mask = uint8_t(1 << (value & 7));
 		const auto old_latch = latch_;
 		latch_ = (latch_ & ~mask) | ((value & 8) ? mask : 0);
 
 		// Check for a strobe on the audio output.
-		if((old_latch^latch_) & old_latch & 1) {
+		if((old_latch^latch_) & old_latch & LatchFlags::WriteToSN76489) {
 			audio_->write(port_a_output_);
 		}
-		Logger::info().append("Programmable latch: %d%d%d%d", bool(latch_ & 8), bool(latch_ & 4), bool(latch_ & 2), bool(latch_ & 1));
+
+		// Pass on the video wraparound/base.
+		video_base_.set_video_base((latch_ >> 4) & 3);
+
+		// If keyboard scanning mode has changed, update CA2.
+		if(mask == LatchFlags::KeyboardIsScanning) {
+			update_ca2();
+		}
+
+		// Update keyboard LEDs.
+		if(mask >= 0x40) {
+			Logger::info().append("CAPS: %d SHIFT: %d", bool(latch_ & 0x40), bool(latch_ & 0x40));
+		}
 	}
 
 	template <MOS::MOS6522::Port port>
@@ -109,29 +169,302 @@ struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 			//
 			//	b4/5: joystick fire buttons;
 			//	b6/7: speech interrupt/ready inputs.
+			return 0x3f;	// b6 = b7 = 0 => no speech hardware.
+		}
 
-			Logger::info().append("Port B read");
+		if(latch_ & LatchFlags::KeyboardIsScanning) {
 			return 0xff;
 		}
 
-		Logger::info().append("Port A read");
-		return 0xff;
+		// Read keyboard. Low six bits of output are key to check, state should be returned in high bit.
+		const uint8_t key_state = key_column(port_a_output_)[key_row(port_a_output_)] ? 0x80 : 0x00;
+		return key_state;
+	}
+
+	void set_key(const uint8_t key, const bool pressed) {
+		key_column(key)[key_row(key)] = pressed;
+		update_ca2();
+	}
+
+	void advance_keyboard_scan(const HalfCycles count) {
+		if(!(latch_ & LatchFlags::KeyboardIsScanning)) {
+			return;
+		}
+
+		const int ending_column = keyboard_scan_column_ + count.as<int>();
+		int steps = (ending_column >> 1) - (keyboard_scan_column_ >> 1);
+		while(steps--) {
+			keyboard_scan_column_ += 2;
+			update_ca2();
+		}
+		keyboard_scan_column_ = ending_column;
 	}
 
 private:
 	uint8_t latch_ = 0;
+	enum LatchFlags: uint8_t {
+		WriteToSN76489 = 1 << 0,
+		KeyboardIsScanning = 1 << 3,
+	};
+
 	uint8_t port_a_output_ = 0;
+
 	Audio &audio_;
+	VideoBaseAddress &video_base_;
+
+	SystemVIA &via_;
+
+	// MARK: - Keyboard state and helpers.
+
+	using KeyRow = std::bitset<8>;
+	std::array<KeyRow, 16> key_states_{};
+	int keyboard_scan_column_ = 0;
+
+	KeyRow &key_column(const uint8_t key) {
+		return key_states_[key & 0xf];
+	}
+	const KeyRow &key_column(const uint8_t key) const {
+		return key_states_[key & 0xf];
+	}
+	static constexpr size_t key_row(const uint8_t key) {
+		return (key >> 4) & 7;
+	}
+
+	void update_ca2() {
+		const bool state = key_column(
+			[&]() {
+				if(latch_ & LatchFlags::KeyboardIsScanning) {
+					return uint8_t(keyboard_scan_column_ >> 1);
+				} else {
+					return uint8_t(port_a_output_ & 0xf);
+				}
+		} ()).to_ulong() & 0xfe;	// Discard the first row.
+
+		via_.set_control_line_input<MOS::MOS6522::Port::A, MOS::MOS6522::Line::Two>(state);
+	}
 };
 
+/*!
+	Handles CRTC bus activity.
+*/
+class CRTCBusHandler: public VideoBaseAddress {
+public:
+	CRTCBusHandler(const uint8_t *const ram, SystemVIA &system_via) :
+		crt_(1024, 1, Outputs::Display::Type::PAL50, Outputs::Display::InputDataType::Red1Green1Blue1),
+		ram_(ram),
+		system_via_(system_via) {}
+
+	void set_palette(const uint8_t value) {
+		const auto index = value >> 4;
+		palette_[index] = uint8_t(
+			7 ^ (
+				((value & 0b100) >> 2) |
+				((value & 0b001) << 2) |
+				(value & 0b010)
+			)
+		);
+		flash_flags_[size_t(index)] = value & 0b1000;
+	}
+
+	void set_control(const uint8_t value) {
+		crtc_clock_multiplier_ = (value & 0x10) ? 1 : 2;
+
+		active_collation_.pixels_per_clock = 1 << ((value >> 2) & 0x03);
+		active_collation_.is_teletext = value & 0x02;
+		if(active_collation_.is_teletext) {
+			Logger::error().append("TODO: video control => teletext %d", bool(value & 0x02));
+		}
+
+		flash_mask_ = value & 0x01 ? 7 : 0;
+
+		Logger::info().append("TODO: video control => cursor segment %d%d%d", bool(value & 0x80), bool(value & 0x40), bool(value & 0x20));
+	}
+
+	/*!
+		The CRTC entry function for the main part of each clock cycle; takes the current
+		bus state and determines what output to produce based on the current palette and mode.
+	*/
+	void perform_bus_cycle(const Motorola::CRTC::BusState &state) {
+		system_via_.set_control_line_input<MOS::MOS6522::Port::A, MOS::MOS6522::Line::One>(state.vsync);
+
+		// Count cycles since horizontal sync to insert a colour burst.
+		if(state.hsync) {
+			++cycles_into_hsync_;
+		} else {
+			cycles_into_hsync_ = 0;
+		}
+		const bool is_colour_burst = cycles_into_hsync_ >= 5 && cycles_into_hsync_ < 9;
+
+		// Sync is taken to override pixels, and is combined as a simple OR.
+		const bool is_sync = state.hsync || state.vsync;
+
+		OutputMode output_mode;
+		if(is_sync) {
+			output_mode = OutputMode::Sync;
+		} else if(is_colour_burst) {
+			output_mode = OutputMode::ColourBurst;
+		} else if(state.display_enable && !(state.row_address & 8)) {
+			output_mode = OutputMode::Pixels;
+		} else {
+			output_mode = OutputMode::Blank;
+		}
+
+		// If a transition between sync/border/pixels just occurred, flush whatever was
+		// in progress to the CRT and reset counting.
+		if(output_mode != previous_output_mode_) {
+			if(cycles_) {
+				switch(previous_output_mode_) {
+					default:
+					case OutputMode::Blank:			crt_.output_blank(cycles_);					break;
+					case OutputMode::Sync:			crt_.output_sync(cycles_);					break;
+					case OutputMode::ColourBurst:	crt_.output_default_colour_burst(cycles_);	break;
+					case OutputMode::Pixels:		flush_pixels();								break;
+				}
+			}
+
+			cycles_ = 0;
+			previous_output_mode_ = output_mode;
+		}
+
+		// Increment cycles since state changed.
+		cycles_ += crtc_clock_multiplier_ << 3;
+
+		// Collect some more pixels if output is ongoing.
+		if(previous_output_mode_ == OutputMode::Pixels) {
+			// Flush the current buffer pixel if full; the CRTC allows many different display
+			// widths so it's not necessarily possible to predict the correct number in advance
+			// and using the upper bound could lead to inefficient behaviour.
+			if(pixel_data_ && (pixels_collected() == 320 || active_collation_ != previous_collation_)) {
+				flush_pixels();
+				cycles_ = 0;
+			}
+			previous_collation_ = active_collation_;
+
+			if(!pixel_data_) {
+				pixel_pointer_ = pixel_data_ = crt_.begin_data(320, 8);
+			}
+			if(pixel_pointer_) {
+				uint16_t address;
+
+				if(state.refresh_address & (1 << 13)) {
+					// Teletext address generation mode.
+					address = uint16_t(
+						0x3c00 |
+						((state.refresh_address & 0x800) << 3) |
+						(state.refresh_address & 0x3ff)
+					);
+					// TODO: wraparound? Does that happen on Mode 7?
+				} else {
+					address = uint16_t((state.refresh_address << 3) | (state.row_address & 7));
+					if(address & 0x8000) {
+						address = (address + video_base_) & 0x7fff;
+					}
+				}
+
+				// Hard coded: pixel mode!
+				pixel_shifter_ = ram_[address];
+				switch(crtc_clock_multiplier_ * active_collation_.pixels_per_clock) {
+					case 1: shift_pixels<1>();		break;
+					case 2: shift_pixels<2>();		break;
+					case 4: shift_pixels<4>();		break;
+					case 8: shift_pixels<8>();		break;
+					case 16: shift_pixels<16>();	break;
+					default: break;
+				}
+			}
+		}
+	}
+
+	/// Sets the destination for output.
+	void set_scan_target(Outputs::Display::ScanTarget *const scan_target) {
+		crt_.set_scan_target(scan_target);
+	}
+
+	/// @returns The current scan status.
+	Outputs::Display::ScanStatus get_scaled_scan_status() const {
+		return crt_.get_scaled_scan_status();
+	}
+
+	/// Sets the type of display.
+	void set_display_type(const Outputs::Display::DisplayType display_type) {
+		crt_.set_display_type(display_type);
+	}
+
+	/// Gets the type of display.
+	Outputs::Display::DisplayType get_display_type() const {
+		return crt_.get_display_type();
+	}
+
+
+private:
+	enum class OutputMode {
+		Sync,
+		Blank,
+		ColourBurst,
+		Pixels
+	};
+	struct PixelCollation {
+		int pixels_per_clock;
+		bool is_teletext;
+
+		bool operator !=(const PixelCollation &rhs) {
+			if(is_teletext && rhs.is_teletext) return false;
+			return pixels_per_clock != rhs.pixels_per_clock;
+		}
+	};
+
+	OutputMode previous_output_mode_ = OutputMode::Sync;
+	int cycles_ = 0;
+	int cycles_into_hsync_ = 0;
+
+	Outputs::CRT::CRT crt_;
+
+	uint8_t *pixel_data_ = nullptr, *pixel_pointer_ = nullptr;
+	size_t pixels_collected() const {
+		return size_t(pixel_pointer_ - pixel_data_);
+	}
+	void flush_pixels() {
+		crt_.output_data(cycles_, pixels_collected());
+		pixel_pointer_ = pixel_data_ = nullptr;
+	}
+	PixelCollation previous_collation_;
+	uint8_t palette_[16];
+	std::bitset<16> flash_flags_;
+	uint8_t flash_mask_ = 0;
+
+	int crtc_clock_multiplier_ = 1;
+	PixelCollation active_collation_;
+	uint8_t pixel_shifter_ = 0;
+
+	template <int count> void shift_pixels() {
+		for(int c = 0; c < count; c++) {
+			const uint8_t colour =
+				((pixel_shifter_ & 0x80) >> 4) |
+				((pixel_shifter_ & 0x20) >> 3) |
+				((pixel_shifter_ & 0x08) >> 2) |
+				((pixel_shifter_ & 0x02) >> 1);
+			pixel_shifter_ <<= 1;
+			*pixel_pointer_++ = palette_[colour] ^ (flash_flags_[colour] ? flash_mask_ : 0x00);
+		}
+	}
+
+	const uint8_t *const ram_ = nullptr;
+	SystemVIA &system_via_;
+};
+using CRTC = Motorola::CRTC::CRTC6845<
+	CRTCBusHandler,
+	Motorola::CRTC::Personality::HD6845S,
+	Motorola::CRTC::CursorType::None>;
 }
 
 class ConcreteMachine:
 	public Machine,
 	public MachineTypes::AudioProducer,
+	public MachineTypes::MappedKeyboardMachine,
 	public MachineTypes::ScanProducer,
 	public MachineTypes::TimedMachine,
-	public MOS::MOS6522::IRQDelegatePortHandler::Delegate
+	public MOS::MOS6522::IRQDelegatePortHandler::Delegate,
+	public NEC::uPD7002::Delegate
 {
 public:
 	ConcreteMachine(
@@ -139,9 +472,13 @@ public:
 		const ROMMachine::ROMFetcher &rom_fetcher
 	) :
 		m6502_(*this),
-		system_via_port_handler_(audio_),
+		system_via_port_handler_(audio_, crtc_bus_handler_, system_via_),
 		user_via_(user_via_port_handler_),
-		system_via_(system_via_port_handler_)
+		system_via_(system_via_port_handler_),
+		crtc_bus_handler_(ram_.data(), system_via_),
+		crtc_(crtc_bus_handler_),
+		acia_(HalfCycles(2'000'000)), // TODO: look up real ACIA clock rate.
+		adc_(HalfCycles(2'000'000))
 	{
 		set_clock_rate(2'000'000);
 
@@ -164,9 +501,10 @@ public:
 
 		// Setup fixed parts of memory map.
 		page(0, &ram_[0], true);
-		page(1, &ram_[1], true);
+		page(1, &ram_[16384], true);
 		page_sideways(15);
-		page(3, os_.data(), true);
+		page(3, os_.data(), false);
+		Memory::Fuzz(ram_);
 
 		(void)target;
 	}
@@ -205,12 +543,32 @@ public:
 
 
 		//
-		// Dependent device updates.
+		// 1Mhz devices.
 		//
 		const auto half_cycles = HalfCycles(duration.as_integral());
-		audio_ += half_cycles;
 		system_via_.run_for(half_cycles);
+		system_via_port_handler_.advance_keyboard_scan(half_cycles);
 		user_via_.run_for(half_cycles);
+
+
+		//
+		// 2Mhz devices.
+		//
+		audio_ += duration;
+		if(crtc_2mhz_) {
+			crtc_.run_for(duration);
+		} else {
+			// TODO: possibly skip one cycle if clock speed just changed partway through a 1Mhz window?
+			const auto cycles = (phase_ >> 1) - ((phase_ - duration.as<int>()) >> 1);
+			crtc_.run_for(Cycles(cycles));
+		}
+		adc_.run_for(duration);
+
+
+		//
+		// Questionably-clocked devices.
+		//
+		acia_.run_for(half_cycles);
 
 
 		//
@@ -235,7 +593,57 @@ public:
 				} else {
 					page_sideways(*value & 0xf);
 				}
-			} else {
+			} else if(address >= 0xfe00 && address < 0xfe08) {
+				if(is_read(operation)) {
+					if(address & 1) {
+						*value = crtc_.get_register();
+					} else {
+						*value = crtc_.get_status();
+					}
+				} else {
+					if(address & 1) {
+						crtc_.set_register(*value);
+					} else {
+						crtc_.select_register(*value);
+					}
+				}
+			} else if(address >= 0xfe20 && address < 0xfe30) {
+				if(is_read(operation)) {
+					*value = 0xfe;
+				} else {
+					switch(address) {
+						case 0xfe20:
+							crtc_bus_handler_.set_control(*value);
+							crtc_2mhz_ = *value & 0x10;
+						break;
+						case 0xfe21:
+							crtc_bus_handler_.set_palette(*value);
+						break;
+					}
+				}
+			} else if(address == 0xfee0) {
+				if(is_read(operation)) {
+					Logger::info().append("Read tube status: 0");
+					*value = 0;
+				} else {
+					Logger::info().append("Wrote tube: %02x", *value);
+				}
+			} else if(address >= 0xfe08 && address < 0xfe10) {
+				if(is_read(operation)) {
+//					Logger::info().append("ACIA read");
+					*value = acia_.read(address);
+				} else {
+//					Logger::info().append("ACIA write: %02x", *value);
+					acia_.write(address, *value);
+				}
+			} else if(address >= 0xfec0 && address < 0xfee0) {
+				if(is_read(operation)) {
+					*value = adc_.read(address);
+				} else {
+					adc_.write(address, *value);
+				}
+			}
+			else {
 				Logger::error()
 					.append("Unhandled IO %s at %04x", is_read(operation) ? "read" : "write", address)
 					.append_if(!is_read(operation), ": %02x", *value);
@@ -269,9 +677,26 @@ private:
 	}
 
 	// MARK: - ScanProducer.
-	void set_scan_target(Outputs::Display::ScanTarget *) override {}
-	Outputs::Display::ScanStatus get_scan_status() const override {
-		return Outputs::Display::ScanStatus{};
+	void set_scan_target(Outputs::Display::ScanTarget *const target) override {
+		crtc_bus_handler_.set_scan_target(target);
+	}
+
+	Outputs::Display::ScanStatus get_scaled_scan_status() const override {
+		return crtc_bus_handler_.get_scaled_scan_status();
+	}
+
+	// MARK: - KeyboardMachine.
+	BBCMicro::KeyboardMapper mapper_;
+	KeyboardMapper *get_keyboard_mapper() override {
+		return &mapper_;
+	}
+
+	void set_key_state(const uint16_t key, const bool is_pressed) override {
+		if(key == BBCMicro::KeyboardMapper::KeyBreak) {
+			m6502_.set_reset_line(is_pressed);
+		} else {
+			system_via_port_handler_.set_key(uint8_t(key), is_pressed);
+		}
 	}
 
 	// MARK: - TimedMachine.
@@ -287,6 +712,11 @@ private:
 
 	// MARK: - IRQDelegatePortHandler::Delegate.
 	void mos6522_did_change_interrupt_status(void *) override {
+		update_irq_line();
+	}
+
+	// MARK: - uPD7002::Delegate.
+	void did_change_interrupt_status(NEC::uPD7002 &) override {
 		update_irq_line();
 	}
 
@@ -328,17 +758,26 @@ private:
 
 	UserVIAPortHandler user_via_port_handler_;
 	SystemVIAPortHandler system_via_port_handler_;
-	MOS::MOS6522::MOS6522<UserVIAPortHandler> user_via_;
-	MOS::MOS6522::MOS6522<SystemVIAPortHandler> system_via_;
+	UserVIA user_via_;
+	SystemVIA system_via_;
 
 	void update_irq_line() {
 		m6502_.set_irq_line(
 			user_via_.get_interrupt_line() ||
-			system_via_.get_interrupt_line()
+			system_via_.get_interrupt_line() ||
+			adc_.interrupt()
 		);
 	}
 
 	Audio audio_;
+
+	CRTCBusHandler crtc_bus_handler_;
+	CRTC crtc_;
+	bool crtc_2mhz_ = true;
+
+	Motorola::ACIA::ACIA acia_;
+
+	NEC::uPD7002 adc_;
 };
 
 }
