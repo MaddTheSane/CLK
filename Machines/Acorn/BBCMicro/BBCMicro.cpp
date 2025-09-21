@@ -7,7 +7,8 @@
 //
 
 #include "BBCMicro.hpp"
-#include "Keyboard.hpp"
+
+#include "Activity/Source.hpp"
 
 #include "Machines/MachineTypes.hpp"
 #include "Machines/Utility/MemoryFuzzer.hpp"
@@ -20,12 +21,17 @@
 #include "Components/6850/6850.hpp"
 #include "Components/uPD7002/uPD7002.hpp"
 
+// TODO: factor this more appropriately.
+#include "Machines/Acorn/Electron/Plus3.hpp"
+
 #include "Analyser/Static/Acorn/Target.hpp"
 #include "Outputs/Log.hpp"
 
 #include "Outputs/CRT/CRT.hpp"
 #include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
 #include "Concurrency/AsyncTaskQueue.hpp"
+
+#include "Keyboard.hpp"
 
 #include <algorithm>
 #include <array>
@@ -158,7 +164,18 @@ struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 
 		// Update keyboard LEDs.
 		if(mask >= 0x40) {
-			Logger::info().append("CAPS: %d SHIFT: %d", bool(latch_ & 0x40), bool(latch_ & 0x40));
+			const bool new_caps = latch_ & 0x80;
+			const bool new_shift = latch_ & 0x40;
+
+			if(new_caps != caps_led_state_) {
+				caps_led_state_ = new_caps;
+				activity_observer_->set_led_status(caps_led, caps_led_state_);
+			}
+
+			if(new_shift != shift_led_state_) {
+				shift_led_state_ = new_shift;
+				activity_observer_->set_led_status(shift_led, shift_led_state_);
+			}
 		}
 	}
 
@@ -198,6 +215,18 @@ struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 			update_ca2();
 		}
 		keyboard_scan_column_ = ending_column;
+	}
+
+	void set_activity_observer(Activity::Observer *const observer) {
+		activity_observer_ = observer;
+
+		if(activity_observer_) {
+			activity_observer_->register_led(caps_led, Activity::Observer::LEDPresentation::Persistent);
+			activity_observer_->register_led(shift_led, Activity::Observer::LEDPresentation::Persistent);
+
+			activity_observer_->set_led_status(caps_led, caps_led_state_);
+			activity_observer_->set_led_status(shift_led, shift_led_state_);
+		}
 	}
 
 private:
@@ -242,6 +271,12 @@ private:
 
 		via_.set_control_line_input<MOS::MOS6522::Port::A, MOS::MOS6522::Line::Two>(state);
 	}
+
+	static inline const std::string caps_led = "CAPS";
+	static inline const std::string shift_led = "SHIFT";
+	bool caps_led_state_ = false;
+	bool shift_led_state_ = false;
+	Activity::Observer *activity_observer_ = nullptr;
 };
 
 /*!
@@ -276,8 +311,7 @@ public:
 		}
 
 		flash_mask_ = value & 0x01 ? 7 : 0;
-
-		Logger::info().append("TODO: video control => cursor segment %d%d%d", bool(value & 0x80), bool(value & 0x40), bool(value & 0x20));
+		cursor_mask_ = value & 0b1110'0000;
 	}
 
 	/*!
@@ -298,12 +332,26 @@ public:
 		// Sync is taken to override pixels, and is combined as a simple OR.
 		const bool is_sync = state.hsync || state.vsync;
 
+		// Check for a cursor leading edge.
+		cursor_shifter_ >>= 4;
+		if(state.cursor != previous_cursor_enabled_) {
+			if(state.cursor && state.display_enable) {	// TODO: should I have to test display enable here? Or should
+														// the CRTC already have factored that in?
+				cursor_shifter_ =
+					((cursor_mask_ & 0x80) ? 0x0007 : 0) |
+					((cursor_mask_ & 0x40) ? 0x0070 : 0) |
+					((cursor_mask_ & 0x20) ? 0x7700 : 0);
+			}
+			previous_cursor_enabled_ = state.cursor;
+		}
+
 		OutputMode output_mode;
+		const bool should_fetch = state.display_enable && !(state.row_address & 8);
 		if(is_sync) {
 			output_mode = OutputMode::Sync;
 		} else if(is_colour_burst) {
 			output_mode = OutputMode::ColourBurst;
-		} else if(state.display_enable && !(state.row_address & 8)) {
+		} else if(should_fetch || cursor_shifter_) {
 			output_mode = OutputMode::Pixels;
 		} else {
 			output_mode = OutputMode::Blank;
@@ -362,13 +410,13 @@ public:
 				}
 
 				// Hard coded: pixel mode!
-				pixel_shifter_ = ram_[address];
+				pixel_shifter_ = should_fetch ? ram_[address] : 0;
 				switch(crtc_clock_multiplier_ * active_collation_.pixels_per_clock) {
-					case 1: shift_pixels<1>();		break;
-					case 2: shift_pixels<2>();		break;
-					case 4: shift_pixels<4>();		break;
-					case 8: shift_pixels<8>();		break;
-					case 16: shift_pixels<16>();	break;
+					case 1: shift_pixels<1>(cursor_shifter_ & 7);	break;
+					case 2: shift_pixels<2>(cursor_shifter_ & 7);	break;
+					case 4: shift_pixels<4>(cursor_shifter_ & 7);	break;
+					case 8: shift_pixels<8>(cursor_shifter_ & 7);	break;
+					case 16: shift_pixels<16>(cursor_shifter_ & 7);	break;
 					default: break;
 				}
 			}
@@ -394,7 +442,6 @@ public:
 	Outputs::Display::DisplayType get_display_type() const {
 		return crt_.get_display_type();
 	}
-
 
 private:
 	enum class OutputMode {
@@ -436,7 +483,11 @@ private:
 	PixelCollation active_collation_;
 	uint8_t pixel_shifter_ = 0;
 
-	template <int count> void shift_pixels() {
+	uint8_t cursor_mask_ = 0;
+	uint32_t cursor_shifter_ = 0;
+	bool previous_cursor_enabled_ = false;
+
+	template <int count> void shift_pixels(const uint8_t cursor_mask) {
 		for(int c = 0; c < count; c++) {
 			const uint8_t colour =
 				((pixel_shifter_ & 0x80) >> 4) |
@@ -444,7 +495,7 @@ private:
 				((pixel_shifter_ & 0x08) >> 2) |
 				((pixel_shifter_ & 0x02) >> 1);
 			pixel_shifter_ <<= 1;
-			*pixel_pointer_++ = palette_[colour] ^ (flash_flags_[colour] ? flash_mask_ : 0x00);
+			*pixel_pointer_++ = palette_[colour] ^ (flash_flags_[colour] ? flash_mask_ : 0x00) ^ cursor_mask;
 		}
 	}
 
@@ -454,17 +505,21 @@ private:
 using CRTC = Motorola::CRTC::CRTC6845<
 	CRTCBusHandler,
 	Motorola::CRTC::Personality::HD6845S,
-	Motorola::CRTC::CursorType::None>;
+	Motorola::CRTC::CursorType::MDA>;
 }
 
+template <bool has_1770>
 class ConcreteMachine:
+	public Activity::Source,
 	public Machine,
 	public MachineTypes::AudioProducer,
 	public MachineTypes::MappedKeyboardMachine,
+	public MachineTypes::MediaTarget,
 	public MachineTypes::ScanProducer,
 	public MachineTypes::TimedMachine,
 	public MOS::MOS6522::IRQDelegatePortHandler::Delegate,
-	public NEC::uPD7002::Delegate
+	public NEC::uPD7002::Delegate,
+	public WD::WD1770::Delegate
 {
 public:
 	ConcreteMachine(
@@ -484,11 +539,20 @@ public:
 
 		system_via_port_handler_.set_interrupt_delegate(this);
 		user_via_port_handler_.set_interrupt_delegate(this);
+		adc_.set_delegate(this);
 
 		// Grab ROMs.
 		using Request = ::ROM::Request;
 		using Name = ::ROM::Name;
-		const auto request = Request(Name::AcornBASICII) && Request(Name::BBCMicroMOS12);
+
+		auto request = Request(Name::AcornBASICII) && Request(Name::BBCMicroMOS12);
+		if(target.has_1770dfs) {
+			request = request && Request(Name::BBCMicroDFS226);
+		}
+		if(target.has_adfs) {
+			request = request && Request(Name::BBCMicroADFS130);
+		}
+
 		auto roms = rom_fetcher(request);
 		if(!request.validate(roms)) {
 			throw ROMMachine::Error::MissingROMs;
@@ -497,7 +561,26 @@ public:
 		const auto os_data = roms.find(Name::BBCMicroMOS12)->second;
 		std::copy(os_data.begin(), os_data.end(), os_.begin());
 
+		// Put BASIC in pole position.
 		install_sideways(15, roms.find(Name::AcornBASICII)->second, false);
+
+		// Install filing systems: put the DFS before the ADFS because it's more common on the BBC.
+		size_t fs_slot = 14;
+		if(target.has_1770dfs) {
+			install_sideways(fs_slot--, roms.find(Name::BBCMicroDFS226)->second, false);
+		}
+		if(target.has_adfs) {
+			install_sideways(fs_slot--, roms.find(Name::BBCMicroADFS130)->second, false);
+		}
+
+		// Throw sideways RAM into all unused slots.
+		if(target.has_sideways_ram) {
+			for(size_t c = 0; c < 16; c++) {
+				if(!rom_inserted_[c]) {
+					rom_inserted_[c] = rom_write_masks_[c] = true;
+				}
+			}
+		}
 
 		// Setup fixed parts of memory map.
 		page(0, &ram_[0], true);
@@ -506,7 +589,11 @@ public:
 		page(3, os_.data(), false);
 		Memory::Fuzz(ram_);
 
-		(void)target;
+		if constexpr (has_1770) {
+			wd1770_.set_delegate(this);
+		}
+
+		insert_media(target.media);
 	}
 
 	// MARK: - 6502 bus.
@@ -538,7 +625,7 @@ public:
 		};
 
 		// Determine whether this access hits the 1Mhz bus; if so then apply appropriate penalty, and update phase.
-		const auto duration = is_1mhz(address) ? Cycles(2 + (phase_&1)) : Cycles(1);
+		const auto duration = Cycles(is_1mhz(address) ? 2 + (phase_&1) : 1);
 		phase_ += duration.as<int>();
 
 
@@ -564,6 +651,11 @@ public:
 		}
 		adc_.run_for(duration);
 
+
+		if constexpr (has_1770) {
+			// The WD1770 is nominally clocked at 8Mhz.
+			wd1770_.run_for(duration * 4);
+		}
 
 		//
 		// Questionably-clocked devices.
@@ -642,6 +734,21 @@ public:
 				} else {
 					adc_.write(address, *value);
 				}
+			} else if(has_1770 && address >= 0xfe80 && address < 0xfe88) {
+				switch(address) {
+					case 0xfe80:
+						if(!is_read(operation)) {
+							wd1770_.set_control_register(*value);
+						}
+					break;
+					default:
+						if(is_read(operation)) {
+							*value = wd1770_.read(address);
+						} else {
+							wd1770_.write(address, *value);
+						}
+					break;
+				}
 			}
 			else {
 				Logger::error()
@@ -671,6 +778,14 @@ public:
 	}
 
 private:
+	// MARK: - Activity::Source.
+	void set_activity_observer(Activity::Observer *const observer) override {
+		if(has_1770) {
+			wd1770_.set_activity_observer(observer);
+		}
+		system_via_port_handler_.set_activity_observer(observer);
+	}
+
 	// MARK: - AudioProducer.
 	Outputs::Speaker::Speaker *get_speaker() override {
 		return audio_.speaker();
@@ -717,7 +832,16 @@ private:
 
 	// MARK: - uPD7002::Delegate.
 	void did_change_interrupt_status(NEC::uPD7002 &) override {
-		update_irq_line();
+		system_via_.set_control_line_input<MOS::MOS6522::Port::B, MOS::MOS6522::Line::One>(adc_.interrupt());
+	}
+
+	// MARK: - MediaTarget.
+	bool insert_media(const Analyser::Static::Media &media) override {
+		if(!media.disks.empty() && has_1770) {
+			wd1770_.set_disk(media.disks.front(), 0);
+		}
+
+		return !media.disks.empty();
 	}
 
 	// MARK: - Clock phase.
@@ -764,8 +888,7 @@ private:
 	void update_irq_line() {
 		m6502_.set_irq_line(
 			user_via_.get_interrupt_line() ||
-			system_via_.get_interrupt_line() ||
-			adc_.interrupt()
+			system_via_.get_interrupt_line()
 		);
 	}
 
@@ -778,6 +901,12 @@ private:
 	Motorola::ACIA::ACIA acia_;
 
 	NEC::uPD7002 adc_;
+
+	// MARK: - WD1770.
+	Electron::Plus3 wd1770_;
+	void wd1770_did_change_output(WD::WD1770 &) override {
+		m6502_.set_nmi_line(wd1770_.get_interrupt_request_line() || wd1770_.get_data_request_line());
+	}
 };
 
 }
@@ -790,5 +919,9 @@ std::unique_ptr<Machine> Machine::BBCMicro(
 ) {
 	using Target = Analyser::Static::Acorn::BBCMicroTarget;
 	const Target *const acorn_target = dynamic_cast<const Target *>(target);
-	return std::make_unique<BBCMicro::ConcreteMachine>(*acorn_target, rom_fetcher);
+	if(acorn_target->has_1770dfs || acorn_target->has_adfs) {
+		return std::make_unique<BBCMicro::ConcreteMachine<true>>(*acorn_target, rom_fetcher);
+	} else {
+		return std::make_unique<BBCMicro::ConcreteMachine<false>>(*acorn_target, rom_fetcher);
+	}
 }
