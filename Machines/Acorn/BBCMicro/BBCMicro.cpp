@@ -12,13 +12,15 @@
 
 #include "Machines/MachineTypes.hpp"
 #include "Machines/Utility/MemoryFuzzer.hpp"
+#include "Machines/Utility/Typer.hpp"
 
 #include "Processors/6502/6502.hpp"
 
 #include "Components/6522/6522.hpp"
 #include "Components/6845/CRTC6845.hpp"
-#include "Components/SN76489/SN76489.hpp"
 #include "Components/6850/6850.hpp"
+#include "Components/SAA5050/SAA5050.hpp"
+#include "Components/SN76489/SN76489.hpp"
 #include "Components/uPD7002/uPD7002.hpp"
 
 // TODO: factor this more appropriately.
@@ -44,6 +46,53 @@ namespace BBCMicro {
 namespace {
 using Logger = Log::Logger<Log::Source::BBCMicro>;
 
+/*!
+	Provides an analogue joystick with a single fire button.
+*/
+class Joystick: public Inputs::ConcreteJoystick {
+public:
+	Joystick(NEC::uPD7002 &adc, const int first_channel) :
+		ConcreteJoystick({
+			Input(Input::Horizontal),
+			Input(Input::Vertical),
+			Input(Input::Fire)
+		}),
+		adc_(adc),
+		first_channel_(first_channel) {}
+
+	void did_set_input(const Input &input, const float value) final {
+		switch(input.type) {
+			case Input::Horizontal:
+			case Input::Vertical:
+				adc_.set_input(first_channel_ + (input.type == Input::Vertical), 1.0f - value);
+			break;
+
+			default: break;
+		}
+	}
+
+	void did_set_input(const Input &input, const bool is_active) final {
+		if(input.type == Input::Fire) {
+			fire_ = is_active;
+		}
+	}
+
+	bool fire() const {
+		return fire_;
+	}
+
+private:
+	float digital_minimum() const final {
+		return 0.0f;
+	}
+	float digital_maximum() const final {
+		return 1.0f;
+	}
+
+	NEC::uPD7002 &adc_;
+	const int first_channel_;
+	bool fire_ = false;
+};
 /*!
 	Combines an SN76489 with an appropriate asynchronous queue and filtering speaker.
 */
@@ -116,13 +165,21 @@ struct SystemVIAPortHandler;
 using SystemVIA = MOS::MOS6522::MOS6522<SystemVIAPortHandler>;
 
 struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
-	SystemVIAPortHandler(Audio &audio, VideoBaseAddress &video_base, SystemVIA &via) :
-		audio_(audio), video_base_(video_base), via_(via)
+	struct Delegate {
+		virtual void strobe_lightpen() = 0;
+	};
+
+	SystemVIAPortHandler(
+		Audio &audio,
+		VideoBaseAddress &video_base,
+		SystemVIA &via,
+		Delegate &delegate,
+		const std::vector<std::unique_ptr<Inputs::Joystick>> &joysticks,
+		const bool run_disk
+	) :
+		audio_(audio), video_base_(video_base), via_(via), joysticks_(joysticks), delegate_(delegate)
 	{
-		// Set initial mode to mode 0.
-		set_key(7, true);
-		set_key(8, true);
-		set_key(9, true);
+		set_key_flag(uint8_t(Key::Bit3), run_disk);
 	}
 
 	// CA2: key pressed;
@@ -169,12 +226,16 @@ struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 
 			if(new_caps != caps_led_state_) {
 				caps_led_state_ = new_caps;
-				activity_observer_->set_led_status(caps_led, caps_led_state_);
+				if(activity_observer_) {
+					activity_observer_->set_led_status(caps_led, caps_led_state_);
+				}
 			}
 
 			if(new_shift != shift_led_state_) {
 				shift_led_state_ = new_shift;
-				activity_observer_->set_led_status(shift_led, shift_led_state_);
+				if(activity_observer_) {
+					activity_observer_->set_led_status(shift_led, shift_led_state_);
+				}
 			}
 		}
 	}
@@ -184,9 +245,12 @@ struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 		if(port == MOS::MOS6522::Port::B) {
 			// TODO:
 			//
-			//	b4/5: joystick fire buttons;
-			//	b6/7: speech interrupt/ready inputs.
-			return 0x3f;	// b6 = b7 = 0 => no speech hardware.
+			//	b4/5: joystick fire buttons (0 = pressed);
+			//	b6/7: speech interrupt/ready inputs. (0 expected if no speech hardware)
+			return
+				0xf |
+				(static_cast<Joystick *>(joysticks_[0].get())->fire() ? 0x00 : 0x10) |
+				(static_cast<Joystick *>(joysticks_[1].get())->fire() ? 0x00 : 0x20);
 		}
 
 		if(latch_ & LatchFlags::KeyboardIsScanning) {
@@ -198,8 +262,23 @@ struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 		return key_state;
 	}
 
+	template<MOS::MOS6522::Port port, MOS::MOS6522::Line line>
+	void set_control_line_output(const bool value) {
+		if constexpr (port == MOS::MOS6522::Port::B && line == MOS::MOS6522::Line::Two) {
+			if(previous_cb2_ != value && !value) {
+				delegate_.strobe_lightpen();
+			}
+			previous_cb2_ = value;
+		}
+	}
+
 	void set_key(const uint8_t key, const bool pressed) {
-		key_column(key)[key_row(key)] = pressed;
+		set_key_flag(key, pressed);
+		update_ca2();
+	}
+
+	void clear_all_keys() {
+		key_states_ = std::array<KeyRow, 16>{};
 		update_ca2();
 	}
 
@@ -229,6 +308,10 @@ struct SystemVIAPortHandler: public MOS::MOS6522::IRQDelegatePortHandler {
 		}
 	}
 
+	bool caps_lock() const {
+		return caps_led_state_;
+	}
+
 private:
 	uint8_t latch_ = 0;
 	enum LatchFlags: uint8_t {
@@ -237,6 +320,7 @@ private:
 	};
 
 	uint8_t port_a_output_ = 0;
+	bool previous_cb2_ = false;
 
 	Audio &audio_;
 	VideoBaseAddress &video_base_;
@@ -249,6 +333,9 @@ private:
 	std::array<KeyRow, 16> key_states_{};
 	int keyboard_scan_column_ = 0;
 
+	void set_key_flag(const uint8_t key, const bool pressed) {
+		key_column(key)[key_row(key)] = pressed;
+	}
 	KeyRow &key_column(const uint8_t key) {
 		return key_states_[key & 0xf];
 	}
@@ -277,6 +364,9 @@ private:
 	bool caps_led_state_ = false;
 	bool shift_led_state_ = false;
 	Activity::Observer *activity_observer_ = nullptr;
+
+	const std::vector<std::unique_ptr<Inputs::Joystick>> &joysticks_;
+	Delegate &delegate_;
 };
 
 /*!
@@ -287,7 +377,12 @@ public:
 	CRTCBusHandler(const uint8_t *const ram, SystemVIA &system_via) :
 		crt_(1024, 1, Outputs::Display::Type::PAL50, Outputs::Display::InputDataType::Red1Green1Blue1),
 		ram_(ram),
-		system_via_(system_via) {}
+		system_via_(system_via)
+	{
+		crt_.set_dynamic_framing(
+			Outputs::Display::Rect(0.13333f, 0.06507f, 0.71579f, 0.86069f),
+			0.0f, 0.05f);
+	}
 
 	void set_palette(const uint8_t value) {
 		const auto index = value >> 4;
@@ -302,14 +397,9 @@ public:
 	}
 
 	void set_control(const uint8_t value) {
-		crtc_clock_multiplier_ = (value & 0x10) ? 1 : 2;
-
+		active_collation_.crtc_clock_multiplier = (value & 0x10) ? 1 : 2;
 		active_collation_.pixels_per_clock = 1 << ((value >> 2) & 0x03);
 		active_collation_.is_teletext = value & 0x02;
-		if(active_collation_.is_teletext) {
-			Logger::error().append("TODO: video control => teletext %d", bool(value & 0x02));
-		}
-
 		flash_mask_ = value & 0x01 ? 7 : 0;
 		cursor_mask_ = value & 0b1110'0000;
 	}
@@ -319,24 +409,26 @@ public:
 		bus state and determines what output to produce based on the current palette and mode.
 	*/
 	void perform_bus_cycle(const Motorola::CRTC::BusState &state) {
+		static constexpr size_t PixelAllocationUnit = 480;	// Is assumed to be a multiple of both 12 and 16.
+															// i.e. a multiple of 48.
+		static_assert(!(PixelAllocationUnit % 16));
+		static_assert(!(PixelAllocationUnit % 12));
+
 		system_via_.set_control_line_input<MOS::MOS6522::Port::A, MOS::MOS6522::Line::One>(state.vsync);
 
 		// Count cycles since horizontal sync to insert a colour burst.
-		if(state.hsync) {
-			++cycles_into_hsync_;
-		} else {
-			cycles_into_hsync_ = 0;
-		}
-		const bool is_colour_burst = cycles_into_hsync_ >= 5 && cycles_into_hsync_ < 9;
-
-		// Sync is taken to override pixels, and is combined as a simple OR.
-		const bool is_sync = state.hsync || state.vsync;
+		// TODO: this is copy/pasted from the CPC. How does the BBC do it?
+//		if(state.hsync) {
+//			++cycles_into_hsync_;
+//		} else {
+//			cycles_into_hsync_ = 0;
+//		}
+//		const bool is_colour_burst = cycles_into_hsync_ >= 5 && cycles_into_hsync_ < 9;
 
 		// Check for a cursor leading edge.
 		cursor_shifter_ >>= 4;
 		if(state.cursor != previous_cursor_enabled_) {
-			if(state.cursor && state.display_enable) {	// TODO: should I have to test display enable here? Or should
-														// the CRTC already have factored that in?
+			if(state.cursor) {
 				cursor_shifter_ =
 					((cursor_mask_ & 0x80) ? 0x0007 : 0) |
 					((cursor_mask_ & 0x40) ? 0x0070 : 0) |
@@ -345,21 +437,69 @@ public:
 			previous_cursor_enabled_ = state.cursor;
 		}
 
-		OutputMode output_mode;
-		const bool should_fetch = state.display_enable && !(state.row_address & 8);
-		if(is_sync) {
-			output_mode = OutputMode::Sync;
-		} else if(is_colour_burst) {
-			output_mode = OutputMode::ColourBurst;
-		} else if(should_fetch || cursor_shifter_) {
-			output_mode = OutputMode::Pixels;
-		} else {
-			output_mode = OutputMode::Blank;
+		// Consider some SAA5050 signalling.
+		if(!state.vsync && previous_vsync_) {
+			// Complete fiction here; the SAA5050 field flag is set by peeking inside CRTC state.
+			// TODO: what really sets CRS for the SAA5050? Time since hsync maybe?
+			saa5050_serialiser_.begin_frame(state.field_count.bit<0>());
+		}
+		previous_vsync_ = state.vsync;
+
+		if(state.display_enable && !previous_display_enabled_ && active_collation_.is_teletext) {
+			saa5050_serialiser_.begin_line();
+		}
+		previous_display_enabled_ = state.display_enable;
+
+		// Grab 5050 output, if any.
+		bool has_5050_output_ = saa5050_serialiser_.has_output();
+		const auto saa_50505_output_ = saa5050_serialiser_.output();
+
+		// Fetch, possibly.
+		const bool should_fetch = state.display_enable && (active_collation_.is_teletext || !(state.line.get() & 8));
+		if(should_fetch) {
+			const uint16_t address = [&] {
+				// Teletext address generation.
+				if(state.refresh.get() & (1 << 13)) {
+					return uint16_t(
+						0x3c00 |
+						((state.refresh.get() & 0x800) << 3) |
+						(state.refresh.get() & 0x3ff)
+					);
+				}
+
+				uint16_t address = uint16_t((state.refresh.get() << 3) | (state.line.get() & 7));
+				if(address & 0x8000) {
+					address = (address + video_base_) & 0x7fff;
+				}
+				return address;
+			} ();
+			const uint8_t fetched = ram_[address];
+			pixel_shifter_ = fetched;
+			saa5050_serialiser_.add(fetched);
 		}
 
+		// Pick new output mode.
+		const OutputMode output_mode = [&] {
+			if(state.hsync || state.vsync) {
+				return OutputMode::Sync;
+			}
+//			if(is_colour_burst) {
+//				return OutputMode::ColourBurst;
+//			}
+			if(
+				(should_fetch && !active_collation_.is_teletext) ||
+				(has_5050_output_ && active_collation_.is_teletext) ||
+				cursor_shifter_
+			) {
+				return OutputMode::Pixels;
+			}
+			return OutputMode::Blank;
+		} ();
+
 		// If a transition between sync/border/pixels just occurred, flush whatever was
-		// in progress to the CRT and reset counting.
-		if(output_mode != previous_output_mode_) {
+		// in progress to the CRT and reset counting. Also flush if this mode has just been effective
+		// for a really long time, so as not to buffer too much.
+		if(output_mode != previous_output_mode_ || cycles_ == 1024) {
 			if(cycles_) {
 				switch(previous_output_mode_) {
 					default:
@@ -374,53 +514,50 @@ public:
 			previous_output_mode_ = output_mode;
 		}
 
-		// Increment cycles since state changed.
-		cycles_ += crtc_clock_multiplier_ << 3;
-
 		// Collect some more pixels if output is ongoing.
-		if(previous_output_mode_ == OutputMode::Pixels) {
+		if(output_mode == OutputMode::Pixels) {
 			// Flush the current buffer pixel if full; the CRTC allows many different display
 			// widths so it's not necessarily possible to predict the correct number in advance
 			// and using the upper bound could lead to inefficient behaviour.
-			if(pixel_data_ && (pixels_collected() == 320 || active_collation_ != previous_collation_)) {
+			if(pixel_data_ && (pixels_collected() == PixelAllocationUnit || active_collation_ != previous_collation_)) {
 				flush_pixels();
 				cycles_ = 0;
 			}
 			previous_collation_ = active_collation_;
 
 			if(!pixel_data_) {
-				pixel_pointer_ = pixel_data_ = crt_.begin_data(320, 8);
+				pixel_pointer_ = pixel_data_ = crt_.begin_data(PixelAllocationUnit);
 			}
-			if(pixel_pointer_) {
-				uint16_t address;
 
-				if(state.refresh_address & (1 << 13)) {
-					// Teletext address generation mode.
-					address = uint16_t(
-						0x3c00 |
-						((state.refresh_address & 0x800) << 3) |
-						(state.refresh_address & 0x3ff)
-					);
-					// TODO: wraparound? Does that happen on Mode 7?
-				} else {
-					address = uint16_t((state.refresh_address << 3) | (state.row_address & 7));
-					if(address & 0x8000) {
-						address = (address + video_base_) & 0x7fff;
+			if(pixel_data_) {
+				if(active_collation_.is_teletext) {
+					if(has_5050_output_) {
+						uint16_t pixels = saa_50505_output_.pixels();
+						for(int c = 0; c < 12; c++) {
+							*pixel_pointer_++ =
+								((pixels & 0b1000'0000'0000) ? saa_50505_output_.alpha : saa_50505_output_.background)
+									^ uint8_t(cursor_shifter_);
+							pixels <<= 1;
+						}
+					} else {
+						std::fill(pixel_pointer_, pixel_pointer_ + 12, 0);
+						pixel_pointer_ += 12;
 					}
-				}
-
-				// Hard coded: pixel mode!
-				pixel_shifter_ = should_fetch ? ram_[address] : 0;
-				switch(crtc_clock_multiplier_ * active_collation_.pixels_per_clock) {
-					case 1: shift_pixels<1>(cursor_shifter_ & 7);	break;
-					case 2: shift_pixels<2>(cursor_shifter_ & 7);	break;
-					case 4: shift_pixels<4>(cursor_shifter_ & 7);	break;
-					case 8: shift_pixels<8>(cursor_shifter_ & 7);	break;
-					case 16: shift_pixels<16>(cursor_shifter_ & 7);	break;
-					default: break;
+				} else {
+					switch(active_collation_.crtc_clock_multiplier * active_collation_.pixels_per_clock) {
+						case 1: shift_pixels<1>(cursor_shifter_ & 7);	break;
+						case 2: shift_pixels<2>(cursor_shifter_ & 7);	break;
+						case 4: shift_pixels<4>(cursor_shifter_ & 7);	break;
+						case 8: shift_pixels<8>(cursor_shifter_ & 7);	break;
+						case 16: shift_pixels<16>(cursor_shifter_ & 7);	break;
+						default: break;
+					}
 				}
 			}
 		}
+
+		// Increment cycles since state changed.
+		cycles_ += active_collation_.crtc_clock_multiplier << 3;
 	}
 
 	/// Sets the destination for output.
@@ -451,12 +588,21 @@ private:
 		Pixels
 	};
 	struct PixelCollation {
-		int pixels_per_clock;
-		bool is_teletext;
+		int crtc_clock_multiplier = 1;
+		int pixels_per_clock = 4;
+		bool is_teletext = false;
 
 		bool operator !=(const PixelCollation &rhs) {
-			if(is_teletext && rhs.is_teletext) return false;
-			return pixels_per_clock != rhs.pixels_per_clock;
+			// If both are teletext, just inspect the clock multiplier.
+			if(is_teletext && rhs.is_teletext) {
+				return crtc_clock_multiplier != rhs.crtc_clock_multiplier;
+			}
+
+			// If one is teletext but the other isn't, that's a sufficient difference.
+			if(is_teletext != rhs.is_teletext) return true;
+
+			// Compare pixel clock rate.
+			return pixels_per_clock != rhs.pixels_per_clock || crtc_clock_multiplier != rhs.crtc_clock_multiplier;
 		}
 	};
 
@@ -479,13 +625,15 @@ private:
 	std::bitset<16> flash_flags_;
 	uint8_t flash_mask_ = 0;
 
-	int crtc_clock_multiplier_ = 1;
 	PixelCollation active_collation_;
 	uint8_t pixel_shifter_ = 0;
 
 	uint8_t cursor_mask_ = 0;
 	uint32_t cursor_shifter_ = 0;
 	bool previous_cursor_enabled_ = false;
+
+	bool previous_display_enabled_ = false;
+	bool previous_vsync_ = false;
 
 	template <int count> void shift_pixels(const uint8_t cursor_mask) {
 		for(int c = 0; c < count; c++) {
@@ -501,11 +649,13 @@ private:
 
 	const uint8_t *const ram_ = nullptr;
 	SystemVIA &system_via_;
+
+	Mullard::SAA5050Serialiser saa5050_serialiser_;
 };
 using CRTC = Motorola::CRTC::CRTC6845<
 	CRTCBusHandler,
 	Motorola::CRTC::Personality::HD6845S,
-	Motorola::CRTC::CursorType::MDA>;
+	Motorola::CRTC::CursorType::Native>;
 }
 
 template <bool has_1770>
@@ -513,12 +663,15 @@ class ConcreteMachine:
 	public Activity::Source,
 	public Machine,
 	public MachineTypes::AudioProducer,
+	public MachineTypes::JoystickMachine,
 	public MachineTypes::MappedKeyboardMachine,
 	public MachineTypes::MediaTarget,
 	public MachineTypes::ScanProducer,
 	public MachineTypes::TimedMachine,
 	public MOS::MOS6522::IRQDelegatePortHandler::Delegate,
 	public NEC::uPD7002::Delegate,
+	public SystemVIAPortHandler::Delegate,
+	public Utility::TypeRecipient<CharacterMapper>,
 	public WD::WD1770::Delegate
 {
 public:
@@ -527,7 +680,7 @@ public:
 		const ROMMachine::ROMFetcher &rom_fetcher
 	) :
 		m6502_(*this),
-		system_via_port_handler_(audio_, crtc_bus_handler_, system_via_),
+		system_via_port_handler_(audio_, crtc_bus_handler_, system_via_, *this, joysticks_, target.should_shift_restart),
 		user_via_(user_via_port_handler_),
 		system_via_(system_via_port_handler_),
 		crtc_bus_handler_(ram_.data(), system_via_),
@@ -536,6 +689,10 @@ public:
 		adc_(HalfCycles(2'000'000))
 	{
 		set_clock_rate(2'000'000);
+
+		// Install two joysticks.
+		joysticks_.emplace_back(new Joystick(adc_, 0));
+		joysticks_.emplace_back(new Joystick(adc_, 2));
 
 		system_via_port_handler_.set_interrupt_delegate(this);
 		user_via_port_handler_.set_interrupt_delegate(this);
@@ -573,6 +730,14 @@ public:
 			install_sideways(fs_slot--, roms.find(Name::BBCMicroADFS130)->second, false);
 		}
 
+		// Install the ADT ROM if available, but don't error if it's missing. It's very optional.
+		if(target.has_1770dfs || target.has_adfs) {
+			const auto adt_rom = rom_fetcher(Request(Name::BBCMicroAdvancedDiscToolkit140));
+			if(const auto rom = adt_rom.find(Name::BBCMicroAdvancedDiscToolkit140); rom != adt_rom.end()) {
+				install_sideways(fs_slot--, rom->second, false);
+			}
+		}
+
 		// Throw sideways RAM into all unused slots.
 		if(target.has_sideways_ram) {
 			for(size_t c = 0; c < 16; c++) {
@@ -594,6 +759,13 @@ public:
 		}
 
 		insert_media(target.media);
+		if(!target.loading_command.empty()) {
+			type_string(target.loading_command);
+		}
+
+		// Prime the display and then reset.
+//		run_for(Cycles(100'000'000));
+//		m6502_.set_power_on(true);
 	}
 
 	// MARK: - 6502 bus.
@@ -626,6 +798,7 @@ public:
 
 		// Determine whether this access hits the 1Mhz bus; if so then apply appropriate penalty, and update phase.
 		const auto duration = Cycles(is_1mhz(address) ? 2 + (phase_&1) : 1);
+		if(typer_) typer_->run_for(duration);
 		phase_ += duration.as<int>();
 
 
@@ -800,6 +973,12 @@ private:
 		return crtc_bus_handler_.get_scaled_scan_status();
 	}
 
+
+	// MARK: - SystemVIAPortHandler::Delegate.
+	void strobe_lightpen() override {
+		crtc_.trigger_light_pen();
+	}
+
 	// MARK: - KeyboardMachine.
 	BBCMicro::KeyboardMapper mapper_;
 	KeyboardMapper *get_keyboard_mapper() override {
@@ -807,11 +986,62 @@ private:
 	}
 
 	void set_key_state(const uint16_t key, const bool is_pressed) override {
-		if(key == BBCMicro::KeyboardMapper::KeyBreak) {
-			m6502_.set_reset_line(is_pressed);
-		} else {
-			system_via_port_handler_.set_key(uint8_t(key), is_pressed);
+		switch(Key(key)) {
+			case Key::SwitchOffCaps:
+				// Store current caps lock state for a potential restore; press caps lock
+				// now if there's a need to exit caps lock mode.
+				was_caps_ = system_via_port_handler_.caps_lock();
+				if(was_caps_) {
+					system_via_port_handler_.set_key(uint8_t(Key::CapsLock), true);
+				}
+			break;
+			case Key::RestoreCaps:
+				// Press caps lock again if the machine was originally in the caps lock state.
+				// If so then SwitchOffCaps switched it off.
+				if(was_caps_) {
+					system_via_port_handler_.set_key(uint8_t(Key::CapsLock), true);
+				}
+			break;
+
+			case Key::Break:
+				m6502_.set_reset_line(is_pressed);
+			break;
+
+			default:
+				system_via_port_handler_.set_key(uint8_t(key), is_pressed);
+			break;
 		}
+	}
+	bool was_caps_ = false;
+
+	void clear_all_keys() final {
+		m6502_.set_reset_line(false);
+		system_via_port_handler_.clear_all_keys();
+	}
+
+	HalfCycles get_typer_delay(const std::string &text) const final {
+		if(!m6502_.get_is_resetting()) {
+			return Cycles(0);
+		}
+
+		// Add a longer delay for a command at reset that involves pressing a modifier;
+		// empirically this seems to be a requirement, in order to avoid a collision with
+		// the system's built-in modifier-at-startup test (e.g. to perform shift+break).
+		CharacterMapper test_mapper;
+		const uint16_t *const sequence = test_mapper.sequence_for_character(text[0]);
+		return is_modifier(Key(sequence[0])) ? Cycles(1'000'000) : Cycles(750'000);
+	}
+
+	HalfCycles get_typer_frequency() const final {
+		return Cycles(60'000);
+	}
+
+	void type_string(const std::string &string) final {
+		Utility::TypeRecipient<CharacterMapper>::add_typer(string);
+	}
+
+	bool can_type(const char c) const final {
+		return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 	}
 
 	// MARK: - TimedMachine.
@@ -906,6 +1136,12 @@ private:
 	Electron::Plus3 wd1770_;
 	void wd1770_did_change_output(WD::WD1770 &) override {
 		m6502_.set_nmi_line(wd1770_.get_interrupt_request_line() || wd1770_.get_data_request_line());
+	}
+
+	// MARK: - Joysticks
+	std::vector<std::unique_ptr<Inputs::Joystick>> joysticks_;
+	const std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() override {
+		return joysticks_;
 	}
 };
 

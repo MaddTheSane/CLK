@@ -61,6 +61,18 @@
         }
       }
     },
+    "2yt-ae-G30.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Electron\"; ObjectID = \"2yt-ae-G30\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Electron"
+          }
+        }
+      }
+    },
     "3Tw-Hk-rP2.label" : {
       "comment" : "Class = \"NSTabViewItem\"; label = \"Archimedes\"; ObjectID = \"3Tw-Hk-rP2\";",
       "extractionState" : "extracted_with_value",
@@ -229,6 +241,18 @@
         }
       }
     },
+    "9hT-Or-oPW.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With Advanced Plus 6 Utility ROM\"; ObjectID = \"9hT-Or-oPW\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With Advanced Plus 6 Utility ROM"
+          }
+        }
+      }
+    },
     "32m-Vs-dPO.title" : {
       "comment" : "Class = \"NSTextFieldCell\"; title = \"Choose a machine\"; ObjectID = \"32m-Vs-dPO\";",
       "extractionState" : "extracted_with_value",
@@ -333,6 +357,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Apple IIe"
+          }
+        }
+      }
+    },
+    "bdQ-qK-WmZ.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Fill unused ROM banks with sideways RAM\"; ObjectID = \"bdQ-qK-WmZ\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fill unused ROM banks with sideways RAM"
           }
         }
       }
@@ -465,6 +501,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "None"
+          }
+        }
+      }
+    },
+    "eUa-hN-pYz.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With Advanced Disk Filing System\"; ObjectID = \"eUa-hN-pYz\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With Advanced Disk Filing System"
           }
         }
       }
@@ -877,14 +925,26 @@
         }
       }
     },
-    "muc-z9-Vqc.label" : {
-      "comment" : "Class = \"NSTabViewItem\"; label = \"Electron\"; ObjectID = \"muc-z9-Vqc\";",
+    "MtF-wS-Q8R.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With Disk Filing System\"; ObjectID = \"MtF-wS-Q8R\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Electron"
+            "value" : "With Disk Filing System"
+          }
+        }
+      }
+    },
+    "muc-z9-Vqc.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"BBC Micro\"; ObjectID = \"muc-z9-Vqc\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "BBC Micro"
           }
         }
       }
@@ -1574,25 +1634,13 @@
       }
     },
     "xTm-Oy-oz5.title" : {
-      "comment" : "Class = \"NSTextFieldCell\"; title = \"If you use File -> Open... to select a disk, tape or cartridge directly, the emulator will select and configure a machine for you.\"; ObjectID = \"xTm-Oy-oz5\";",
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"If you use File -> Open..., the emulator will select and configure a machine for you.\"; ObjectID = \"xTm-Oy-oz5\";",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "If you use File -> Open... to select a disk, tape or cartridge directly, the emulator will select and configure a machine for you."
-          }
-        }
-      }
-    },
-    "yjF-XS-zx6.title" : {
-      "comment" : "Class = \"NSButtonCell\"; title = \"With Advanced Plus 6 Utility ROM\"; ObjectID = \"yjF-XS-zx6\";",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "With Advanced Plus 6 Utility ROM"
+            "value" : "If you use File -> Open..., the emulator will select and configure a machine for you."
           }
         }
       }
