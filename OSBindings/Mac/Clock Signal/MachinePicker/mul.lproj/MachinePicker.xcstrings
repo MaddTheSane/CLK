@@ -253,6 +253,18 @@
         }
       }
     },
+    "11b-Ml-o3Y.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Second Processor:\"; ObjectID = \"11b-Ml-o3Y\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Second Processor:"
+          }
+        }
+      }
+    },
     "32m-Vs-dPO.title" : {
       "comment" : "Class = \"NSTextFieldCell\"; title = \"Choose a machine\"; ObjectID = \"32m-Vs-dPO\";",
       "extractionState" : "extracted_with_value",
@@ -793,6 +805,18 @@
         }
       }
     },
+    "k5e-d2-O0X.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"65C02\"; ObjectID = \"k5e-d2-O0X\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "65C02"
+          }
+        }
+      }
+    },
     "kbf-rc-Y4M.title" : {
       "comment" : "Class = \"NSTextFieldCell\"; title = \"Disk Controller:\"; ObjectID = \"kbf-rc-Y4M\";",
       "extractionState" : "extracted_with_value",
@@ -1021,6 +1045,18 @@
         }
       }
     },
+    "oWF-1C-PLs.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Z80\"; ObjectID = \"oWF-1C-PLs\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Z80"
+          }
+        }
+      }
+    },
     "p5O-Jq-Tft.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"Oric Atmos\"; ObjectID = \"p5O-Jq-Tft\";",
       "extractionState" : "extracted_with_value",
@@ -1209,6 +1245,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Video Adaptor:"
+          }
+        }
+      }
+    },
+    "Rpc-1u-8X2.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"None\"; ObjectID = \"Rpc-1u-8X2\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
           }
         }
       }

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "Analyser/Static/StaticAnalyser.hpp"
+#include "Reflection/Enum.hpp"
 #include "Reflection/Struct.hpp"
 #include <string>
 
@@ -43,6 +44,10 @@ struct BBCMicroTarget: public ::Analyser::Static::Target, public Reflection::Str
 	bool has_1770dfs = false;
 	bool has_adfs = false;
 	bool has_sideways_ram = true;
+	bool has_beebsid = false;
+
+	ReflectableEnum(TubeProcessor, None, WDC65C02, Z80);
+	TubeProcessor tube_processor = TubeProcessor::None;
 
 	BBCMicroTarget() : Analyser::Static::Target(Machine::BBCMicro) {}
 
@@ -52,6 +57,9 @@ private:
 		DeclareField(has_1770dfs);
 		DeclareField(has_adfs);
 		DeclareField(has_sideways_ram);
+		DeclareField(has_beebsid);
+		AnnounceEnum(TubeProcessor);
+		DeclareField(tube_processor);
 	}
 };
 

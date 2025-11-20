@@ -430,7 +430,15 @@ const std::vector<Description> &Description::all_roms() {
 			0x3c14fc70u
 		},
 		{
-			BBCMicroDFS226,
+			BBCMicro8271DFS09,
+			"BBCMicro",
+			"the Acorn 8271 DFS 0.9 ROM",
+			"dfs09.rom",
+			8_kb,
+			0x3ce609cfu
+		},
+		{
+			BBCMicro1770DFS226,
 			"BBCMicro",
 			"the Acorn 1770 DFS 2.26 ROM",
 			"dfs-2.26.rom",
@@ -452,6 +460,22 @@ const std::vector<Description> &Description::all_roms() {
 			"ADT-1.40.rom",
 			16_kb,
 			0x8314fed0u
+		},
+		{
+			BBCMicro6502Tube110,
+			"BBCMicro",
+			"the 6502 Tube 1.10 Boot ROM",
+			"TUBE110.rom",
+			2_kb,
+			0x9ec2dbd0u
+		},
+		{
+			BBCMicroZ80Tube122,
+			"BBCMicro",
+			"the Z80 Tube 1.22 Boot ROM",
+			"Z80_122.rom",
+			4_kb,
+			0xb5851efcu
 		},
 
 	//

@@ -76,7 +76,7 @@ public:
 	CRTC6845(BusHandlerT &bus_handler) noexcept :
 		bus_handler_(bus_handler), status_(0) {}
 
-	void select_register(uint8_t r) {
+	void select_register(const uint8_t r) {
 		selected_register_ = r;
 	}
 
@@ -101,11 +101,11 @@ public:
 		// Per the BBC Wiki, attempting to read such a register results in 0.
 		if(selected_register_ < 12 || selected_register_ > 17) return 0x00;
 
-		return registers_[selected_register_];
+		return registers_[selected_register_.get()];
 	}
 
 	void set_register(const uint8_t value) {
-		switch(selected_register_) {
+		switch(selected_register_.get()) {
 			case 0:	layout_.horizontal.total = value;		break;
 			case 1: layout_.horizontal.displayed = value;	break;
 			case 2:	layout_.horizontal.start_sync = value;	break;
@@ -120,7 +120,6 @@ public:
 			case 6:	layout_.vertical.displayed = value;		break;
 			case 7:	layout_.vertical.start_sync = value;	break;
 			case 8:
-				printf("Interlace mode: %d", value & 3);
 				switch(value & 3) {
 					default:	layout_.interlace_mode_ = InterlaceMode::Off;			break;
 					case 0b01:	layout_.interlace_mode_ = InterlaceMode::Sync;			break;
@@ -128,13 +127,13 @@ public:
 				}
 
 				// Per CPC documentation, skew doesn't work on a "type 1 or 2", i.e. an MC6845 or a UM6845R.
-				if(personality != Personality::UM6845R && personality != Personality::MC6845) {
-					switch((value >> 4)&3) {
-						default:	display_skew_mask_ = 1;		break;
-						case 1:		display_skew_mask_ = 2;		break;
-						case 2:		display_skew_mask_ = 4;		break;
-					}
-				}
+//				if(personality != Personality::UM6845R && personality != Personality::MC6845) {
+//					switch((value >> 4)&3) {
+//						default:	display_skew_mask_ = 1;		break;
+//						case 1:		display_skew_mask_ = 2;		break;
+//						case 2:		display_skew_mask_ = 4;		break;
+//					}
+//				}
 			break;
 			case 9:	layout_.vertical.end_line = value;	break;
 			case 10:
@@ -169,9 +168,9 @@ public:
 		};
 
 		if(selected_register_ < 16) {
-			registers_[selected_register_] = value & masks[selected_register_];
+			registers_[selected_register_.get()] = value & masks[selected_register_.get()];
 		}
-		if(selected_register_ == 31 && personality == Personality::UM6845R) {
+		if(selected_register_.get() == 31 && personality == Personality::UM6845R) {
 			dummy_register_ = value;
 		}
 	}
@@ -493,9 +492,6 @@ private:
 		/// Provide interlaced sync and scan even/odd lines depending on field.
 		SyncAndVideo,
 	};
-	enum class BlinkMode {
-		// TODO.
-	};
 
 	// Comments on the right provide the corresponding signal name in hoglet's VHDL implementation.
 	struct {
@@ -528,7 +524,7 @@ private:
 
 	uint8_t registers_[18]{};
 	uint8_t dummy_register_ = 0;
-	int selected_register_ = 0;
+	Numeric::SizedInt<5> selected_register_ = 0;
 
 	CharacterAddress character_counter_;		// h_counter
 	Numeric::SizedInt<3> character_reset_history_;	// sol
@@ -537,7 +533,6 @@ private:
 	LineAddress line_;							// line_counter
 	LineAddress next_line_;						// line_counter_next
 	RefreshAddress refresh_;					// ma_i
-	uint8_t adjustment_counter_ = 0;
 
 	bool character_is_visible_ = false;			// h_display
 	bool row_is_visible_ = false;				// v_display
@@ -553,8 +548,7 @@ private:
 	RefreshAddress line_address_;				// ma_row
 	uint8_t status_ = 0;
 
-	int display_skew_mask_ = 1;
-	unsigned int character_is_visible_shifter_ = 0;
+//	int display_skew_mask_ = 1;
 
 	bool eof_latched_ = false;					// eof_latched
 	bool eom_latched_ = false;					// eom_latched
@@ -564,8 +558,6 @@ private:
 	bool hit_vsync_last_ = false;				// vs_hit_last
 	bool vsync_even_ = false;					// vs_even
 	bool vsync_odd_ = false;					// vs_odd
-
-	bool reset_ = false;
 
 	Numeric::SizedInt<3> cursor_history_;	// cursor0, cursor1, cursor2 [TODO]
 	bool line_is_interlaced_ = false;

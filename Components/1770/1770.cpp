@@ -137,23 +137,23 @@ void WD1770::run_for(const Cycles cycles) {
 
 void WD1770::posit_event(const int new_event_type) {
 #define WAIT_FOR_EVENT(mask) {							\
-	interesting_event_mask_ = int(mask); 				\
+	interesting_event_mask_ = int(mask);				\
 	static constexpr int location = __COUNTER__ + 1;	\
-	resume_point_ = location; 							\
-	return; 											\
+	resume_point_ = location;							\
+	return;												\
 	case location:										\
 		(void)0;										\
 }
 
-#define WAIT_FOR_TIME(ms) 				\
-	delay_time_ = ms * 8000; 			\
+#define WAIT_FOR_TIME(ms)				\
+	delay_time_ = ms * 8000;			\
 	WAIT_FOR_EVENT(Event1770::Timer);
 
-#define WAIT_FOR_BYTES(count) 											\
-	distance_into_section_ = 0; 										\
-	WAIT_FOR_EVENT(Event::Token); 										\
+#define WAIT_FOR_BYTES(count)											\
+	distance_into_section_ = 0;											\
+	WAIT_FOR_EVENT(Event::Token);										\
 	distance_into_section_ += get_latest_token().type == Token::Byte;	\
-	if(distance_into_section_ < count) { 								\
+	if(distance_into_section_ < count) {								\
 		RESUME_WAIT(Event::Token);										\
 	}
 
@@ -562,7 +562,7 @@ void WD1770::posit_event(const int new_event_type) {
 		}
 
 		set_data_mode(DataMode::Writing);
-		begin_writing(false);
+		begin_writing(false, false);
 		for(int c = 0; c < (get_is_double_density() ? 12 : 6); c++) {
 			write_byte(0);
 		}
@@ -755,7 +755,7 @@ void WD1770::posit_event(const int new_event_type) {
 		}
 
 		WAIT_FOR_EVENT(Event1770::IndexHoleTarget);
-		begin_writing(true);
+		begin_writing(true, false);
 		index_hole_count_ = 0;
 
 	write_track_write_loop:
