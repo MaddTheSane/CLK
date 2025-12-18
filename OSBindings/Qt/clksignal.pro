@@ -1,7 +1,6 @@
-QT += core gui multimedia widgets
-greaterThan(5, QT_MAJOR_VERSION) QT += openglwidgets
+QT += core gui multimedia widgets openglwidgets
 
-# Be specific about C++17 but also try the vaguer C++1z for older
+# Be specific about C++20 but also try the vaguer C++2a for older
 # versions of Qt.
 CONFIG += c++20
 CONFIG += c++2a
@@ -13,10 +12,15 @@ CONFIG += object_parallel_to_source
 INCLUDEPATH += $$[QT_INSTALL_PREFIX]/src/3rdparty/zlib
 LIBS += -lz
 
-# If targetting X11, link against that.
+# If targetting X11, link against X11 directly; this project avoid Qt's faulty
+# approach to keyboard handling where it can.
 linux {
-	QT += x11extras
 	LIBS += -lX11
+}
+
+debug {
+#	CONFIG += sanitizer
+#	CONFIG += sanitize_address
 }
 
 # Add flags (i) to identify that this is a Qt build; and
@@ -146,6 +150,7 @@ SOURCES += \
 	$$SRC/Storage/Disk/Encodings/MFM/*.cpp \
 	$$SRC/Storage/Disk/Parsers/*.cpp \
 	$$SRC/Storage/Disk/Track/*.cpp \
+	$$SRC/Storage/FileBundle/*.cpp \
 	$$SRC/Storage/MassStorage/*.cpp \
 	$$SRC/Storage/MassStorage/Encodings/*.cpp \
 	$$SRC/Storage/MassStorage/Formats/*.cpp \
@@ -303,6 +308,7 @@ HEADERS += \
 	$$SRC/Storage/Disk/Encodings/MFM/*.hpp \
 	$$SRC/Storage/Disk/Parsers/*.hpp \
 	$$SRC/Storage/Disk/Track/*.hpp \
+	$$SRC/Storage/FileBundle/*.hpp \
 	$$SRC/Storage/MassStorage/*.hpp \
 	$$SRC/Storage/MassStorage/Encodings/*.hpp \
 	$$SRC/Storage/MassStorage/Formats/*.hpp \

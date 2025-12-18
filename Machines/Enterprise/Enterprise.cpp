@@ -10,6 +10,7 @@
 
 #include "Dave.hpp"
 #include "EXDos.hpp"
+#include "HostFSHandler.hpp"
 #include "Keyboard.hpp"
 #include "Nick.hpp"
 
@@ -23,8 +24,20 @@
 #include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
 #include "Processors/Z80/Z80.hpp"
 
+#include <algorithm>
+#include <unordered_set>
+
 namespace {
 using Logger = Log::Logger<Log::Source::Enterprise>;
+
+static constexpr size_t ram_size(const Analyser::Static::Enterprise::Target::Model model) {
+	switch(model) {
+		case Analyser::Static::Enterprise::Target::Model::Enterprise64:		return 64 * 1024;
+		default:
+		case Analyser::Static::Enterprise::Target::Model::Enterprise128:	return 128 * 1024;
+		case Analyser::Static::Enterprise::Target::Model::Enterprise256:	return 256 * 1024;
+	}
+}
 }
 
 namespace Enterprise {
@@ -68,10 +81,15 @@ namespace Enterprise {
 
 */
 
-template <bool has_disk_controller, bool is_6mhz> class ConcreteMachine:
+template <
+	Analyser::Static::Enterprise::Target::Model model,
+	bool has_disk_controller,
+	bool is_6mhz
+> class ConcreteMachine:
 	public Activity::Source,
 	public Configurable::Device,
 	public CPU::Z80::BusHandler,
+	public HostFSHandler::MemoryAccessor,
 	public Machine,
 	public MachineTypes::AudioProducer,
 	public MachineTypes::MappedKeyboardMachine,
@@ -80,17 +98,6 @@ template <bool has_disk_controller, bool is_6mhz> class ConcreteMachine:
 	public MachineTypes::TimedMachine,
 	public Utility::TypeRecipient<CharacterMapper> {
 private:
-	constexpr uint8_t min_ram_slot(const Analyser::Static::Enterprise::Target &target) {
-		const auto ram_size = [&] {
-			switch(target.model) {
-				case Analyser::Static::Enterprise::Target::Model::Enterprise64:		return 64*1024;
-				default:
-				case Analyser::Static::Enterprise::Target::Model::Enterprise128:	return 128*1024;
-				case Analyser::Static::Enterprise::Target::Model::Enterprise256:	return 256*1024;
-			}
-		}();
-		return uint8_t(0x100 - ram_size / 0x4000);
-	}
 
 	static constexpr double clock_rate = is_6mhz ? 6'000'000.0 : 4'000'000.0;
 	using NickType =
@@ -100,11 +107,11 @@ private:
 
 public:
 	ConcreteMachine(const Analyser::Static::Enterprise::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
-		min_ram_slot_(min_ram_slot(target)),
 		z80_(*this),
 		nick_(ram_.end() - 65536),
 		dave_audio_(audio_queue_),
-		speaker_(dave_audio_) {
+		speaker_(dave_audio_),
+		host_fs_(*this) {
 
 		// Request a clock of 4Mhz; this'll be mapped upwards for Nick and downwards for Dave elsewhere.
 		set_clock_rate(clock_rate);
@@ -180,15 +187,27 @@ public:
 			throw ROMMachine::Error::MissingROMs;
 		}
 
+		const auto install = [&](const ROM::Name rom_name, auto &destination) {
+			const auto source = roms.find(rom_name);
+			if(source == roms.end()) {
+				return false;
+			}
+			std::copy_n(
+				source->second.begin(),
+				std::min(destination.size(), source->second.size()),
+				destination.begin()
+			);
+
+			return true;
+		};
+
 		// Extract the appropriate EXOS ROM.
 		exos_.fill(0xff);
 		for(const auto rom_name: {
 			ROM::Name::EnterpriseEXOS10, ROM::Name::EnterpriseEXOS20,
 			ROM::Name::EnterpriseEXOS21, ROM::Name::EnterpriseEXOS23
 		}) {
-			const auto exos = roms.find(rom_name);
-			if(exos != roms.end()) {
-				memcpy(exos_.data(), exos->second.data(), std::min(exos_.size(), exos->second.size()));
+			if(install(rom_name, exos_)) {
 				break;
 			}
 		}
@@ -200,9 +219,7 @@ public:
 			ROM::Name::EnterpriseBASIC10, ROM::Name::EnterpriseBASIC11,
 			ROM::Name::EnterpriseBASIC11Suffixed, ROM::Name::EnterpriseBASIC21
 		}) {
-			const auto basic = roms.find(rom_name);
-			if(basic != roms.end()) {
-				memcpy(basic_.data(), basic->second.data(), std::min(basic_.size(), basic->second.size()));
+			if(install(rom_name, basic_)) {
 				has_basic = true;
 				break;
 			}
@@ -211,21 +228,32 @@ public:
 			const auto basic1 = roms.find(ROM::Name::EnterpriseBASIC10Part1);
 			const auto basic2 = roms.find(ROM::Name::EnterpriseBASIC10Part2);
 			if(basic1 != roms.end() && basic2 != roms.end()) {
-				memcpy(&basic_[0x0000], basic1->second.data(), std::min(size_t(8192), basic1->second.size()));
-				memcpy(&basic_[0x2000], basic2->second.data(), std::min(size_t(8192), basic2->second.size()));
+				std::copy_n(
+					basic1->second.begin(),
+					std::min(size_t(8192), basic1->second.size()),
+					&basic_[0x0000]
+				);
+				std::copy_n(
+					basic2->second.begin(),
+					std::min(size_t(8192), basic2->second.size()),
+					&basic_[0x2000]
+				);
 			}
 		}
 
 		// Extract the appropriate DOS ROMs.
 		epdos_rom_.fill(0xff);
-		const auto epdos = roms.find(ROM::Name::EnterpriseEPDOS);
-		if(epdos != roms.end()) {
-			memcpy(epdos_rom_.data(), epdos->second.data(), std::min(epdos_rom_.size(), epdos->second.size()));
-		}
+		install(ROM::Name::EnterpriseEPDOS, epdos_rom_);
+
 		exdos_rom_.fill(0xff);
-		const auto exdos = roms.find(ROM::Name::EnterpriseEXDOS);
-		if(exdos != roms.end()) {
-			memcpy(exdos_rom_.data(), exdos->second.data(), std::min(exdos_rom_.size(), exdos->second.size()));
+		install(ROM::Name::EnterpriseEXDOS, exdos_rom_);
+
+		// Possibly install the host FS ROM.
+		host_fs_rom_.fill(0xff);
+		if(!target.media.file_bundles.empty()) {
+			const auto rom = host_fs_.rom();
+			std::copy(rom.begin(), rom.end(), host_fs_rom_.begin());
+			find_host_fs_hooks();
 		}
 
 		// Seed key state.
@@ -539,8 +567,40 @@ public:
 				}
 			break;
 
-			case PartialMachineCycle::Read:
 			case PartialMachineCycle::ReadOpcode:
+				{
+					static bool print_opcode = false;
+					if(print_opcode) {
+						printf("%04x: %02x\n", address, read_pointers_[address >> 14][address]);
+					}
+				}
+
+				// Potential segue for the host FS. I'm relying on branch prediction to
+				// avoid this cost almost always.
+				if(test_host_fs_traps_ && (address >> 14) == 3) [[unlikely]] {
+					const auto is_trap = host_fs_traps_.contains(address);
+
+					if(is_trap) {
+						using Register = CPU::Z80::Register;
+
+						uint8_t a = uint8_t(z80_.value_of(Register::A));
+						uint16_t bc = z80_.value_of(Register::BC);
+						uint16_t de = z80_.value_of(Register::DE);
+
+						// Grab function code from where the PC actually is, and return a NOP
+						host_fs_.perform(read_pointers_[address >> 14][address], a, bc, de);
+						*cycle.value = 0x00;	// i.e. NOP.
+
+						z80_.set_value_of(Register::A, a);
+						z80_.set_value_of(Register::BC, bc);
+						z80_.set_value_of(Register::DE, de);
+
+						break;
+					}
+				}
+				[[fallthrough]];
+
+			case PartialMachineCycle::Read:
 				if(read_pointers_[address >> 14]) {
 					*cycle.value = read_pointers_[address >> 14][address];
 				} else {
@@ -570,58 +630,97 @@ public:
 
 private:
 	// MARK: - Memory layout
-	std::array<uint8_t, 256 * 1024> ram_{};
+
+	std::array<uint8_t, ram_size(model)> ram_{};
 	std::array<uint8_t, 64 * 1024> exos_;
 	std::array<uint8_t, 16 * 1024> basic_;
 	std::array<uint8_t, 16 * 1024> exdos_rom_;
 	std::array<uint8_t, 32 * 1024> epdos_rom_;
-	const uint8_t min_ram_slot_;
+	std::array<uint8_t, 16 * 1024> host_fs_rom_;
+	static constexpr auto MinRAMSlot = uint8_t(0x100 - (ram_size(model) >> 14));
 
+	/// @returns A pointer to the start of the RAM segment representing @c page if any; otherwise @c nullptr.
+	uint8_t *ram_segment(const uint8_t page) {
+		if(page < MinRAMSlot) return nullptr;
+		return &ram_[size_t((page - MinRAMSlot) << 14)];
+	}
+
+	struct ROMPage {
+		const uint8_t *rom;
+		uint8_t page_offset;
+
+		operator bool() const {
+			return bool(rom);
+		}
+		uint8_t operator[](const size_t offset) const {
+			return rom[page_offset * 0x4000 + offset];
+		}
+	};
+
+	/// @returns A pointer to the ROM segment representing @c page if any; otherwise an object that converts to bool @c false. The returned object
+	/// names both the start of the ROM and how many pages into it this page rests.
+	ROMPage rom_segment(const uint8_t page) {
+		const auto rom_segment = [&](const uint8_t base, auto &source) -> ROMPage {
+			if(page < base || page >= base + source.size() / 0x4000) {
+				return { nullptr, 0 };
+			}
+			return {
+				source.data(),
+				uint8_t(page - base)
+			};
+		};
+
+		// This is where I've effectively dictated the overall 22-bit RAM layout.
+		// The first argument before each ROM dictates its starting page.
+		if(const auto segment = rom_segment(0, exos_); segment.rom) return segment;
+		if(const auto segment = rom_segment(16, basic_); segment.rom) return segment;
+		if(const auto segment = rom_segment(32, exdos_rom_); segment.rom) return segment;
+		if(const auto segment = rom_segment(48, epdos_rom_); segment.rom) return segment;
+		if(const auto segment = rom_segment(64, host_fs_rom_); segment.rom) return segment;
+		return { nullptr, 0 };
+	}
+
+	// Ephemeral, user-set state, representing the current memory map as viewed from the Z80.
 	const uint8_t *read_pointers_[4] = {nullptr, nullptr, nullptr, nullptr};
 	uint8_t *write_pointers_[4] = {nullptr, nullptr, nullptr, nullptr};
 	uint8_t pages_[4] = {0x80, 0x80, 0x80, 0x80};
 
-	template <size_t slot, typename RomT>
-	bool page_rom(const uint8_t offset, const uint8_t location, const RomT &source) {
-		if(offset < location || offset >= location + source.size() / 0x4000) {
-			return false;
-		}
-
-		page<slot>(&source[(offset - location) * 0x4000], nullptr);
-		is_video_[slot] = false;
-		return true;
-	}
-
+	/// Pages whatever is supposed to be at @c offset into memory at @c slot, whether ROM or RAM, and updates the
+	/// @c test_host_fs_traps_ and relevant @c is_video_ flags.
 	template <size_t slot> void page(const uint8_t offset) {
+		const auto apply = [&](const uint8_t *const read, uint8_t *const write) {
+			read_pointers_[slot] = read ? read - (slot * 0x4000) : nullptr;
+			write_pointers_[slot] = write ? write - (slot * 0x4000) : nullptr;
+		};
+
 		pages_[slot] = offset;
 
-		if(page_rom<slot>(offset, 0, exos_)) return;
-		if(page_rom<slot>(offset, 16, basic_)) return;
-		if(page_rom<slot>(offset, 32, exdos_rom_)) return;
-		if(page_rom<slot>(offset, 48, epdos_rom_)) return;
+		const auto rom = rom_segment(offset);
+		if constexpr (slot == 3) {
+			if(rom) {
+				test_host_fs_traps_ = rom.rom == host_fs_rom_.data();
+			} else {
+				test_host_fs_traps_ = false;
+			}
+		}
 
-		// Of whatever size of RAM I've declared above, use only the final portion.
-		// This correlated with Nick always having been handed the final 64kb and,
-		// at least while the RAM is the first thing declared above, does a little
-		// to benefit data locality. Albeit not in a useful sense.
-		if(offset >= min_ram_slot_) {
-			const auto ram_floor = 4194304 - ram_.size();
-			const size_t address = offset * 0x4000 - ram_floor;
-			is_video_[slot] = offset >= 0xfc;	// TODO: this hard-codes a 64kb video assumption.
-			page<slot>(&ram_[address], &ram_[address]);
+		if(rom) {
+			apply(rom.rom + rom.page_offset * 0x4000, nullptr);
+			is_video_[slot] = false;
 			return;
 		}
 
-		page<slot>(nullptr, nullptr);
-	}
+		auto pointer = ram_segment(offset);
+		if(pointer) {
+			is_video_[slot] = offset >= 0xfc;	// TODO: this hard-codes a 64kb video assumption.
+			apply(pointer, pointer);
+			return;
+		}
 
-	template <size_t slot> void page(const uint8_t *const read, uint8_t *const write) {
-		read_pointers_[slot] = read ? read - (slot * 0x4000) : nullptr;
-		write_pointers_[slot] = write ? write - (slot * 0x4000) : nullptr;
+		apply(nullptr, nullptr);
 	}
 
 	// MARK: - Memory Timing
-
 	// The wait mode affects all memory accesses _outside of the video area_.
 	enum class WaitMode {
 		None,
@@ -631,6 +730,7 @@ private:
 	bool is_video_[4]{};
 
 	// MARK: - ScanProducer
+
 	void set_scan_target(Outputs::Display::ScanTarget *const scan_target) override {
 		nick_.last_valid()->set_scan_target(scan_target);
 	}
@@ -706,11 +806,14 @@ private:
 			}
 		}
 
+		if(!media.file_bundles.empty()) {
+			host_fs_.set_file_bundle(media.file_bundles.front());
+		}
+
 		return true;
 	}
 
 	// MARK: - Interrupts
-
 	uint8_t interrupt_mask_ = 0x00, interrupt_state_ = 0x00;
 	void set_interrupts(const uint8_t mask, const HalfCycles offset = HalfCycles(0)) {
 		interrupt_state_ |= uint8_t(mask);
@@ -742,9 +845,93 @@ private:
 	}
 
 	// MARK: - EXDos card.
+
 	EXDos exdos_;
 
+	// MARK: - Host FS.
+
+	HostFSHandler host_fs_;
+	std::unordered_set<uint16_t> host_fs_traps_;
+	bool test_host_fs_traps_ = false;
+
+	/// Reads from mamory as currently laid out.
+	uint8_t hostfs_read(const uint16_t address) override {
+		if(read_pointers_[address >> 14]) {
+			return read_pointers_[address >> 14][address];
+		} else {
+			return 0xff;
+		}
+	}
+
+	/// @returns The page that should be used to access memory at @c address within the current user memory map.
+	/// This is purely an EXOS construct. It has no basis in hardware.
+	uint8_t user_page(const uint16_t address) {
+		const auto page_id = address >> 14;
+		return read_pointers_[0xbffc >> 14] ? read_pointers_[0xbffc >> 14][0xbffc + page_id] : 0xff;
+	}
+
+	/// @returns The byte of RAM at @c address in the user memory map, if RAM is paged there. @c nullptr otherwise.
+	uint8_t *user_ram(const uint8_t page, const uint16_t address) {
+		// "User" accesses go to to wherever the user last had paged;
+		// per 5.4 System Segment Usage those pages are stored in memory from
+		// 0xbffc, so grab from there.
+		const auto offset = address & 0x3fff;
+		auto segment = ram_segment(page);
+		if(segment) {
+			return &segment[offset];
+		}
+		return nullptr;
+	}
+
+	/// @returns The byte at @c address in the user memory map, whether ROM or RAM.
+	uint8_t hostfs_user_read(const uint16_t address) override {
+		const auto page = user_page(address);
+
+		const auto ram = ram_segment(page);
+		if(ram) return ram[address & 0x3fff];
+
+		const auto rom = rom_segment(page);
+		if(rom) return rom[address & 0x3fff];
+
+		return 0xff;
+	}
+
+	/// Writes a byte to an address in the user memory map, if it's RAM. Otherwise acts as a no-op.
+	void hostfs_user_write(const uint16_t address, const uint8_t value) override {
+		const auto ram = user_ram(user_page(address), address);
+		if(ram) *ram = value;
+	}
+
+	/// Searches @c host_fs_rom_ for high-level hooks and records those addresses into @c host_fs_traps_ with the assumption that the rom will
+	/// be paged at 0xc000. Then covers up the hook with NOPs other than the first byte, which captures the hook code.
+	void find_host_fs_hooks() {
+		static constexpr uint8_t syscall[] = {
+			0xed, 0xfe, 0xfe
+		};
+
+		auto begin = host_fs_rom_.begin();
+		while(true) {
+			begin = std::search(
+				begin, host_fs_rom_.end(),
+				std::begin(syscall), std::end(syscall)
+			);
+
+			if(begin == host_fs_rom_.end()) {
+				break;
+			}
+
+			const auto offset = begin - host_fs_rom_.begin() + 0xc000;	// ROM will be paged in slot 3, i.e. at $c000.
+			host_fs_traps_.insert(uint16_t(offset));
+
+			// Move function code up to where this trap was, and NOP out the tail.
+			begin[0] = begin[3];
+			begin[1] = begin[2] = begin[3] = 0x00;
+			begin += 4;
+		}
+	}
+
 	// MARK: - Activity Source
+
 	void set_activity_observer([[maybe_unused]] Activity::Observer *const observer) final {
 		if constexpr (has_disk_controller) {
 			exdos_.set_activity_observer(observer);
@@ -752,6 +939,7 @@ private:
 	}
 
 	// MARK: - Configuration options.
+
 	std::unique_ptr<Reflection::Struct> get_options() const final {
 		auto options = std::make_unique<Options>(Configurable::OptionsType::UserFriendly);
 		options->output = get_video_signal_configurable();
@@ -770,15 +958,37 @@ using namespace Enterprise;
 
 namespace {
 
+template <bool has_disk_controller, bool is_6mhz>
+std::unique_ptr<Machine> machine(
+	const Analyser::Static::Enterprise::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	switch(target.model) {
+		using enum Analyser::Static::Enterprise::Target::Model;
+
+		default: __builtin_unreachable();
+
+		case Enterprise64:
+			return std::make_unique<Enterprise::ConcreteMachine<Enterprise64, has_disk_controller, true>>
+				(target, rom_fetcher);
+		case Enterprise128:
+			return std::make_unique<Enterprise::ConcreteMachine<Enterprise128, has_disk_controller, true>>
+				(target, rom_fetcher);
+		case Enterprise256:
+			return std::make_unique<Enterprise::ConcreteMachine<Enterprise256, has_disk_controller, true>>
+				(target, rom_fetcher);
+	}
+}
+
 template <bool has_disk_controller>
 std::unique_ptr<Machine> machine(
 	const Analyser::Static::Enterprise::Target &target,
 	const ROMMachine::ROMFetcher &rom_fetcher
 ) {
 	if(target.speed == Analyser::Static::Enterprise::Target::Speed::SixMHz) {
-		return std::make_unique<Enterprise::ConcreteMachine<has_disk_controller, true>>(target, rom_fetcher);
+		return machine<has_disk_controller, true>(target, rom_fetcher);
 	} else {
-		return std::make_unique<Enterprise::ConcreteMachine<has_disk_controller, false>>(target, rom_fetcher);
+		return machine<has_disk_controller, false>(target, rom_fetcher);
 	}
 }
 

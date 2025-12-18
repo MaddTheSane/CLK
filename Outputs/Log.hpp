@@ -13,6 +13,24 @@
 #include <cstring>
 #include <string>
 
+#ifdef TARGET_QT
+#include <QDebug>
+namespace {
+[[maybe_unused]] QDebug stream(const bool is_info) {
+	return (is_info ? qInfo() : qWarning()).noquote().nospace();
+}
+static constexpr char EndLine = 0;
+}
+#else
+#include <iostream>
+namespace {
+[[maybe_unused]] std::ostream &stream(const bool is_info) {
+	return is_info ? std::cout : std::cerr;
+}
+static constexpr char EndLine = '\n';
+}
+#endif
+
 namespace Log {
 // TODO: if adopting C++20, std::format would be a better model to apply below.
 // But I prefer C files to C++ streams, so here it is for now.
@@ -174,7 +192,7 @@ struct RepeatAccumulator {
 	Source source;
 
 	size_t count = 0;
-	FILE *stream;
+	bool is_info;
 };
 
 struct AccumulatingLog {
@@ -184,11 +202,10 @@ struct AccumulatingLog {
 template <Source source>
 struct LogLine<source, true>: private AccumulatingLog {
 public:
-	explicit LogLine(FILE *const stream) noexcept :
-		stream_(stream) {}
+	explicit LogLine(const bool is_info) noexcept : is_info_(is_info) {}
 
 	~LogLine() {
-		if(output_ == accumulator_.last && source == accumulator_.source && stream_ == accumulator_.stream) {
+		if(output_ == accumulator_.last && source == accumulator_.source && is_info_ == accumulator_.is_info) {
 			++accumulator_.count;
 			return;
 		}
@@ -202,34 +219,26 @@ public:
 				prefix += "] ";
 			}
 
+			auto &&out = stream(accumulator_.is_info);
+			out << prefix.c_str() << accumulator_.last.c_str();	// Use of .c_str() avoids an ambiguity affecting older
+																// versions of Qt.
 			if(accumulator_.count > 1) {
-				fprintf(
-					accumulator_.stream,
-					"%s%s [* %zu]\n",
-						prefix.c_str(),
-						accumulator_.last.c_str(),
-						accumulator_.count
-				);
-			} else {
-				fprintf(
-					accumulator_.stream,
-					"%s%s\n",
-						prefix.c_str(),
-						accumulator_.last.c_str()
-				);
+				out << " [* " << accumulator_.count << "]";
 			}
+			if(EndLine) out << EndLine;
 		}
 
 		accumulator_.count = 1;
 		accumulator_.last = output_;
 		accumulator_.source = source;
-		accumulator_.stream = stream_;
+		accumulator_.is_info = is_info_;
 	}
 
 	template <size_t size, typename... Args>
 	auto &append(const char (&format)[size], Args... args) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
+#pragma GCC diagnostic ignored "-Wformat-security"
 		const auto append_size = std::snprintf(nullptr, 0, format, args...);
 		const auto end = output_.size();
 		output_.resize(output_.size() + size_t(append_size) + 1);
@@ -246,13 +255,13 @@ public:
 	}
 
 private:
-	FILE *stream_;
+	bool is_info_;
 	std::string output_;
 };
 
 template <Source source>
 struct LogLine<source, false> {
-	explicit LogLine(FILE *) noexcept {}
+	explicit LogLine(bool) noexcept {}
 
 	template <size_t size, typename... Args>
 	auto &append(const char (&)[size], Args...) { return *this; }
@@ -269,8 +278,8 @@ public:
 	static constexpr bool InfoEnabled = enabled_level(source) == EnabledLevel::ErrorsAndInfo;
 	static constexpr bool ErrorsEnabled = enabled_level(source) >= EnabledLevel::Errors;
 
-	static auto info()	{	return LogLine<source, InfoEnabled>(stdout);	}
-	static auto error()	{	return LogLine<source, ErrorsEnabled>(stderr);	}
+	static auto info()	{	return LogLine<source, InfoEnabled>(true);		}
+	static auto error()	{	return LogLine<source, ErrorsEnabled>(false);	}
 };
 
 }

@@ -28,7 +28,165 @@
 #include "Analyser/Static/ZX8081/Target.hpp"
 #include "Analyser/Static/ZXSpectrum/Target.hpp"
 
+#include "Storage/FileBundle/FileBundle.hpp"
+
 #import "Clock_Signal-Swift.h"
+
+namespace {
+
+struct PermissionDelegate: public Storage::FileBundle::FileBundle::PermissionDelegate {
+	void validate_open(Storage::FileBundle::FileBundle &bundle, const std::string &path, const Storage::FileMode mode) {
+		NSData *bookmarkData;
+		NSString *stringPath = [NSString stringWithUTF8String:path.c_str()];
+		NSURL *url = [NSURL fileURLWithPath:stringPath isDirectory:NO];
+		NSError *error;
+
+		// Check for and possibly apply an existing bookmark.
+		NSString *bookmarkKey = [[url URLByDeletingLastPathComponent] absoluteString];
+		bookmarkData = [[NSUserDefaults standardUserDefaults] objectForKey:bookmarkKey];
+		if(bookmarkData) {
+			NSURL *accessURL =
+				[NSURL
+					URLByResolvingBookmarkData:bookmarkData
+					options:NSURLBookmarkResolutionWithSecurityScope | NSURLBookmarkResolutionWithoutUI
+					relativeToURL:nil
+					bookmarkDataIsStale:nil
+					error:nil];
+			[accessURL startAccessingSecurityScopedResource];
+		}
+
+		// If the file exists can now be accessed, no further action required.
+		NSFileHandle *file = [&]() {
+			switch(mode) {
+				case Storage::FileMode::ReadWrite:	{
+					NSFileHandle *updating = [NSFileHandle fileHandleForUpdatingURL:url error:&error];
+					if(updating) return updating;
+					[[fallthrough]];
+				}
+				default:
+				case Storage::FileMode::Read:		return [NSFileHandle fileHandleForReadingFromURL:url error:&error];
+				case Storage::FileMode::Rewrite:	return [NSFileHandle fileHandleForWritingToURL:url error:&error];
+			}
+		}();
+
+		// Managed to open the file: that's enough.
+		if(file) {
+			return;
+		}
+
+		// Otherwise: if not being opened exclusively for reading, see whether the file can be created.
+		if(
+			error.domain == NSCocoaErrorDomain &&
+			error.code == NSFileNoSuchFileError &&
+			mode != Storage::FileMode::Read
+		) {
+			NSFileManager *manager = [NSFileManager defaultManager];
+			if([manager createFileAtPath:url.path contents:nil attributes:nil]) {
+				[manager removeItemAtPath:url.path error:&error];
+				return;
+			}
+		}
+
+		// Failing that, ask the user for permission and keep the bookmark.
+		__block NSURL *selectedURL;
+
+		// Ask the user for permission.
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			NSOpenPanel *request = [NSOpenPanel openPanel];
+			request.prompt = NSLocalizedString(@"Grant Permission", @"");
+			request.message = NSLocalizedString(@"Please Grant Permission For Full Folder Access", @"");
+			request.canChooseFiles = NO;
+			request.allowsMultipleSelection = NO;
+			request.canChooseDirectories = YES;
+			[request setDirectoryURL:[url URLByDeletingLastPathComponent]];
+
+			// TODO: a nicer accessory view; NSTextField or the relevant equivalent
+			// with an attributed string might work.
+			request.accessoryView = [NSTextField labelWithString:[&] {
+				const auto key_file = bundle.key_file();
+
+				if(key_file) {
+					return [NSString stringWithFormat:
+						@"Clock Signal cannot access your files without explicit permission but "
+						@"%s is trying to use additional files in its folder.\n"
+						@"Please select 'Grant Permission' if you are willing to let it to do so.",
+							key_file->c_str()
+					];
+				} else {
+					assert(bundle.base_path().has_value());
+					return [NSString stringWithFormat:
+						@"Clock Signal cannot access your files without explicit permission but "
+						@"your emulated machine is trying to use additional files from %s.\n"
+						@"Please select 'Grant Permission' if you are willing to let it to do so.",
+							bundle.base_path()->c_str()
+					];
+				}
+			}()];
+
+			request.accessoryViewDisclosed = YES;
+			[request runModal];
+
+			selectedURL = request.URL;
+		});
+
+		// Store bookmark data for potential later retrieval.
+		// That amounts to this application remembering the user's permission.
+		error = nil;
+		[[NSUserDefaults standardUserDefaults]
+			setObject:[selectedURL
+				bookmarkDataWithOptions:NSURLBookmarkCreationWithSecurityScope
+				includingResourceValuesForKeys:nil
+				relativeToURL:nil
+				error:&error]
+			forKey:bookmarkKey];
+	}
+
+	void validate_erase(Storage::FileBundle::FileBundle &, const std::string &) {
+		// Currently a no-op, as it so happens that the only machine that currently
+		// uses a file bundle is the Enterprise, and its semantics involve opening
+		// a file before it can be erased.
+	}
+};
+
+PermissionDelegate permission_delegate;
+
+}
+
+@implementation CSMediaSet {
+	Analyser::Static::Media _media;
+}
+
+- (instancetype)initWithMedia:(Analyser::Static::Media)media {
+	self = [super init];
+	if(self) {
+		_media = media;
+	}
+	return self;
+}
+
+- (instancetype)initWithFileAtURL:(NSURL *)url {
+	self = [super init];
+	if(self) {
+		_media = Analyser::Static::GetMedia([url fileSystemRepresentation]);
+	}
+	return self;
+}
+
+- (BOOL)isEmpty {
+	return _media.empty();
+}
+
+- (void)applyToMachine:(CSMachine *)machine {
+	[machine applyMedia:_media];
+}
+
+- (void)addPermissionHandler {
+	for(const auto &bundle: _media.file_bundles) {
+		bundle->set_permission_delegate(&permission_delegate);
+	}
+}
+
+@end
 
 @implementation CSStaticAnalyser {
 	Analyser::Static::TargetList _targets;
@@ -51,7 +209,10 @@
 
 // MARK: - Machine-based Initialisers
 
-- (instancetype)initWithAmigaModel:(CSMachineAmigaModel)model chipMemorySize:(Kilobytes)chipMemorySize fastMemorySize:(Kilobytes)fastMemorySize {
+- (instancetype)initWithAmigaModel:(CSMachineAmigaModel)model
+	chipMemorySize:(Kilobytes)chipMemorySize
+	fastMemorySize:(Kilobytes)fastMemorySize
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::Amiga::Target;
@@ -93,7 +254,10 @@
 	return self;
 }
 
-- (instancetype)initWithAppleIIModel:(CSMachineAppleIIModel)model diskController:(CSMachineAppleIIDiskController)diskController hasMockingboard:(BOOL)hasMockingboard {
+- (instancetype)initWithAppleIIModel:(CSMachineAppleIIModel)model
+	diskController:(CSMachineAppleIIDiskController)diskController
+	hasMockingboard:(BOOL)hasMockingboard
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::AppleII::Target;
@@ -116,7 +280,9 @@
 	return self;
 }
 
-- (instancetype)initWithAppleIIgsModel:(CSMachineAppleIIgsModel)model memorySize:(Kilobytes)memorySize {
+- (instancetype)initWithAppleIIgsModel:(CSMachineAppleIIgsModel)model
+	memorySize:(Kilobytes)memorySize
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::AppleIIgs::Target;
@@ -160,13 +326,19 @@
 	return self;
 }
 
-- (instancetype)initWithBBCMicroDFS:(BOOL)dfs adfs:(BOOL)adfs sidewaysRAM:(BOOL)sidewaysRAM secondProcessor:(CSMachineBBCMicroSecondProcessor)secondProcessor {
+- (instancetype)initWithBBCMicroDFS:(BOOL)dfs
+	adfs:(BOOL)adfs
+	sidewaysRAM:(BOOL)sidewaysRAM
+	beebSID:(BOOL)beebSID
+	secondProcessor:(CSMachineBBCMicroSecondProcessor)secondProcessor
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::Acorn::BBCMicroTarget;
 		auto target = std::make_unique<Target>();
 		target->has_1770dfs = dfs;
 		target->has_adfs = adfs;
+		target->has_beebsid = beebSID;
 		target->has_sideways_ram = sidewaysRAM;
 
 		switch(secondProcessor) {
@@ -179,7 +351,9 @@
 	return self;
 }
 
-- (instancetype)initWithCommodoreTEDModel:(CSMachineCommodoreTEDModel)model hasC1541:(BOOL)hasC1541 {
+- (instancetype)initWithCommodoreTEDModel:(CSMachineCommodoreTEDModel)model
+	hasC1541:(BOOL)hasC1541
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::Commodore::Plus4Target;
@@ -190,7 +364,11 @@
 	return self;
 }
 
-- (instancetype)initWithElectronDFS:(BOOL)dfs adfs:(BOOL)adfs ap6:(BOOL)ap6 sidewaysRAM:(BOOL)sidewaysRAM {
+- (instancetype)initWithElectronDFS:(BOOL)dfs
+	adfs:(BOOL)adfs
+	ap6:(BOOL)ap6
+	sidewaysRAM:(BOOL)sidewaysRAM
+{
 	self = [super init];
 	if(self) {
 		auto target = std::make_unique<Analyser::Static::Acorn::ElectronTarget>();
@@ -203,7 +381,13 @@
 	return self;
 }
 
-- (instancetype)initWithEnterpriseModel:(CSMachineEnterpriseModel)model speed:(CSMachineEnterpriseSpeed)speed exosVersion:(CSMachineEnterpriseEXOS)exosVersion basicVersion:(CSMachineEnterpriseBASIC)basicVersion dos:(CSMachineEnterpriseDOS)dos {
+- (instancetype)initWithEnterpriseModel:(CSMachineEnterpriseModel)model
+	speed:(CSMachineEnterpriseSpeed)speed
+	exosVersion:(CSMachineEnterpriseEXOS)exosVersion
+	basicVersion:(CSMachineEnterpriseBASIC)basicVersion
+	dos:(CSMachineEnterpriseDOS)dos
+	exposedLocalPath:(nullable NSURL *)path
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::Enterprise::Target;
@@ -243,6 +427,12 @@
 			case CSMachineEnterpriseDOSNone:		target->dos = Target::DOS::None;					break;
 		}
 
+		if(path) {
+			const auto bundle = std::make_shared<Storage::FileBundle::LocalFSFileBundle>(path.path.UTF8String);
+			bundle->set_permission_delegate(&permission_delegate);
+			target->media.file_bundles.push_back(std::move(bundle));
+		}
+
 		_targets.push_back(std::move(target));
 	}
 	return self;
@@ -268,7 +458,11 @@
 	return self;
 }
 
-- (instancetype)initWithMSXModel:(CSMachineMSXModel)model region:(CSMachineMSXRegion)region hasDiskDrive:(BOOL)hasDiskDrive hasMSXMUSIC:(BOOL)hasMSXMUSIC {
+- (instancetype)initWithMSXModel:(CSMachineMSXModel)model
+	region:(CSMachineMSXRegion)region
+	hasDiskDrive:(BOOL)hasDiskDrive
+	hasMSXMUSIC:(BOOL)hasMSXMUSIC
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::MSX::Target;
@@ -289,7 +483,9 @@
 	return self;
 }
 
-- (instancetype)initWithOricModel:(CSMachineOricModel)model diskInterface:(CSMachineOricDiskInterface)diskInterface {
+- (instancetype)initWithOricModel:(CSMachineOricModel)model
+	diskInterface:(CSMachineOricDiskInterface)diskInterface
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::Oric::Target;
@@ -311,7 +507,10 @@
 	return self;
 }
 
-- (instancetype)initWithPCCompatibleSpeed:(CSPCCompatibleSpeed)speed videoAdaptor:(CSPCCompatibleVideoAdaptor)adaptor {
+
+- (instancetype)initWithPCCompatibleSpeed:(CSPCCompatibleSpeed)speed
+	videoAdaptor:(CSPCCompatibleVideoAdaptor)adaptor
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::PCCompatible::Target;
@@ -347,7 +546,10 @@
 	return self;
 }
 
-- (instancetype)initWithVic20Region:(CSMachineVic20Region)region memorySize:(Kilobytes)memorySize hasC1540:(BOOL)hasC1540 {
+- (instancetype)initWithVic20Region:(CSMachineVic20Region)region
+	memorySize:(Kilobytes)memorySize
+	hasC1540:(BOOL)hasC1540
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::Commodore::Vic20Target;
@@ -381,7 +583,9 @@ static Analyser::Static::ZX8081::Target::MemoryModel ZX8081MemoryModelFromSize(K
 	}
 }
 
-- (instancetype)initWithZX80MemorySize:(Kilobytes)memorySize useZX81ROM:(BOOL)useZX81ROM {
+- (instancetype)initWithZX80MemorySize:(Kilobytes)memorySize
+	useZX81ROM:(BOOL)useZX81ROM
+{
 	self = [super init];
 	if(self) {
 		using Target = Analyser::Static::ZX8081::Target;
@@ -438,26 +642,12 @@ static Analyser::Static::ZX8081::Target::MemoryModel ZX8081MemoryModelFromSize(K
 	return _targets;
 }
 
-@end
-
-@implementation CSMediaSet {
-	Analyser::Static::Media _media;
-}
-
-- (instancetype)initWithFileAtURL:(NSURL *)url {
-	self = [super init];
-	if(self) {
-		_media = Analyser::Static::GetMedia([url fileSystemRepresentation]);
+- (nonnull CSMediaSet *)mediaSet {
+	Analyser::Static::Media net;
+	for(const auto &target: _targets) {
+		net += target->media;
 	}
-	return self;
-}
-
-- (void)applyToMachine:(CSMachine *)machine {
-	[machine applyMedia:_media];
-}
-
-- (BOOL)isEmpty {
-	return _media.empty();
+	return [[CSMediaSet alloc] initWithMedia:net];
 }
 
 @end

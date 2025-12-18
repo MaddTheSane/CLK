@@ -877,6 +877,18 @@
         }
       }
     },
+    "l0h-Ih-sZi.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"Expose local path to machine:\"; ObjectID = \"l0h-Ih-sZi\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Expose local path to machine:"
+          }
+        }
+      }
+    },
     "LeD-N4-avf.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"Turbo\"; ObjectID = \"LeD-N4-avf\";",
       "extractionState" : "extracted_with_value",
@@ -1401,6 +1413,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Pravetz 8D"
+          }
+        }
+      }
+    },
+    "ucb-pL-9rx.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With BeebSID\"; ObjectID = \"ucb-pL-9rx\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With BeebSID"
           }
         }
       }

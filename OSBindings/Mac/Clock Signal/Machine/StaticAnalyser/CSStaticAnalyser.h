@@ -12,6 +12,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class CSMachine;
 
+@interface CSMediaSet : NSObject
+
+- (instancetype)initWithFileAtURL:(NSURL *)url;
+- (void)applyToMachine:(CSMachine *)machine;
+- (void)addPermissionHandler;
+
+@property(nonatomic, readonly, getter=isEmpty) BOOL empty;
+
+@end
+
 typedef NS_ENUM(NSInteger, CSMachineAmigaModel) {
 	CSMachineAmigaModelA500,
 };
@@ -150,36 +160,71 @@ typedef int Kilobytes;
 
 - (nullable instancetype)initWithFileAtURL:(NSURL *)url;
 
-- (instancetype)initWithAmigaModel:(CSMachineAmigaModel)model chipMemorySize:(Kilobytes)chipMemorySize fastMemorySize:(Kilobytes)fastMemorySize;
+- (instancetype)initWithAmigaModel:(CSMachineAmigaModel)model
+	chipMemorySize:(Kilobytes)chipMemorySize
+	fastMemorySize:(Kilobytes)fastMemorySize;
+
 - (instancetype)initWithAmstradCPCModel:(CSMachineCPCModel)model;
-- (instancetype)initWithAppleIIModel:(CSMachineAppleIIModel)model diskController:(CSMachineAppleIIDiskController)diskController hasMockingboard:(BOOL)hasMockingboard;
-- (instancetype)initWithAppleIIgsModel:(CSMachineAppleIIgsModel)model memorySize:(Kilobytes)memorySize;
+
+- (instancetype)initWithAppleIIModel:(CSMachineAppleIIModel)model
+	diskController:(CSMachineAppleIIDiskController)diskController
+	hasMockingboard:(BOOL)hasMockingboard;
+
+- (instancetype)initWithAppleIIgsModel:(CSMachineAppleIIgsModel)model
+	memorySize:(Kilobytes)memorySize;
+
 - (instancetype)initWithArchimedesModel:(CSMachineArchimedesModel)model;
+
 - (instancetype)initWithAtariSTMemorySize:(Kilobytes)memorySize;
-- (instancetype)initWithBBCMicroDFS:(BOOL)dfs adfs:(BOOL)adfs sidewaysRAM:(BOOL)sidewaysRAM secondProcessor:(CSMachineBBCMicroSecondProcessor)secondProcessor;
-- (instancetype)initWithCommodoreTEDModel:(CSMachineCommodoreTEDModel)model hasC1541:(BOOL)hasC1541;
-- (instancetype)initWithElectronDFS:(BOOL)dfs adfs:(BOOL)adfs ap6:(BOOL)ap6 sidewaysRAM:(BOOL)sidewaysRAM;
-- (instancetype)initWithEnterpriseModel:(CSMachineEnterpriseModel)model speed:(CSMachineEnterpriseSpeed)speed exosVersion:(CSMachineEnterpriseEXOS)exosVersion basicVersion:(CSMachineEnterpriseBASIC)basicVersion dos:(CSMachineEnterpriseDOS)dos;
+
+- (instancetype)initWithBBCMicroDFS:(BOOL)dfs
+	adfs:(BOOL)adfs
+	sidewaysRAM:(BOOL)sidewaysRAM
+	beebSID:(BOOL)beebSID
+	secondProcessor:(CSMachineBBCMicroSecondProcessor)secondProcessor;
+
+- (instancetype)initWithCommodoreTEDModel:(CSMachineCommodoreTEDModel)model
+	hasC1541:(BOOL)hasC1541;
+
+- (instancetype)initWithElectronDFS:(BOOL)dfs
+	adfs:(BOOL)adfs
+	ap6:(BOOL)ap6
+	sidewaysRAM:(BOOL)sidewaysRAM;
+
+- (instancetype)initWithEnterpriseModel:(CSMachineEnterpriseModel)model
+	speed:(CSMachineEnterpriseSpeed)speed
+	exosVersion:(CSMachineEnterpriseEXOS)exosVersion
+	basicVersion:(CSMachineEnterpriseBASIC)basicVersion
+	dos:(CSMachineEnterpriseDOS)dos
+	exposedLocalPath:(nullable NSURL *)path;
+
 - (instancetype)initWithMacintoshModel:(CSMachineMacintoshModel)model;
-- (instancetype)initWithMSXModel:(CSMachineMSXModel)model region:(CSMachineMSXRegion)region hasDiskDrive:(BOOL)hasDiskDrive hasMSXMUSIC:(BOOL)hasMSXMUSIC;
-- (instancetype)initWithOricModel:(CSMachineOricModel)model diskInterface:(CSMachineOricDiskInterface)diskInterface;
+
+- (instancetype)initWithMSXModel:(CSMachineMSXModel)model
+	region:(CSMachineMSXRegion)region
+	hasDiskDrive:(BOOL)hasDiskDrive
+	hasMSXMUSIC:(BOOL)hasMSXMUSIC;
+
+- (instancetype)initWithOricModel:(CSMachineOricModel)model
+	diskInterface:(CSMachineOricDiskInterface)diskInterface;
+
 - (instancetype)initWithSpectrumModel:(CSMachineSpectrumModel)model;
-- (instancetype)initWithVic20Region:(CSMachineVic20Region)region memorySize:(Kilobytes)memorySize hasC1540:(BOOL)hasC1540;
-- (instancetype)initWithZX80MemorySize:(Kilobytes)memorySize useZX81ROM:(BOOL)useZX81ROM;
+
+- (instancetype)initWithVic20Region:(CSMachineVic20Region)region
+	memorySize:(Kilobytes)memorySize
+	hasC1540:(BOOL)hasC1540;
+
+- (instancetype)initWithZX80MemorySize:(Kilobytes)memorySize
+	useZX81ROM:(BOOL)useZX81ROM;
+
 - (instancetype)initWithZX81MemorySize:(Kilobytes)memorySize;
-- (instancetype)initWithPCCompatibleSpeed:(CSPCCompatibleSpeed)speed videoAdaptor:(CSPCCompatibleVideoAdaptor)adaptor;
+
+- (instancetype)initWithPCCompatibleSpeed:(CSPCCompatibleSpeed)speed
+	videoAdaptor:(CSPCCompatibleVideoAdaptor)adaptor;
 
 @property(nonatomic, readonly, nullable) NSString *optionsNibName;
 @property(nonatomic, readonly) NSString *displayName;
-
-@end
-
-@interface CSMediaSet : NSObject
-
-- (instancetype)initWithFileAtURL:(NSURL *)url;
-- (void)applyToMachine:(CSMachine *)machine;
-
-@property(nonatomic, readonly, getter=isEmpty) BOOL empty;
+@property(nonatomic, readonly, nonnull) CSMediaSet *mediaSet;
 
 @end
 

@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <optional>
 
 namespace {
 using Logger = Log::Logger<Log::Source::Vic20>;
@@ -456,27 +457,24 @@ public:
 	}
 
 	void set_key_state(const uint16_t key, const bool is_pressed) final {
-		if(key < KeyUp) {
+		const auto apply_shifted = [&](const uint16_t key) {
+			keyboard_via_port_handler_.set_key_state(KeyLShift, is_pressed);
 			keyboard_via_port_handler_.set_key_state(key, is_pressed);
-		} else {
-			switch(key) {
-				case KeyRestore:
-					user_port_via_.set_control_line_input<MOS::MOS6522::Port::A, MOS::MOS6522::Line::One>(!is_pressed);
-				break;
-#define ShiftedMap(source, target)	\
-				case source:	\
-					keyboard_via_port_handler_.set_key_state(KeyLShift, is_pressed);	\
-					keyboard_via_port_handler_.set_key_state(target, is_pressed);	\
-				break;
+		};
 
-				ShiftedMap(KeyUp, KeyDown);
-				ShiftedMap(KeyLeft, KeyRight);
-				ShiftedMap(KeyF2, KeyF1);
-				ShiftedMap(KeyF4, KeyF3);
-				ShiftedMap(KeyF6, KeyF5);
-				ShiftedMap(KeyF8, KeyF7);
-#undef ShiftedMap
-			}
+		switch(key) {
+			default:
+				keyboard_via_port_handler_.set_key_state(key, is_pressed);
+			break;
+			case KeyRestore:
+				user_port_via_.set_control_line_input<MOS::MOS6522::Port::A, MOS::MOS6522::Line::One>(!is_pressed);
+			break;
+			case KeyUp:		apply_shifted(KeyDown);		break;
+			case KeyLeft:	apply_shifted(KeyRight);	break;
+			case KeyF2:		apply_shifted(KeyF1);		break;
+			case KeyF4:		apply_shifted(KeyF3);		break;
+			case KeyF6:		apply_shifted(KeyF5);		break;
+			case KeyF8:		apply_shifted(KeyF7);		break;
 		}
 	}
 
@@ -553,6 +551,7 @@ public:
 
 					value = 0x0c;	// i.e. NOP abs, to swallow the entire JSR
 				} else if(address == 0xf90b) {
+					// second JSR in TAPE / LAB_F8F4.
 					auto registers = m6502_.registers();
 					if(registers.x == 0xe) {
 						Storage::Tape::Commodore::Parser parser(TargetPlatform::Vic20);
@@ -563,7 +562,7 @@ public:
 							start_address = uint16_t(ram_[0xc1] | (ram_[0xc2] << 8));
 							end_address = uint16_t(ram_[0xae] | (ram_[0xaf] << 8));
 
-							// perform a via-processor_write_memory_map_ memcpy
+							// Perform a via-processor_write_memory_map_ copy.
 							uint8_t *data_ptr = data->data.data();
 							std::size_t data_left = data->data.size();
 							while(data_left && start_address != end_address) {

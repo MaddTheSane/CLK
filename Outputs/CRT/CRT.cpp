@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdarg>
+#include <optional>
 
 using namespace Outputs::CRT;
 using Logger = Log::Logger<Log::Source::CRT>;
@@ -94,7 +95,7 @@ void CRT::set_new_timing(
 
 	// Default crop: middle 90%.
 	if(is_first_set) {
-		scan_target_modals_.visible_area = posted_rect_ = Display::Rect(
+		posted_rect_ = scan_target_modals_.visible_area = Display::Rect(
 			0.05f, 0.05f, 0.9f, 0.9f
 		);
 	}
@@ -126,8 +127,10 @@ void CRT::set_dynamic_framing(
 
 	if(!has_first_reading_) {
 		previous_posted_rect_ = posted_rect_ = scan_target_modals_.visible_area = initial;
+		scan_target_->set_modals(scan_target_modals_);
 	}
 	has_first_reading_ = true;
+	animation_step_ = AnimationSteps;
 }
 
 void CRT::set_fixed_framing(const std::function<void()> &advance) {
@@ -468,7 +471,7 @@ void CRT::posit(Display::Rect rect) {
 	};
 
 	// Continue with any ongoing animation.
-	if(animation_step_ < AnimationSteps) {
+	if(animation_step_ != NoFrameYet && animation_step_ < AnimationSteps) {
 		set_rect(current_rect());
 		++animation_step_;
 		if(animation_step_ == AnimationSteps) {
@@ -506,8 +509,9 @@ void CRT::posit(Display::Rect rect) {
 				return;
 			}
 		}
-	}
 
+		return;
+	}
 
 	const auto output_frame = rect_accumulator_.posit(rect);
 	dynamic_framer_.update(rect, output_frame, first_reading);

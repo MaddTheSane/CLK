@@ -58,7 +58,7 @@ MachineBase::MachineBase(const Personality personality, const ROM::Map &roms) :
 	if(rom == roms.end()) {
 		throw ROMMachine::Error::MissingROMs;
 	}
-	std::memcpy(rom_, rom->second.data(), std::min(sizeof(rom_), rom->second.size()));
+	std::copy_n(rom->second.begin(), std::min(sizeof(rom_), rom->second.size()), rom_);
 }
 
 Machine::Machine(const Personality personality, const ROM::Map &roms) :

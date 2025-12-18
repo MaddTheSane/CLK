@@ -130,6 +130,7 @@ set(CLK_SOURCES
 	Machines/Enterprise/Dave.cpp
 	Machines/Enterprise/EXDos.cpp
 	Machines/Enterprise/Enterprise.cpp
+	Machines/Enterprise/HostFSHandler.cpp
 	Machines/Enterprise/Keyboard.cpp
 	Machines/Enterprise/Nick.cpp
 	Machines/KeyboardMachine.cpp
@@ -224,6 +225,7 @@ set(CLK_SOURCES
 	Storage/Disk/Track/PCMTrack.cpp
 	Storage/Disk/Track/TrackSerialiser.cpp
 	Storage/Disk/Track/UnformattedTrack.cpp
+	Storage/FileBundle/FileBundle.cpp
 	Storage/FileHolder.cpp
 	Storage/MassStorage/Encodings/MacintoshVolume.cpp
 	Storage/MassStorage/Formats/DAT.cpp
@@ -261,5 +263,16 @@ set(CLK_SOURCES
 if(CLK_UI STREQUAL "SDL")
 	list(APPEND CLK_SOURCES
 		OSBindings/SDL/main.cpp
+	)
+endif()
+
+if(CLK_UI STREQUAL "Qt")
+	list(APPEND CLK_SOURCES
+		OSBindings/Qt/mainwindow.ui
+		OSBindings/Qt/keyboard.cpp
+		OSBindings/Qt/main.cpp
+		OSBindings/Qt/mainwindow.cpp
+		OSBindings/Qt/scantargetwidget.cpp
+		OSBindings/Qt/timer.cpp
 	)
 endif()
