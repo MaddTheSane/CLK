@@ -241,6 +241,18 @@
         }
       }
     },
+    "jrz-ME-uL6.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Soft Reset\"; ObjectID = \"jrz-ME-uL6\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Soft Reset"
+          }
+        }
+      }
+    },
     "KaW-ft-85H.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"Revert to Saved\"; ObjectID = \"KaW-ft-85H\";",
       "extractionState" : "extracted_with_value",
@@ -489,6 +501,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Copy"
+          }
+        }
+      }
+    },
+    "Z84-pv-CRj.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Hard Reset\"; ObjectID = \"Z84-pv-CRj\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard Reset"
           }
         }
       }

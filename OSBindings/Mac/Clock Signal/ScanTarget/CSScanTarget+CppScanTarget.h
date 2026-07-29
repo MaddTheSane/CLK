@@ -9,7 +9,7 @@
 #import "CSScanTarget.h"
 #include "ScanTarget.hpp"
 
-@interface CSScanTarget (CppScanTarget)
+@interface CSScanTarget (/*CppScanTarget*/)
 
 @property (nonatomic, readonly, nonnull) Outputs::Display::ScanTarget *scanTarget;
 

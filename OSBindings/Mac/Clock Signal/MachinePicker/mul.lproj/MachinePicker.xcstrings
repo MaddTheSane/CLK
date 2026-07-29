@@ -121,6 +121,18 @@
         }
       }
     },
+    "7GI-C0-Snt.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Olivetti Prodest 128\"; ObjectID = \"7GI-C0-Snt\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Olivetti Prodest 128"
+          }
+        }
+      }
+    },
     "7kj-PC-c6s.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"Thirteen Sector\"; ObjectID = \"7kj-PC-c6s\";",
       "extractionState" : "extracted_with_value",
@@ -213,6 +225,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "MSX 2"
+          }
+        }
+      }
+    },
+    "8Hf-Pj-AM3.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"MO6\"; ObjectID = \"8Hf-Pj-AM3\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MO6"
           }
         }
       }
@@ -361,6 +385,18 @@
         }
       }
     },
+    "AMG-ZV-Au3.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"64kb\"; ObjectID = \"AMG-ZV-Au3\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "64kb"
+          }
+        }
+      }
+    },
     "AMt-WU-a0H.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"Apple IIe\"; ObjectID = \"AMt-WU-a0H\";",
       "extractionState" : "extracted_with_value",
@@ -369,6 +405,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Apple IIe"
+          }
+        }
+      }
+    },
+    "b95-U5-aXQ.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Tandy CoCo\"; ObjectID = \"b95-U5-aXQ\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tandy CoCo"
           }
         }
       }
@@ -889,6 +937,18 @@
         }
       }
     },
+    "LDC-yq-1w7.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Machine:\"; ObjectID = \"LDC-yq-1w7\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Machine:"
+          }
+        }
+      }
+    },
     "LeD-N4-avf.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"Turbo\"; ObjectID = \"LeD-N4-avf\";",
       "extractionState" : "extracted_with_value",
@@ -945,6 +1005,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "512 kb"
+          }
+        }
+      }
+    },
+    "Lz0-xd-kzj.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"32kb\"; ObjectID = \"Lz0-xd-kzj\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "32kb"
           }
         }
       }
@@ -1285,6 +1357,30 @@
         }
       }
     },
+    "rRf-PT-0jI.title" : {
+      "comment" : "Class = \"NSTextFieldCell\"; title = \"Memory Size:\"; ObjectID = \"rRf-PT-0jI\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Memory Size:"
+          }
+        }
+      }
+    },
+    "rWB-ah-9Dc.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With Disk Drive\"; ObjectID = \"rWB-ah-9Dc\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With Disk Drive"
+          }
+        }
+      }
+    },
     "S0c-Jg-7Pu.title" : {
       "comment" : "Class = \"NSButtonCell\"; title = \"With Advanced Disk Filing System\"; ObjectID = \"S0c-Jg-7Pu\";",
       "extractionState" : "extracted_with_value",
@@ -1341,6 +1437,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "Swn-Yx-KLU.label" : {
+      "comment" : "Class = \"NSTabViewItem\"; label = \"Thomson MO\"; ObjectID = \"Swn-Yx-KLU\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thomson MO"
           }
         }
       }
@@ -1573,6 +1681,18 @@
         }
       }
     },
+    "wjb-gR-57f.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"MO5\"; ObjectID = \"wjb-gR-57f\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "MO5"
+          }
+        }
+      }
+    },
     "WNJ-kT-TYn.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"64 kb\"; ObjectID = \"WNJ-kT-TYn\";",
       "extractionState" : "extracted_with_value",
@@ -1665,6 +1785,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "None"
+          }
+        }
+      }
+    },
+    "xIr-cG-FuW.title" : {
+      "comment" : "Class = \"NSButtonCell\"; title = \"With Disk Drive\"; ObjectID = \"xIr-cG-FuW\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With Disk Drive"
           }
         }
       }

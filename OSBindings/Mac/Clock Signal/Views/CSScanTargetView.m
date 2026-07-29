@@ -47,6 +47,7 @@ static CVReturn DisplayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
 	// Create a display link for the display the window is currently on.
 	NSNumber *const screenNumber = self.window.screen.deviceDescription[@"NSScreenNumber"];
 	_currentScreenNumber = screenNumber;
+//	[self displayLinkWithTarget:self selector:nil];
 	CVDisplayLinkCreateWithCGDisplay(screenNumber.unsignedIntValue, &_displayLink);
 
 	// Set the renderer output callback function.
