@@ -100,9 +100,10 @@ void CRT::set_new_timing(
 		);
 	}
 
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_->set_modals(scan_target_modals_);
 
-	const float stability_threshold = 1.0f / scan_target_modals_.expected_vertical_lines;
+	const float stability_threshold = 1.0f / float(scan_target_modals_.expected_vertical_lines);
 	rect_accumulator_.set_stability_threshold(stability_threshold);
 }
 
@@ -127,6 +128,7 @@ void CRT::set_dynamic_framing(
 
 	if(!has_first_reading_) {
 		previous_posted_rect_ = posted_rect_ = scan_target_modals_.visible_area = initial;
+		std::lock_guard guard(scan_target_lock_);
 		scan_target_->set_modals(scan_target_modals_);
 	}
 	has_first_reading_ = true;
@@ -135,8 +137,14 @@ void CRT::set_dynamic_framing(
 
 void CRT::set_fixed_framing(const std::function<void()> &advance) {
 	framing_ = Framing::CalibratingAutomaticFixed;
-	while(framing_ == Framing::CalibratingAutomaticFixed) {
+
+	static constexpr int MaxSpins = 1000;
+	int spin = 0;
+	while(framing_ == Framing::CalibratingAutomaticFixed && ++spin < MaxSpins) {
 		advance();
+	}
+	if(spin == MaxSpins) {
+		Logger::info().append("CRT failed to calibrate after %d spins", spin);
 	}
 }
 
@@ -145,6 +153,7 @@ void CRT::set_fixed_framing(const Display::Rect frame) {
 	static_frame_ = frame;
 	if(!has_first_reading_) {
 		scan_target_modals_.visible_area = frame;
+		std::lock_guard guard(scan_target_lock_);
 		scan_target_->set_modals(scan_target_modals_);
 	}
 }
@@ -179,7 +188,7 @@ void CRT::set_new_display_type(const int cycles_per_line, const Outputs::Display
 }
 
 void CRT::set_composite_function_type(const CompositeSourceType type, const float offset_of_first_sample) {
-	if(type == DiscreteFourSamplesPerCycle) {
+	if(type == CompositeSourceType::DiscreteFourSamplesPerCycle) {
 		colour_burst_phase_adjustment_ = uint8_t(offset_of_first_sample * 256.0f) & 63;
 	} else {
 		colour_burst_phase_adjustment_ = 0xff;
@@ -257,6 +266,7 @@ void CRT::advance_cycles(
 	const Scan::Type type,
 	const int number_of_samples
 ) {
+	std::lock_guard guard(scan_target_lock_);
 	number_of_cycles *= time_multiplier_;
 
 	const bool is_output_run = type == Scan::Type::Level || type == Scan::Type::Data;
@@ -375,13 +385,13 @@ void CRT::advance_cycles(
 			// Reset the cycles-since-sync counter if this is the end of retrace.
 			if(horizontal_event.first == Flywheel::SyncEvent::EndRetrace) {
 				cycles_since_horizontal_sync_ = 0;
+				start_of_line_y_ = current_vertical_flywheel();
 
 				// This is unnecessary, strictly speaking, but seeks to help ScanTargets fit as
 				// much as possible into a fixed range.
 				phase_numerator_ %= phase_denominator_;
 				if(!phase_numerator_) phase_numerator_ += phase_denominator_;
 			}
-
 			// Announce event.
 			const auto event =
 				horizontal_event.first == Flywheel::SyncEvent::StartRetrace
@@ -437,17 +447,20 @@ Outputs::Display::ScanTarget::Scan::EndPoint CRT::end_point(const uint16_t data_
 	// TODO: I could supply time_multiplier_ as a modal and just not round .cycles_since_end_of_horizontal_retrace.
 	// Would that be better?
 	const auto lost_precision = cycles_since_horizontal_sync_ % time_multiplier_;
-	const auto composite_angle =
-		(((phase_numerator_ - lost_precision * colour_cycle_numerator_) << 6) / phase_denominator_)
-			* (is_alternate_line_ ? -1 : 1);
+	const auto unsigned_angle =
+		((phase_numerator_ - lost_precision * colour_cycle_numerator_) << 6) / phase_denominator_;
+	const auto composite_angle = unsigned_angle *
+		((is_alternate_line_ && colour_burst_phase_adjustment_ == 0xff) ? -1 : 1);
+		// Don't swing the phase if discrete four samples/cycle composite sampling is set because:
+		//	(i) it'd make no difference to the output, contractually; and
+		//	(ii) it'd complicate the samplers, unnecessarily as per (i).
 
 	return Display::ScanTarget::Scan::EndPoint{
 		// Clamp the available range on endpoints. These will almost always be within range, but may go
 		// out during times of resync.
 		.x = uint16_t(std::min(horizontal_flywheel_.current_output_position(), 65535)),
-		.y = uint16_t(
-			std::min(vertical_flywheel_.current_output_position() / vertical_flywheel_output_divider_, 65535)
-		),
+		.y = preferences_.force_horizontal_scans.load(std::memory_order_relaxed) ?
+			start_of_line_y_ : current_vertical_flywheel(),
 		.data_offset = data_offset,
 
 		.composite_angle = int16_t(composite_angle),
@@ -459,6 +472,7 @@ void CRT::posit(Display::Rect rect) {
 	// Scale and push a rect.
 	const auto set_rect = [&](const Display::Rect &rect) {
 		scan_target_modals_.visible_area = rect;
+		// posit is called only with the scan_target_ lock already held.
 		scan_target_->set_modals(scan_target_modals_);
 	};
 
@@ -541,6 +555,7 @@ void CRT::posit(Display::Rect rect) {
 
 void CRT::output_scan(const Scan &scan) {
 	assert(scan.number_of_cycles >= 0);
+	if(!scan.number_of_cycles) return;
 
 	// Simplified colour burst logic: if it's within the back porch we'll take it.
 	if(scan.type == Scan::Type::ColourBurst) {
@@ -550,8 +565,9 @@ void CRT::output_scan(const Scan &scan) {
 		) {
 			// Load phase_numerator_ as a fixed-point quantity in the range [0, 255].
 			phase_numerator_ = scan.phase;
-			if(colour_burst_phase_adjustment_ != 0xff)
+			if(colour_burst_phase_adjustment_ != 0xff) {
 				phase_numerator_ = (phase_numerator_ & ~63) + colour_burst_phase_adjustment_;
+			}
 
 			// Multiply the phase_numerator_ up to be to the proper scale.
 			phase_numerator_ = (phase_numerator_ * phase_denominator_) >> 8;
@@ -596,6 +612,7 @@ void CRT::output_scan(const Scan &scan) {
 	if(is_accumulating_sync_ && !is_refusing_sync_) {
 		cycles_of_sync_ += scan.number_of_cycles;
 
+		// TODO: Verify the logic below; I'm suspicious.
 		if(this_is_sync && cycles_of_sync_ >= sync_capacitor_charge_threshold_) {
 			const int overshoot = std::min(cycles_of_sync_ - sync_capacitor_charge_threshold_, number_of_cycles);
 			if(overshoot) {
@@ -631,7 +648,11 @@ void CRT::output_blank(const int number_of_cycles) {
 }
 
 void CRT::output_level(const int number_of_cycles) {
-	scan_target_->end_data(1);
+	{
+		std::lock_guard guard(scan_target_lock_);
+		scan_target_->end_data(1);
+		// Ensure lock is released before proceeding; it's not recursive.
+	}
 	output_scan(Scan{
 		.type = Scan::Type::Level,
 		.number_of_cycles = number_of_cycles,
@@ -674,7 +695,10 @@ void CRT::output_data(const int number_of_cycles, const size_t number_of_samples
 //	assert(number_of_samples <= allocated_data_length_);
 //	allocated_data_length_ = std::numeric_limits<size_t>::min();
 #endif
-	scan_target_->end_data(number_of_samples);
+	{
+		std::lock_guard guard(scan_target_lock_);
+		scan_target_->end_data(number_of_samples);
+	}
 	output_scan(Scan{
 		.type = Scan::Type::Data,
 		.number_of_cycles = number_of_cycles,
@@ -733,7 +757,7 @@ Outputs::Display::Rect CRT::get_rect_for_area(
 	const float start_y =
 		float(first_line_after_sync * horizontal_period - vertical_retrace_period) /
 		float(vertical_scan_period);
-	const float height = float(number_of_lines * horizontal_period) / vertical_scan_period;
+	const float height = float(number_of_lines * horizontal_period) / float(vertical_scan_period);
 
 	return Outputs::Display::Rect(start_x, start_y, width, height);
 }
@@ -751,23 +775,28 @@ Outputs::Display::ScanStatus CRT::get_scaled_scan_status() const {
 // MARK: - ScanTarget passthroughs.
 
 void CRT::set_scan_target(Outputs::Display::ScanTarget *const scan_target) {
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_ = scan_target;
 	if(!scan_target_) scan_target_ = &Outputs::Display::NullScanTarget::singleton;
 	scan_target_->set_modals(scan_target_modals_);
+	scan_target_->set_delegate(preferences_);
 }
 
 void CRT::set_new_data_type(const Outputs::Display::InputDataType data_type) {
 	scan_target_modals_.input_data_type = data_type;
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_->set_modals(scan_target_modals_);
 }
 
 void CRT::set_aspect_ratio(const float aspect_ratio) {
 	scan_target_modals_.aspect_ratio = aspect_ratio;
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_->set_modals(scan_target_modals_);
 }
 
 void CRT::set_display_type(const Outputs::Display::DisplayType display_type) {
 	scan_target_modals_.display_type = display_type;
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_->set_modals(scan_target_modals_);
 }
 
@@ -777,20 +806,24 @@ Outputs::Display::DisplayType CRT::get_display_type() const {
 
 void CRT::set_phase_linked_luminance_offset(const float offset) {
 	scan_target_modals_.input_data_tweaks.phase_linked_luminance_offset = offset;
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_->set_modals(scan_target_modals_);
 }
 
 void CRT::set_input_data_type(const Outputs::Display::InputDataType input_data_type) {
 	scan_target_modals_.input_data_type = input_data_type;
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_->set_modals(scan_target_modals_);
 }
 
 void CRT::set_brightness(const float brightness) {
 	scan_target_modals_.brightness = brightness;
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_->set_modals(scan_target_modals_);
 }
 
 void CRT::set_input_gamma(const float gamma) {
 	scan_target_modals_.intended_gamma = gamma;
+	std::lock_guard guard(scan_target_lock_);
 	scan_target_->set_modals(scan_target_modals_);
 }

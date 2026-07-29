@@ -19,7 +19,7 @@ namespace Sinclair::ZXSpectrum {
 
 struct Machine {
 	virtual ~Machine() = default;
-	static std::unique_ptr<Machine> ZXSpectrum(const Analyser::Static::Target *, const ROMMachine::ROMFetcher &);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	virtual void set_tape_is_playing(bool is_playing) = 0;
 	virtual bool get_tape_is_playing() = 0;
@@ -40,7 +40,7 @@ struct Machine {
 			automatic_tape_motor_control(type == Configurable::OptionsType::UserFriendly) {}
 
 	private:
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {

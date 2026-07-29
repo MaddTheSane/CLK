@@ -361,7 +361,7 @@ private:
 		executor_.bus.video().crt().set_scan_target(scan_target);
 	}
 	Outputs::Display::ScanStatus get_scaled_scan_status() const override {
-		return executor_.bus.video().crt().get_scaled_scan_status() * video_divider_;
+		return executor_.bus.video().crt().get_scaled_scan_status() * float(video_divider_);
 	}
 
 	// MARK: - TimedMachine.
@@ -399,7 +399,7 @@ private:
 		static constexpr int TickFrequency = ClockRate / 50;	// i.e. 480,000
 		Cycles subtractor = cursor_action_subcycle_;
 		cursor_action_subcycle_ += cycles;
-		auto segments = cursor_action_subcycle_.divide(Cycles(TickFrequency)).as<int>();
+		auto segments = cursor_action_subcycle_.divide(TickFrequency).as<int>();
 		while(segments--) {
 			//
 			// Run up until end of next window.
@@ -535,7 +535,7 @@ private:
 	}
 
 	// MARK: - MappedKeyboardMachine.
-	MappedKeyboardMachine::KeyboardMapper *get_keyboard_mapper() override {
+	MappedKeyboardMachine::KeyboardMapper *keyboard_mapper() override {
 		return &keyboard_mapper_;
 	}
 	Archimedes::KeyboardMapper keyboard_mapper_;
@@ -749,10 +749,10 @@ private:
 
 using namespace Archimedes;
 
-std::unique_ptr<Machine> Machine::Archimedes(
-	const Analyser::Static::Target *target,
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
 	const ROMMachine::ROMFetcher &rom_fetcher
 ) {
-	const auto archimedes_target = dynamic_cast<const Analyser::Static::Acorn::ArchimedesTarget *>(target);
-	return std::make_unique<ConcreteMachine>(*archimedes_target, rom_fetcher);
+	const auto &archimedes_target = static_cast<const Analyser::Static::Acorn::ArchimedesTarget &>(target);
+	return std::make_unique<ConcreteMachine>(archimedes_target, rom_fetcher);
 }

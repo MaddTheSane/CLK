@@ -31,6 +31,7 @@
 #import "NSData+StdVector.h"
 
 #include <cassert>
+#include <codecvt>
 #include <atomic>
 #include <bitset>
 #include <locale>
@@ -126,7 +127,14 @@ struct ActivityObserver: public Activity::Observer {
 	CSJoystickManager *_joystickManager;
 	NSMutableArray<CSMachineLED *> *_leds;
 
-	std::unique_ptr<Updater> updater;
+	std::unique_ptr<Updater> _ownedUpdater;
+	std::atomic<Updater *> _updater;	// This will only ever be updated from nullptr to a valid pointer;
+										// that pointer will live for the lifetime of this NSObject.
+										//
+										// So, it's safe to read this atomically and check for nullptr. If
+										// it is nullptr then you read it ahead of the object being created.
+										// If it isn't then the object will definitely still be alive if
+										// other NSObject lifetime invariants have held.
 	Time::ScanSynchroniser _scanSynchroniser;
 
 	NSTimer *_joystickTimer;
@@ -188,11 +196,13 @@ struct ActivityObserver: public Activity::Observer {
 	_analyser = machine;
 	_machine->scan_producer()->set_scan_target(_view.scanTarget.scanTarget);
 
-	updater = std::make_unique<Updater>();
-	updater->performer.machine = _machine.get();
-	if(updater->performer.machine) {
-		updater->start();
+	_ownedUpdater = std::make_unique<Updater>();
+	std::atomic_thread_fence(std::memory_order_release);
+	_ownedUpdater->performer.machine = _machine.get();
+	if(_ownedUpdater->performer.machine) {
+		_ownedUpdater->start();
 	}
+	_updater.store(_ownedUpdater.get(), std::memory_order_relaxed);
 
 	_leds = [[NSMutableArray alloc] init];
 	Activity::Source *const activity_source = _machine->activity_source();
@@ -205,7 +215,7 @@ struct ActivityObserver: public Activity::Observer {
 
 	// Use the keyboard as a joystick if the machine has no keyboard, or if it has a 'non-exclusive' keyboard.
 	_inputMode =
-		(_machine->keyboard_machine() && _machine->keyboard_machine()->get_keyboard().is_exclusive())
+		(_machine->keyboard_machine() && _machine->keyboard_machine()->keyboard().is_exclusive())
 			? CSMachineKeyboardInputModeKeyboardPhysical : CSMachineKeyboardInputModeJoystick;
 
 	_joystickMachine = _machine->joystick_machine();
@@ -356,8 +366,17 @@ struct ActivityObserver: public Activity::Observer {
 
 - (void)paste:(NSString *)paste {
 	auto keyboardMachine = _machine->keyboard_machine();
-	if(keyboardMachine)
-		keyboardMachine->type_string([paste UTF8String]);
+	if(keyboardMachine) {
+		// Baked-in macOS assumptions.
+		static_assert(sizeof(wchar_t) == 4);
+		static_assert(TARGET_RT_LITTLE_ENDIAN);
+
+		NSData *const data = [paste dataUsingEncoding:NSUTF32LittleEndianStringEncoding];
+		if(data) {
+			std::wstring text(static_cast<const wchar_t *>(data.bytes), data.length / sizeof(wchar_t));
+			keyboardMachine->type_string(text);
+		}
+	}
 }
 
 - (NSBitmapImageRep *)imageRepresentation {
@@ -365,10 +384,20 @@ struct ActivityObserver: public Activity::Observer {
 }
 
 - (void)applyMedia:(const Analyser::Static::Media &)media {
-	@synchronized(self) {
-		const auto mediaTarget = _machine->media_target();
-		if(mediaTarget) mediaTarget->insert_media(media);
-	}
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return;
+
+	__weak CSMachine *weakSelf = self;
+	updater->enqueue([weakSelf, updater, media] {
+
+		auto strongSelf = weakSelf;
+		if(!strongSelf) return;
+
+		@synchronized(strongSelf) {
+			const auto mediaTarget = strongSelf->_machine->media_target();
+			if(mediaTarget) mediaTarget->insert_media(media);
+		}
+	});
 }
 
 - (CSMachineChangeEffect)effectForFileAtURLDidChange:(nonnull NSURL *)url {
@@ -396,13 +425,15 @@ struct ActivityObserver: public Activity::Observer {
 
 
 - (void)setInputMode:(CSMachineKeyboardInputMode)inputMode {
+	if(inputMode == _inputMode) {
+		return;
+	}
 	_inputMode = inputMode;
 
 	// Avoid the risk that the user used a keyboard shortcut to change input mode,
-	// leaving any modifiers associated with that dangling.
-	if(_inputMode == CSMachineKeyboardInputModeJoystick) {
-		[self clearAllKeys];
-	}
+	// leaving any modifiers associated with that dangling or, in the converse,
+	// leaving a joystick button pressed.
+	[self clearAllKeys];
 }
 
 - (void)setJoystickManager:(CSJoystickManager *)joystickManager {
@@ -422,7 +453,7 @@ struct ActivityObserver: public Activity::Observer {
 - (void)setKey:(uint16_t)key characters:(NSString *)characters isPressed:(BOOL)isPressed isRepeat:(BOOL)isRepeat {
 	[self applyInputEvent:^{
 		auto keyboard_machine = self->_machine->keyboard_machine();
-		if(keyboard_machine && (self.inputMode != CSMachineKeyboardInputModeJoystick || !keyboard_machine->get_keyboard().is_exclusive())) {
+		if(keyboard_machine && (self.inputMode != CSMachineKeyboardInputModeJoystick || !keyboard_machine->keyboard().is_exclusive())) {
 			Inputs::Keyboard::Key mapped_key = Inputs::Keyboard::Key::Help;	// Make an innocuous default guess.
 #define BIND(source, dest) case source: mapped_key = Inputs::Keyboard::Key::dest; break;
 			// Connect the Carbon-era Mac keyboard scancodes to Clock Signal's 'universal' enumeration in order
@@ -506,25 +537,27 @@ struct ActivityObserver: public Activity::Observer {
 		if(self.inputMode == CSMachineKeyboardInputModeJoystick && joystick_machine) {
 			auto &joysticks = joystick_machine->get_joysticks();
 			if(!joysticks.empty()) {
-				// Convert to a C++ bool so that the following calls are resolved correctly even if overloaded.
-				const auto is_pressed = bool(isPressed);
-				switch(key) {
-					case VK_LeftArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Left, is_pressed);		break;
-					case VK_RightArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Right, is_pressed);	break;
-					case VK_UpArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Up, is_pressed);		break;
-					case VK_DownArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Down, is_pressed);		break;
-					case VK_Space:		joysticks[0]->set_input(Inputs::Joystick::Input::Fire, is_pressed);		break;
-					case VK_ANSI_A:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 0), is_pressed);	break;
-					case VK_ANSI_S:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 1), is_pressed);	break;
-					case VK_ANSI_D:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 2), is_pressed);	break;
-					case VK_ANSI_F:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 3), is_pressed);	break;
-					default:
-						if(characters.length) {
-							joysticks[0]->set_input(Inputs::Joystick::Input([characters characterAtIndex:0]), is_pressed);
-						} else {
-							joysticks[0]->set_input(Inputs::Joystick::Input::Fire, is_pressed);
-						}
-					break;
+				@synchronized(self) {
+					// Convert to a C++ bool so that the following calls are resolved correctly even if overloaded.
+					const auto is_pressed = bool(isPressed);
+					switch(key) {
+						case VK_LeftArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Left, is_pressed);		break;
+						case VK_RightArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Right, is_pressed);	break;
+						case VK_UpArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Up, is_pressed);		break;
+						case VK_DownArrow:	joysticks[0]->set_input(Inputs::Joystick::Input::Down, is_pressed);		break;
+						case VK_Space:		joysticks[0]->set_input(Inputs::Joystick::Input::Fire, is_pressed);		break;
+						case VK_ANSI_A:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 0), is_pressed);	break;
+						case VK_ANSI_S:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 1), is_pressed);	break;
+						case VK_ANSI_D:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 2), is_pressed);	break;
+						case VK_ANSI_F:		joysticks[0]->set_input(Inputs::Joystick::Input(Inputs::Joystick::Input::Fire, 3), is_pressed);	break;
+						default:
+							if(characters.length) {
+								joysticks[0]->set_input(Inputs::Joystick::Input([characters characterAtIndex:0]), is_pressed);
+							} else {
+								joysticks[0]->set_input(Inputs::Joystick::Input::Fire, is_pressed);
+							}
+						break;
+					}
 				}
 			}
 		}
@@ -532,6 +565,9 @@ struct ActivityObserver: public Activity::Observer {
 }
 
 - (void)applyInputEvent:(dispatch_block_t)event {
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return;
+
 	updater->enqueue([event] {
 		event();
 	});
@@ -541,7 +577,7 @@ struct ActivityObserver: public Activity::Observer {
 	const auto keyboard_machine = _machine->keyboard_machine();
 	if(keyboard_machine) {
 		[self applyInputEvent:^{
-			keyboard_machine->get_keyboard().reset_all_keys();
+			keyboard_machine->keyboard().reset_all_keys();
 		}];
 	}
 
@@ -719,13 +755,13 @@ struct ActivityObserver: public Activity::Observer {
 }
 
 - (BOOL)hasExclusiveKeyboard {
-	return !!_machine->keyboard_machine() && _machine->keyboard_machine()->get_keyboard().is_exclusive();
+	return !!_machine->keyboard_machine() && _machine->keyboard_machine()->keyboard().is_exclusive();
 }
 
 - (BOOL)shouldUsurpCommand {
 	if(!_machine->keyboard_machine()) return NO;
 
-	const auto essential_modifiers = _machine->keyboard_machine()->get_keyboard().get_essential_modifiers();
+	const auto essential_modifiers = _machine->keyboard_machine()->keyboard().get_essential_modifiers();
 	return	essential_modifiers.find(Inputs::Keyboard::Key::LeftMeta) != essential_modifiers.end() ||
 			essential_modifiers.find(Inputs::Keyboard::Key::RightMeta) != essential_modifiers.end();
 }
@@ -763,18 +799,28 @@ struct ActivityObserver: public Activity::Observer {
 - (void)audioQueueIsRunningDry:(nonnull CSAudioQueue *)audioQueue {
 	__weak CSMachine *weakSelf = self;
 
-	updater->enqueue([weakSelf] {
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return;
+
+	updater->enqueue([weakSelf, updater] {
 		CSMachine *const strongSelf = weakSelf;
 		if(strongSelf) {
-			strongSelf->updater->performer.timed_machine->flush_output(MachineTypes::TimedMachine::Output::Audio);
+			updater->performer.timed_machine->flush_output(MachineTypes::TimedMachine::Output::Audio);
 		}
 	});
 }
 
-- (void)scanTargetViewDisplayLinkDidFire:(CSScanTargetView *)view now:(const CVTimeStamp *)now outputTime:(const CVTimeStamp *)outputTime {
+- (void)scanTargetViewDisplayLinkDidFire:(CSScanTargetView *)view
+	now:(const CVTimeStamp *)now
+	outputTime:(const CVTimeStamp *)outputTime
+{
 	__weak CSMachine *weakSelf = self;
+	const auto refreshPeriod = view.refreshPeriod;
 
-	updater->enqueue([weakSelf] {
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return;
+
+	updater->enqueue([weakSelf, refreshPeriod, updater] {
 		CSMachine *const strongSelf = weakSelf;
 		if(!strongSelf) {
 			return;
@@ -782,7 +828,7 @@ struct ActivityObserver: public Activity::Observer {
 
 		// Grab a pointer to the timed machine from somewhere where it has already
 		// been dynamically cast, to avoid that cost here.
-		MachineTypes::TimedMachine *const timed_machine = strongSelf->updater->performer.timed_machine;
+		MachineTypes::TimedMachine *const timed_machine = updater->performer.timed_machine;
 
 		// Definitely update video; update audio too if that pipeline is looking a little dry.
 		auto outputs = MachineTypes::TimedMachine::Output::Video;
@@ -795,16 +841,19 @@ struct ActivityObserver: public Activity::Observer {
 		const auto scanStatus = strongSelf->_machine->scan_producer()->get_scan_status();
 		const bool canSynchronise = strongSelf->_scanSynchroniser.can_synchronise(
 			scanStatus,
-			strongSelf.view.refreshPeriod
+			refreshPeriod
 		);
 
 		if(canSynchronise) {
-			const double multiplier = strongSelf->_scanSynchroniser.next_speed_multiplier(
-				strongSelf->_machine->scan_producer()->get_scan_status()
-			);
+			const auto scan_status = strongSelf->_machine->scan_producer()->get_scan_status();
+			const double multiplier = strongSelf->_scanSynchroniser.next_speed_multiplier(scan_status);
 			timed_machine->set_speed_multiplier(multiplier);
+
+			strongSelf->_view.scanTarget.isFrameSynced =
+				scan_status.current_position > 0.9f || scan_status.current_position < 0.1f;
 		} else {
 			timed_machine->set_speed_multiplier(1.0);
+			strongSelf->_view.scanTarget.isFrameSynced = NO;
 		}
 
 		// Ask Metal to rasterise all that just happened and present it.
@@ -821,11 +870,53 @@ struct ActivityObserver: public Activity::Observer {
 }
 
 - (void)stop {
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return;
 	updater->stop();
 }
 
 + (BOOL)attemptInstallROM:(NSURL *)url {
 	return CSInstallROM(url);
+}
+
+- (void)hardReset {
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return;
+
+	__weak CSMachine *weakSelf = self;
+	updater->enqueue([weakSelf, updater] {
+		CSMachine *const strongSelf = weakSelf;
+		if(strongSelf) {
+			auto *const resettable = updater->performer.machine->hard_resettable();
+			if(resettable) resettable->hard_reset();
+		}
+	});
+}
+
+- (BOOL)canHardReset {
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return NO;
+	return updater->performer.machine->hard_resettable() != nullptr;
+}
+
+- (void)softReset {
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return;
+
+	__weak CSMachine *weakSelf = self;
+	updater->enqueue([weakSelf, updater] {
+		CSMachine *const strongSelf = weakSelf;
+		if(strongSelf) {
+			auto *const resettable = updater->performer.machine->soft_resettable();
+			if(resettable) resettable->soft_reset();
+		}
+	});
+}
+
+- (BOOL)canSoftReset {
+	const auto updater = _updater.load(std::memory_order_relaxed);
+	if(!updater) return NO;
+	return updater->performer.machine->soft_resettable() != nullptr;
 }
 
 @end

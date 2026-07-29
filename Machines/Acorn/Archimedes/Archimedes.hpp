@@ -19,10 +19,7 @@ namespace Archimedes {
 
 struct Machine {
 	virtual ~Machine() = default;
-	static std::unique_ptr<Machine> Archimedes(
-		const Analyser::Static::Target *target,
-		const ROMMachine::ROMFetcher &rom_fetcher
-	);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	class Options: public Reflection::StructImpl<Options>, public Configurable::Options::QuickLoad<Options> {
 		friend Configurable::Options::QuickLoad<Options>;
@@ -30,7 +27,7 @@ struct Machine {
 		Options(const Configurable::OptionsType type) :
 			Configurable::Options::QuickLoad<Options>(type == Configurable::OptionsType::UserFriendly) {}
 	private:
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {
 			declare_quickload_option();

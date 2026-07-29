@@ -1,3 +1,5 @@
+![GitHub](https://img.shields.io/github/license/TomHarte/CLK?style=for-the-badge)![GitHub Release Date](https://img.shields.io/github/release-date/TomHarte/CLK?label=Latest%20Release&style=for-the-badge)![GitHub last commit](https://img.shields.io/github/last-commit/TomHarte/CLK?style=for-the-badge)![GitHub repo size](https://img.shields.io/github/repo-size/TomHarte/CLK?style=for-the-badge)
+
 # Clock Signal
 
 <img align="left" src="READMEImages/Icon.png" alt="Clock Signal Application Icon" /> Clock Signal ('CLK') is an emulator that seeks to be invisible. Users directly launch classic software, avoiding the learning curves associated with emulators and with classic machines.
@@ -19,19 +21,21 @@ It currently contains emulations of the:
 * Atari ST;
 * BBC Micro;
 * ColecoVision;
+* Commodore Plus 4;
 * Commodore Vic-20;
 * Enterprise 64/128;
 * Macintosh 128K, 512K, 512Ke, and Plus;
 * MSX 1 and 2;
 * Oric 1/Atmos;
 * Sega Master System;
-* Sinclair ZX80/81; and
-* Sinclair ZX Spectrum.
+* Sinclair ZX80/81;
+* Sinclair ZX Spectrum;
+* Tandy CoCo 1/2; and
+* Thomson MO5/6.
 
-Also present but very much upcoming are the:
+Also present but less rounded are the:
 
 * Acorn Archimedes;
-* Commodore Plus 4;
 * Commodore Amiga; and
 * early PC compatible.
 
@@ -122,11 +126,8 @@ This emulator attempts cycle-accurate emulation of all supported machines. In so
 		<td width=50%><img alt="Apple IIe Prince of Persia" src="READMEImages/AppleIIPrinceOfPersia.png"></td>
 		<td width=50%><img alt="Archimedes Star Fighter 3000" src="READMEImages/StarFighter3000.png"></td>
 	</tr><tr>
-		<td width=50%><img alt="Apple Macintosh MusicWorks" src="READMEImages/MusicWorks.png"></td>
-		<td width=50%><img alt="Atari ST Stunt Car Racer" src="READMEImages/STStuntCarRacer.png"></td>
-	</tr><tr>
 		<td width=50%><img alt="Amiga Indianapolis 500" src="READMEImages/AmigaIndy500.png"></td>
-		<td width=50%><img alt="Acorn Electron Chuckie Egg" src="READMEImages/ElectronChuckieEgg.png"></td>
+		<td width=50%><img alt="Atari ST Stunt Car Racer" src="READMEImages/STStuntCarRacer.png"></td>
 	</tr><tr>
 		<td width=50%><img alt="Amstrad CPC Chase HQ" src="READMEImages/CPCChaseHQ.png"></td>
 		<td width=50%><img alt="MSX 2 Space Manbow" src="READMEImages/MSX2SpaceManbow.png"></td>
@@ -137,20 +138,26 @@ This emulator attempts cycle-accurate emulation of all supported machines. In so
 		<td width=50%><img alt="Microsoft Flight Simulator" src="READMEImages/PCFlightSimulator.png"></td>
 		<td width=50%><img alt="BBC Micro Elite" src="READMEImages/BBCElite.png"></td>
 	</tr><tr>
+		<td width=50%><img alt="Acorn Electron Chuckie Egg" src="READMEImages/ElectronChuckieEgg.png"></td>
+		<td width=50%><img alt="C16+4 Kikstart" src="READMEImages/Plus4Kikstart.png"></td>
+	</tr><tr>
 		<td width=50%><img alt="ColecoVision Galaxian" src="READMEImages/ColecoVisionGalaxian.png"></td>
 		<td width=50%><img alt="SG1000 Chack'n'Pop" src="READMEImages/SGChackNPop.png"></td>
 	</tr><tr>
 		<td width=50%><img alt="ZX81 3D Monster Maze" src="READMEImages/ZX81MonsterMaze.png"></td>
-		<td width=50%><img alt="ZX80 Kong" src="READMEImages/ZX80Kong.png"></td>
+		<td width=50%><img alt="Thomson MO5 Minotaure 3D" src="READMEImages/MO5Minotaure3D.png"></td>
 	</tr><tr>
 		<td width=50%><img alt="Vic-20 Gridrunner" src="READMEImages/Vic20Gridrunner.png"></td>
 		<td width=50%><img alt="ZX Spectrum Chromatrons Attack" src="READMEImages/ZXSpectrumChromatronsAttack.png"></td>
 	</tr><tr>
-		<td width=50%><img alt="ZX Spectrum Menu" src="READMEImages/ZXSpectrumMenu.png"></td>
-		<td width=50%><img alt="VIC-20 BASIC" src="READMEImages/Vic20BASIC.png"></td>
+		<td width=50%><img alt="Tandy CoCo Dragonfire" src="READMEImages/CoCoDragonfire.png"></td>
+		<td width=50%><img alt="ZX80 Kong" src="READMEImages/ZX80Kong.png"></td>
 	</tr><tr>
-		<td width=50%><img alt="MS-DOS Prompt" src="READMEImages/MSDOSPrompt.png"></td>
+		<td width=50%><img alt="Apple Macintosh MusicWorks" src="READMEImages/MusicWorks.png"></td>
 		<td width=50%><img alt="RISC OS" src="READMEImages/RISCOS.png"></td>
+	</tr><tr>
+		<td width=50%><img alt="ZX Spectrum Menu" src="READMEImages/ZXSpectrumMenu.png"></td>
+		<td width=50%><img alt="MS-DOS Prompt" src="READMEImages/MSDOSPrompt.png"></td>
 	</tr>
 	</tbody>
 </table>

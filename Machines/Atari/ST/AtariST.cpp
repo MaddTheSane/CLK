@@ -46,22 +46,23 @@ constexpr int CLOCK_RATE = 8021247;
 
 using Target = Analyser::Static::AtariST::Target;
 class ConcreteMachine:
+	public Activity::Source,
 	public Atari::ST::Machine,
+	public ClockingHint::Observer,
+	public Configurable::Device,
 	public CPU::MC68000::BusHandler,
-	public MachineTypes::TimedMachine,
-	public MachineTypes::ScanProducer,
+	public DMAController::Delegate,
+	public GI::AY38910::PortHandler,
 	public MachineTypes::AudioProducer,
-	public MachineTypes::MouseMachine,
 	public MachineTypes::JoystickMachine,
 	public MachineTypes::MappedKeyboardMachine,
+	public MachineTypes::MouseMachine,
+	public MachineTypes::SoftResettable,
+	public MachineTypes::ScanProducer,
+	public MachineTypes::TimedMachine,
 	public MachineTypes::MediaTarget,
-	public ClockingHint::Observer,
 	public Motorola::ACIA::ACIA::InterruptDelegate,
 	public Motorola::MFP68901::MFP68901::InterruptDelegate,
-	public DMAController::Delegate,
-	public Activity::Source,
-	public GI::AY38910::PortHandler,
-	public Configurable::Device,
 	public Video::RangeObserver {
 public:
 	ConcreteMachine(const Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
@@ -149,19 +150,19 @@ public:
 
 	// MARK: CRTMachine::Machine
 	void set_scan_target(Outputs::Display::ScanTarget *scan_target) final {
-		video_->set_scan_target(scan_target);
+		video_.get()->set_scan_target(scan_target);
 	}
 
 	Outputs::Display::ScanStatus get_scaled_scan_status() const final {
-		return video_->get_scaled_scan_status();
+		return video_.get()->get_scaled_scan_status();
 	}
 
 	void set_display_type(Outputs::Display::DisplayType display_type) final {
-		video_->set_display_type(display_type);
+		video_.get()->set_display_type(display_type);
 	}
 
 	Outputs::Display::DisplayType get_display_type() const final {
-		return video_->get_display_type();
+		return video_.get()->get_display_type();
 	}
 
 	Outputs::Speaker::Speaker *get_speaker() final {
@@ -175,6 +176,10 @@ public:
 		}
 
 		mc68000_.run_for(cycles);
+	}
+
+	void soft_reset() final {
+		mc68000_.reset();
 	}
 
 	// MARK: MC68000::BusHandler
@@ -468,7 +473,7 @@ private:
 		// Don't even count time for the keyboard unless it has requested it.
 		if(keyboard_needs_clock_) {
 			cycles_since_ikbd_update_ += length;
-			ikbd_.run_for(cycles_since_ikbd_update_.divide(HalfCycles(512)));
+			ikbd_.run_for(cycles_since_ikbd_update_.divide(512));
 		}
 
 		// Flush anything that needs real-time updating.
@@ -498,7 +503,7 @@ private:
 	}
 
 	void update_audio() {
-		speaker_.run_for(audio_queue_, cycles_since_audio_update_.divide_cycles(Cycles(4)));
+		speaker_.run_for(audio_queue_, cycles_since_audio_update_.divide<Cycles>(4));
 	}
 
 	CPU::MC68000::Processor<ConcreteMachine, true, true> mc68000_;
@@ -550,11 +555,11 @@ private:
 		// This is being called by one of the components; avoid any time flushing here as that's
 		// already dealt with (and, just to be absolutely sure, to avoid recursive mania).
 		may_defer_acias_ =
-			(keyboard_acia_.last_valid()->preferred_clocking() != ClockingHint::Preference::RealTime) &&
-			(midi_acia_.last_valid()->preferred_clocking() != ClockingHint::Preference::RealTime);
+			(keyboard_acia_.get()->preferred_clocking() != ClockingHint::Preference::RealTime) &&
+			(midi_acia_.get()->preferred_clocking() != ClockingHint::Preference::RealTime);
 		keyboard_needs_clock_ = ikbd_.preferred_clocking() != ClockingHint::Preference::None;
-		mfp_is_realtime_ = mfp_.last_valid()->preferred_clocking() == ClockingHint::Preference::RealTime;
-		dma_clocking_preference_ = dma_.last_valid()->preferred_clocking();
+		mfp_is_realtime_ = mfp_.get()->preferred_clocking() == ClockingHint::Preference::RealTime;
+		dma_clocking_preference_ = dma_.get()->preferred_clocking();
 	}
 
 	// MARK: - GPIP input.
@@ -606,8 +611,8 @@ private:
 	void update_interrupt_input() {
 		// Complete guess: set video interrupts pending if/when hsync of vsync
 		// go inactive. Reset upon IACK.
-		const bool hsync = video_.last_valid()->hsync();
-		const bool vsync = video_.last_valid()->vsync();
+		const bool hsync = video_.get()->hsync();
+		const bool vsync = video_.get()->vsync();
 		if(previous_hsync_ != hsync && previous_hsync_) {
 			video_interrupts_pending_ |= 2;
 		}
@@ -639,7 +644,7 @@ private:
 	}
 
 	IntelligentKeyboard::KeyboardMapper keyboard_mapper_;
-	KeyboardMapper *get_keyboard_mapper() final {
+	KeyboardMapper *keyboard_mapper() final {
 		return &keyboard_mapper_;
 	}
 
@@ -708,11 +713,10 @@ private:
 
 using namespace Atari::ST;
 
-std::unique_ptr<Machine> Machine::AtariST(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	auto *const atari_target = dynamic_cast<const Analyser::Static::AtariST::Target *>(target);
-	if(!atari_target) {
-		return nullptr;
-	}
-
-	return std::make_unique<ConcreteMachine>(*atari_target, rom_fetcher);
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	const auto &atari_target = static_cast<const Analyser::Static::AtariST::Target &>(target);
+	return std::make_unique<ConcreteMachine>(atari_target, rom_fetcher);
 }

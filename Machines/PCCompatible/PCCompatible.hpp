@@ -22,10 +22,7 @@ struct Machine {
 	virtual ~Machine() = default;
 
 	/// Creates and returns a PC Compatible.
-	static std::unique_ptr<Machine> PCCompatible(
-		const Analyser::Static::Target *target,
-		const ROMMachine::ROMFetcher &rom_fetcher
-	);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	/// Defines the runtime options [sometimes] available for a PC.
 	class Options:
@@ -38,7 +35,7 @@ struct Machine {
 			Configurable::Options::Display<Options>(Configurable::Display::RGB) {}
 
 	private:
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {

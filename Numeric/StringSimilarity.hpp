@@ -6,8 +6,7 @@
 //  Copyright © 2024 Thomas Harte. All rights reserved.
 //
 
-#ifndef StringSimilarity_hpp
-#define StringSimilarity_hpp
+#pragma once
 
 #include <cstdint>
 #include <set>
@@ -39,9 +38,11 @@ inline double similarity(std::string_view first, std::string_view second) {
 
 	const auto first_pairs = pairs(first);
 	const auto second_pairs = pairs(second);
+	if(first_pairs.empty() || second_pairs.empty()) {
+		return 0.0;
+	}
 
 	const auto denominator = static_cast<double>(first_pairs.size() + second_pairs.size());
-
 	std::size_t numerator = 0;
 	auto first_it = first_pairs.begin();
 	auto second_it = second_pairs.begin();
@@ -61,5 +62,3 @@ inline double similarity(std::string_view first, std::string_view second) {
 }
 
 }
-
-#endif /* StringSimilarity_h */

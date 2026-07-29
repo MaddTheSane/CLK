@@ -149,7 +149,18 @@ const std::vector<Description> &Description::all_roms() {
 			"the Electron MOS ROM v1.00",
 			"os.rom",
 			16_kb,
-			0xbf63fb1fu
+			std::set{0x406a42ceu, 0x0886741bu, 0xbf63fb1fu, 0x6fea0978u, 0xd61135d7u}	// Covers a perfect ROM image plus various instances of the
+																						// credits text being corrupted or missing. The credits text
+																						// is on the IO page in the real machine so in practice those
+																						// differences are acceptable.
+		},
+		{
+			AcornPlus1,
+			"Electron",
+			"the Acorn Plus 1 ROM",
+			"plus1.rom",
+			8_kb,
+			0xcff09d2bu
 		},
 
 	//
@@ -548,6 +559,42 @@ const std::vector<Description> &Description::all_roms() {
 		},
 
 	//
+	// Dragon.
+	//
+		{
+			Dragon32,
+			"Dragon",
+			"the Dragon 32 BASIC ROM",
+			"d32.rom",
+			16_kb,
+			0xe3879310u
+		},
+		{
+			Dragon64ROM1,
+			"Dragon",
+			"the Dragon 64 ROM 1",
+			"d64rom1.rom",
+			16_kb,
+			0x60a4634cu
+		},
+		{
+			TanoDragon64ROM1,
+			"Dragon",
+			"the Tano Dragon 64 ROM 1",
+			Files{ "d64tano.rom", "d200rom1.rom" },
+			16_kb,
+			0x84f68bf9u
+		},
+		{
+			Dragon64ROM2,
+			"Dragon",
+			"the Dragon 64 ROM 2",
+			Files{ "d64rom2.rom", "d64tano2.rom", "d200rom2.rom" },
+			16_kb,
+			0x17893a42u
+		},
+
+	//
 	// Enterprise.
 	//
 		{
@@ -797,12 +844,28 @@ const std::vector<Description> &Description::all_roms() {
 	// Oric.
 	//
 		{
-			OricColourROM,
+			OricColourROM128,
 			"Oric",
-			"the Oric colour ROM",
+			"the Oric colour ROM (128-byte version)",
 			"colour.rom",
 			128,
 			0xd50fca65u
+		},
+		{
+			OricColourROM256,
+			"Oric",
+			"the Oric colour ROM (256-byte version)",
+			"ORIC.PAL-PROM-TBP24S10-1ab9b572.bin",
+			256,
+			0x1ab9b572u
+		},
+		{
+			OricPravetzColourROM,
+			"Oric",
+			"the Pravetz 8D colour ROM",
+			"PRAVETZ-8D.PAL-PROM-82S129-1576a69b.bin",
+			256,
+			0x1576a69bu
 		},
 		{
 			OricBASIC10,
@@ -1002,6 +1065,154 @@ const std::vector<Description> &Description::all_roms() {
 		},
 
 	//
+	// Tandy CoCo.
+	//
+
+		{
+			TandyCoCoColourBasic10,
+			"TandyCoCo",
+			"Colour BASIC 1.0",
+			"Color Basic v1.0 (1980) (Tandy).rom",
+			8_kb,
+			0x00b50aaau
+		},
+		{
+			TandyCoCoColourBasic11,
+			"TandyCoCo",
+			"Colour BASIC 1.1",
+			"Color Basic v1.1 (1980) (Tandy).rom",
+			8_kb,
+			0x6270955au
+		},
+		{
+			TandyCoCoColourBasic12,
+			"TandyCoCo",
+			"Colour BASIC 1.2",
+			"Color Basic v1.2 (1982) (Tandy).rom",
+			8_kb,
+			0x54368805u
+		},
+		{
+			TandyCoCoColourBasic13,
+			"TandyCoCo",
+			"Colour BASIC 1.3",
+			"Color Basic v1.3 (1982) (Tandy).rom",
+			8_kb,
+			0xd8f4d15eu
+		},
+		{
+			TandyCoCoColourBasic14,
+			"TandyCoCo",
+			"Colour BASIC 1.4",
+			"Color Basic v1.4 (1985) (Tandy).rom",
+			8_kb,
+			0xcbdc1ba2u
+		},
+
+		{
+			TandyExtendedBASIC10,
+			"TandyCoCo",
+			"Extended BASIC 1.0",
+			"extbas10.rom",
+			8_kb,
+			0xe031d076u
+		},
+		{
+			TandyExtendedBASIC11,
+			"TandyCoCo",
+			"Extended BASIC 1.1",
+			"extbas11.rom",
+			8_kb,
+			0xa82a6254u
+		},
+
+		{
+			TandyCoCoDiskBASIC10,
+			"TandyCoCo",
+			"Disk BASIC 1.0",
+			"disk10.rom",
+			8_kb,
+			0xb4f9968eu
+		},
+		{
+			TandyCoCoDiskBASIC11,
+			"TandyCoCo",
+			"Disk BASIC 1.1",
+			"disk11.rom",
+			8_kb,
+			0x0b9c5415u
+		},
+		{
+			TandyCoCoDiskBASIC21,
+			"TandyCoCo",
+			"Disk BASIC 2.1",
+			Files{"Disk21.bin", "DISK21.ROM"},
+			16_kb,
+			0xdf9dd220u
+		},
+
+	//
+	// Thomson MO and TO machines.
+	//
+		{
+			ThomsonMO5v1,
+			"Thomson",
+			"the Thomson MO5 ROM, version 1",
+			"mo5-v1.0.rom",
+			16_kb,
+			0xf62d2f3au
+		},
+		{
+			ThomsonMO5v11,
+			"Thomson",
+			"the Thomson MO5 ROM, version 1.1",
+			"mo5-v1.1.rom",
+			16_kb,
+			0x237c60bfu
+		},
+		{
+			ThomsonMO6v1,
+			"Thomson",
+			"the Thomson MO6 ROM, version 1",
+			"mo6-v1.rom",
+			64_kb,
+			0x45e859c6u
+		},
+		{
+			ThomsonMO6v2,
+			"Thomson",
+			"the Thomson MO6 ROM, version 2",
+			"mo6-v2.rom",
+			64_kb,
+			0xb4430a3bu
+		},
+		{
+			ThomsonMO6v3,
+			"Thomson",
+			"the Thomson MO6 ROM, version 3",
+			"mo6-v3.rom",
+			64_kb,
+			0x7a012322u
+		},
+		{
+			OlivettiProdest128,
+			"Thomson",
+			"the Olivetti Prodest 128 ROM",
+			"pc128.rom",
+			64_kb,
+			0xfc173504u
+		},
+
+		{
+			ThomsonCD90_640,
+			"Thomson",
+			"the Thomson CD90-640 ROM",
+			"cd90-640.rom",
+			0x7c0,
+			0x5114c0a5u
+		},
+
+	//
 	// Vic-20.
 	//
 		{
@@ -1105,7 +1316,7 @@ const std::vector<Description> &Description::all_roms() {
 			0x2cbe8995u
 		},
 		{
-			SpecrumPlus2,
+			SpectrumPlus2,
 			"ZXSpectrum",
 			"the +2 ROM",
 			"plus2.rom",
@@ -1148,9 +1359,14 @@ const std::vector<Description> &Description::all_roms() {
 	return descriptions;
 }
 
-Request::Request(const Name name, const bool optional) {
+Request::Request(const Name name) {
 	node.name = name;
-	node.is_optional = optional;
+}
+
+Request Request::optional() {
+	auto copy = *this;
+	copy.node.is_optional = true;
+	return copy;
 }
 
 Request Request::append(const Node::Type type, const Request &rhs) {

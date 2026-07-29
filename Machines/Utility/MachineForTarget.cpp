@@ -9,96 +9,194 @@
 #include "MachineForTarget.hpp"
 
 #include <algorithm>
-
-// Sources for runtime options and machines.
-#include "Machines/Acorn/Archimedes/Archimedes.hpp"
-#include "Machines/Acorn/BBCMicro/BBCMicro.hpp"
-#include "Machines/Acorn/Electron/Electron.hpp"
-#include "Machines/Amiga/Amiga.hpp"
-#include "Machines/AmstradCPC/AmstradCPC.hpp"
-#include "Machines/Apple/AppleII/AppleII.hpp"
-#include "Machines/Apple/AppleIIgs/AppleIIgs.hpp"
-#include "Machines/Apple/Macintosh/Macintosh.hpp"
-#include "Machines/Atari/2600/Atari2600.hpp"
-#include "Machines/Atari/ST/AtariST.hpp"
-#include "Machines/ColecoVision/ColecoVision.hpp"
-#include "Machines/Commodore/Plus4/Plus4.hpp"
-#include "Machines/Commodore/Vic-20/Vic20.hpp"
-#include "Machines/Enterprise/Enterprise.hpp"
-#include "Machines/MasterSystem/MasterSystem.hpp"
-#include "Machines/MSX/MSX.hpp"
-#include "Machines/Oric/Oric.hpp"
-#include "Machines/PCCompatible/PCCompatible.hpp"
-#include "Machines/Sinclair/ZX8081/ZX8081.hpp"
-#include "Machines/Sinclair/ZXSpectrum/ZXSpectrum.hpp"
-
-// Sources for construction options.
-#include "Analyser/Static/Acorn/Target.hpp"
-#include "Analyser/Static/Amiga/Target.hpp"
-#include "Analyser/Static/AmstradCPC/Target.hpp"
-#include "Analyser/Static/AppleII/Target.hpp"
-#include "Analyser/Static/AppleIIgs/Target.hpp"
-#include "Analyser/Static/Atari2600/Target.hpp"
-#include "Analyser/Static/AtariST/Target.hpp"
-#include "Analyser/Static/Commodore/Target.hpp"
-#include "Analyser/Static/Enterprise/Target.hpp"
-#include "Analyser/Static/Macintosh/Target.hpp"
-#include "Analyser/Static/MSX/Target.hpp"
-#include "Analyser/Static/Oric/Target.hpp"
-#include "Analyser/Static/PCCompatible/Target.hpp"
-#include "Analyser/Static/Sega/Target.hpp"
-#include "Analyser/Static/ZX8081/Target.hpp"
-#include "Analyser/Static/ZXSpectrum/Target.hpp"
+#include "Machines/Registry.hpp"
 
 #include "Analyser/Dynamic/MultiMachine/MultiMachine.hpp"
 #include "TypedDynamicMachine.hpp"
 
+namespace {
+/*!
+	Compares each machine supplied to it to a given target and retains either its short name or its long name
+	as per the template parameter.
+*/
+template <bool capture_short>
+struct NameCapture {
+	NameCapture(const Analyser::Machine machine) : machine_(machine) {}
+	const char *result = "";
+
+	template <typename MachineT>
+	struct Adder {
+		void operator()(NameCapture &capturer) {
+			if(MachineT::name != capturer.machine_) {
+				return;
+			}
+			capturer.result = capture_short ? MachineT::short_name : MachineT::long_name;
+		}
+	};
+
+private:
+	Analyser::Machine machine_;
+};
+
+/*
+	Creates an instance of Machine::DynamicMachine based on the supplied target and ROM fetcher.
+*/
+struct MachineGenerator {
+	MachineGenerator(
+		const Analyser::Static::Target &target,
+		const ROMMachine::ROMFetcher &rom_fetcher
+	) : target(target), rom_fetcher(rom_fetcher) {}
+
+	std::unique_ptr<Machine::DynamicMachine> machine;
+
+	template <typename MachineT>
+	struct Adder {
+		void operator()(MachineGenerator &generator) {
+			generator.posit<typename MachineT::Machine>(MachineT::name);
+		}
+	};
+
+private:
+	const Analyser::Static::Target &target;
+	const ROMMachine::ROMFetcher &rom_fetcher;
+	template <typename MachineT>
+	void posit(const Analyser::Machine name) {
+		if(target.machine == name) {
+			machine = std::make_unique<Machine::TypedDynamicMachine<MachineT>>(MachineT::create(target, rom_fetcher));
+		}
+	}
+};
+
+/*
+	Creates a list naming all complete machines, optionally filtering by launch media requirements.
+*/
+struct MachineLister {
+	MachineLister(const Machine::Type type, const bool long_names) :
+		type_(type), long_names_(long_names) {};
+
+	std::vector<std::string> machines;
+
+	template <typename MachineT>
+	struct Adder {
+		void operator()(MachineLister &lister) {
+			switch(lister.type_) {
+				case Machine::Type::RequiresMedia:
+					if(!MachineT::requires_media) return;
+				break;
+
+				case Machine::Type::DoesntRequireMedia:
+					if(MachineT::requires_media) return;
+				break;
+
+				default: break;
+			}
+
+			lister.machines.push_back(lister.long_names_ ? MachineT::long_name : MachineT::short_name);
+		}
+	};
+
+private:
+	Machine::Type type_;
+	bool long_names_;
+};
+
+/*
+	Creates a map from machine long name to default user-friendly options.
+*/
+struct OptionsList {
+	std::map<std::string, std::unique_ptr<Reflection::Struct>> options_by_name;
+	std::map<Analyser::Machine, std::unique_ptr<Reflection::Struct>> options_by_machine;
+
+	template <typename MachineT>
+	struct Adder {
+		void operator()(OptionsList &list) {
+			list.emplace<MachineT>();
+		}
+	};
+
+private:
+	template <typename MachineT>
+	void emplace() {
+		if constexpr (requires{ typename MachineT::Machine::Options(Configurable::OptionsType::UserFriendly); }) {
+			options_by_name.emplace(
+				MachineT::long_name,
+				std::make_unique<typename MachineT::Machine::Options>(Configurable::OptionsType::UserFriendly)
+			);
+			options_by_machine.emplace(
+				MachineT::name,
+				std::make_unique<typename MachineT::Machine::Options>(Configurable::OptionsType::UserFriendly)
+			);
+		}
+	};
+};
+
+/*
+	Creates a map from machine long name to an instantiation of its `Target`, optionally filtered on whether
+	media is required for a meaningful launch.
+*/
+struct TargetList {
+	TargetList(const bool meaningful_without_media_only) :
+		meaningful_without_media_only_(meaningful_without_media_only) {}
+
+	std::map<std::string, std::unique_ptr<Analyser::Static::Target>> targets;
+
+	template <typename MachineT>
+	struct Adder {
+		void operator()(TargetList &list) {
+			if(MachineT::requires_media && list.meaningful_without_media_only_) {
+				return;
+			}
+
+			if constexpr (requires { typename MachineT::Target(); }) {
+				list.emplace<typename MachineT::Target>(MachineT::long_name);
+			} else {
+				list.emplace(
+					MachineT::long_name,
+					std::make_unique<Analyser::Static::Target>(MachineT::name)
+				);
+			}
+		}
+	};
+
+private:
+	bool meaningful_without_media_only_;
+
+	template <typename TargetT>
+	void emplace(const char *name) {
+		targets.emplace(name, std::make_unique<TargetT>());
+	};
+
+	void emplace(const char *name, std::unique_ptr<Analyser::Static::Target> &&target) {
+		targets.emplace(name, std::move(target));
+	}
+};
+}
+
+std::string Machine::ShortNameForTargetMachine(const Analyser::Machine machine) {
+	NameCapture<true> name(machine);
+	MachineRegister::for_all_machines<NameCapture<true>::Adder>(name);
+	return name.result;
+}
+
+std::string Machine::LongNameForTargetMachine(const Analyser::Machine machine) {
+	NameCapture<false> name(machine);
+	MachineRegister::for_all_machines<NameCapture<false>::Adder>(name);
+	return name.result;
+}
+
 std::unique_ptr<Machine::DynamicMachine> Machine::MachineForTarget(
-	const Analyser::Static::Target *const target,
+	const Analyser::Static::Target &target,
 	const ROMMachine::ROMFetcher &rom_fetcher,
 	Machine::Error &error
 ) {
 	error = Machine::Error::None;
-	std::unique_ptr<Machine::DynamicMachine> machine;
+	MachineGenerator generator(target, rom_fetcher);
 
 	try {
-
-#define BindD(name, m)	\
-	case Analyser::Machine::m: \
-		machine = std::make_unique<Machine::TypedDynamicMachine<::name::Machine>>(	\
-			name::Machine::m(target, rom_fetcher)	\
-		);		\
-	break;
-#define Bind(m)	BindD(m, m)
-		switch(target->machine) {
-			Bind(Amiga)
-			Bind(AmstradCPC)
-			Bind(Archimedes)
-			BindD(Apple::II, AppleII)
-			BindD(Apple::IIgs, AppleIIgs)
-			BindD(Apple::Macintosh, Macintosh)
-			Bind(Atari2600)
-			BindD(Atari::ST, AtariST)
-			Bind(BBCMicro)
-			BindD(Coleco::Vision, ColecoVision)
-			BindD(Commodore::Plus4, Plus4)
-			BindD(Commodore::Vic20, Vic20)
-			Bind(Electron)
-			Bind(Enterprise)
-			Bind(MSX)
-			Bind(Oric)
-			Bind(PCCompatible)
-			BindD(Sega::MasterSystem, MasterSystem)
-			BindD(Sinclair::ZX8081, ZX8081)
-			BindD(Sinclair::ZXSpectrum, ZXSpectrum)
-
-			default:
-				error = Machine::Error::UnknownMachine;
-			return nullptr;
+		MachineRegister::for_all_machines<MachineGenerator::Adder>(generator, true);
+		if(!generator.machine) {
+			error = Machine::Error::UnknownMachine;
 		}
-#undef Bind
-#undef BindD
-
 	} catch(ROMMachine::Error construction_error) {
 		switch(construction_error) {
 			case ROMMachine::Error::MissingROMs:
@@ -110,7 +208,7 @@ std::unique_ptr<Machine::DynamicMachine> Machine::MachineForTarget(
 		}
 	}
 
-	return machine;
+	return std::move(generator.machine);
 }
 
 std::unique_ptr<Machine::DynamicMachine> Machine::MachineForTargets(
@@ -128,7 +226,7 @@ std::unique_ptr<Machine::DynamicMachine> Machine::MachineForTargets(
 	if(targets.size() > 1) {
 		std::vector<std::unique_ptr<Machine::DynamicMachine>> machines;
 		for(const auto &target: targets) {
-			machines.emplace_back(MachineForTarget(target.get(), rom_fetcher, error));
+			machines.emplace_back(MachineForTarget(*target, rom_fetcher, error));
 
 			// Exit early if any errors have occurred.
 			if(error != Error::None) {
@@ -146,188 +244,32 @@ std::unique_ptr<Machine::DynamicMachine> Machine::MachineForTargets(
 	}
 
 	// There's definitely exactly one target.
-	return MachineForTarget(targets.front().get(), rom_fetcher, error);
-}
-
-std::string Machine::ShortNameForTargetMachine(const Analyser::Machine machine) {
-	switch(machine) {
-		case Analyser::Machine::Amiga:			return "Amiga";
-		case Analyser::Machine::AmstradCPC:		return "AmstradCPC";
-		case Analyser::Machine::AppleII:		return "AppleII";
-		case Analyser::Machine::AppleIIgs:		return "AppleIIgs";
-		case Analyser::Machine::Archimedes:		return "Archimedes";
-		case Analyser::Machine::Atari2600:		return "Atari2600";
-		case Analyser::Machine::AtariST:		return "AtariST";
-		case Analyser::Machine::BBCMicro:		return "BBCMicro";
-		case Analyser::Machine::ColecoVision:	return "ColecoVision";
-		case Analyser::Machine::Electron:		return "Electron";
-		case Analyser::Machine::Enterprise:		return "Enterprise";
-		case Analyser::Machine::Macintosh:		return "Macintosh";
-		case Analyser::Machine::MasterSystem:	return "MasterSystem";
-		case Analyser::Machine::MSX:			return "MSX";
-		case Analyser::Machine::Oric:			return "Oric";
-		case Analyser::Machine::Plus4:			return "Plus4";
-		case Analyser::Machine::PCCompatible:	return "PCCompatible";
-		case Analyser::Machine::Vic20:			return "Vic20";
-		case Analyser::Machine::ZX8081:			return "ZX8081";
-		case Analyser::Machine::ZXSpectrum:		return "ZXSpectrum";
-
-		default:	return "";
-	}
-}
-
-std::string Machine::LongNameForTargetMachine(const Analyser::Machine machine) {
-	switch(machine) {
-		case Analyser::Machine::Amiga:			return "Amiga";
-		case Analyser::Machine::AmstradCPC:		return "Amstrad CPC";
-		case Analyser::Machine::AppleII:		return "Apple II";
-		case Analyser::Machine::AppleIIgs:		return "Apple IIgs";
-		case Analyser::Machine::Archimedes:		return "Acorn Archimedes";
-		case Analyser::Machine::Atari2600:		return "Atari 2600";
-		case Analyser::Machine::AtariST:		return "Atari ST";
-		case Analyser::Machine::BBCMicro:		return "BBC Micro";
-		case Analyser::Machine::ColecoVision:	return "ColecoVision";
-		case Analyser::Machine::Electron:		return "Acorn Electron";
-		case Analyser::Machine::Enterprise:		return "Enterprise";
-		case Analyser::Machine::Macintosh:		return "Apple Macintosh";
-		case Analyser::Machine::MasterSystem:	return "Sega Master System";
-		case Analyser::Machine::MSX:			return "MSX";
-		case Analyser::Machine::Oric:			return "Oric";
-		case Analyser::Machine::Plus4:			return "Commodore C16+4";
-		case Analyser::Machine::PCCompatible:	return "PC Compatible";
-		case Analyser::Machine::Vic20:			return "Vic 20";
-		case Analyser::Machine::ZX8081:			return "ZX80/81";
-		case Analyser::Machine::ZXSpectrum:		return "ZX Spectrum";
-
-		default:	return "";
-	}
+	return MachineForTarget(*targets.front(), rom_fetcher, error);
 }
 
 std::vector<std::string> Machine::AllMachines(const Type type, const bool long_names) {
-	std::vector<std::string> result;
-	const auto add_name = [&](const Analyser::Machine machine) {
-		result.push_back(
-			long_names ? LongNameForTargetMachine(machine) : ShortNameForTargetMachine(machine)
-		);
-	};
-
-	if(type == Type::Any || type == Type::RequiresMedia) {
-		add_name(Analyser::Machine::Atari2600);
-		add_name(Analyser::Machine::ColecoVision);
-		add_name(Analyser::Machine::MasterSystem);
-	}
-
-	if(type == Type::Any || type == Type::DoesntRequireMedia) {
-		add_name(Analyser::Machine::Amiga);
-		add_name(Analyser::Machine::AmstradCPC);
-		add_name(Analyser::Machine::AppleII);
-		add_name(Analyser::Machine::AppleIIgs);
-		add_name(Analyser::Machine::Archimedes);
-		add_name(Analyser::Machine::AtariST);
-		add_name(Analyser::Machine::BBCMicro);
-		add_name(Analyser::Machine::Electron);
-		add_name(Analyser::Machine::Enterprise);
-		add_name(Analyser::Machine::Macintosh);
-		add_name(Analyser::Machine::MSX);
-		add_name(Analyser::Machine::Oric);
-		add_name(Analyser::Machine::Plus4);
-		add_name(Analyser::Machine::PCCompatible);
-		add_name(Analyser::Machine::Vic20);
-		add_name(Analyser::Machine::ZX8081);
-		add_name(Analyser::Machine::ZXSpectrum);
-	}
-
-	return result;
+	MachineLister lister(type, long_names);
+	MachineRegister::for_all_machines<MachineLister::Adder>(lister);
+	return std::move(lister.machines);
 }
 
 std::map<std::string, std::unique_ptr<Reflection::Struct>> Machine::AllOptionsByMachineName() {
-	std::map<std::string, std::unique_ptr<Reflection::Struct>> options;
+	OptionsList options;
+	MachineRegister::for_all_machines<OptionsList::Adder>(options);
+	return std::move(options.options_by_name);
+}
 
-#define Emplace(machine, class)														\
-	options.emplace(																\
-		LongNameForTargetMachine(Analyser::Machine::machine),						\
-		std::make_unique<class::Options>(Configurable::OptionsType::UserFriendly)	\
-	)
-
-	Emplace(AmstradCPC, AmstradCPC::Machine);
-	Emplace(AppleII, Apple::II::Machine);
-	Emplace(Archimedes, Archimedes::Machine);
-	Emplace(AtariST, Atari::ST::Machine);
-	Emplace(BBCMicro, BBCMicro::Machine);
-	Emplace(ColecoVision, Coleco::Vision::Machine);
-	Emplace(Electron, Electron::Machine);
-	Emplace(Enterprise, Enterprise::Machine);
-	Emplace(Macintosh, Apple::Macintosh::Machine);
-	Emplace(MasterSystem, Sega::MasterSystem::Machine);
-	Emplace(MSX, MSX::Machine);
-	Emplace(Oric, Oric::Machine);
-	Emplace(Plus4, Commodore::Plus4::Machine);
-	Emplace(PCCompatible, PCCompatible::Machine);
-	Emplace(Vic20, Commodore::Vic20::Machine);
-	Emplace(ZX8081, Sinclair::ZX8081::Machine);
-	Emplace(ZXSpectrum, Sinclair::ZXSpectrum::Machine);
-
-#undef Emplace
-
-	return options;
+std::map<Analyser::Machine, std::unique_ptr<Reflection::Struct>>
+Machine::AllOptionsByMachine(const bool include_incomplete) {
+	OptionsList options;
+	MachineRegister::for_all_machines<OptionsList::Adder>(options, include_incomplete);
+	return std::move(options.options_by_machine);
 }
 
 std::map<std::string, std::unique_ptr<Analyser::Static::Target>> Machine::TargetsByMachineName(
 	const bool meaningful_without_media_only
 ) {
-	std::map<std::string, std::unique_ptr<Analyser::Static::Target>> options;
-
-#define AddMapped(Name, TargetNamespace)								\
-	options.emplace(													\
-		LongNameForTargetMachine(Analyser::Machine::Name),				\
-		std::make_unique<Analyser::Static::TargetNamespace::Target>()	\
-	);
-#define Add(Name)	AddMapped(Name, Name)
-
-	Add(Amiga);
-	Add(AmstradCPC);
-	Add(AppleII);
-	Add(AppleIIgs);
-	options.emplace(
-		LongNameForTargetMachine(Analyser::Machine::Archimedes),
-		std::make_unique<Analyser::Static::Acorn::ArchimedesTarget>()
-	);
-	Add(AtariST);
-	options.emplace(
-		LongNameForTargetMachine(Analyser::Machine::BBCMicro),
-		std::make_unique<Analyser::Static::Acorn::BBCMicroTarget>()
-	);
-	options.emplace(
-		LongNameForTargetMachine(Analyser::Machine::Electron),
-		std::make_unique<Analyser::Static::Acorn::ElectronTarget>()
-	);
-	Add(Enterprise);
-	Add(Macintosh);
-	Add(MSX);
-	Add(Oric);
-	options.emplace(
-		LongNameForTargetMachine(Analyser::Machine::Plus4),
-		std::make_unique<Analyser::Static::Commodore::Plus4Target>()
-	);
-	Add(PCCompatible);
-	options.emplace(
-		LongNameForTargetMachine(Analyser::Machine::Vic20),
-		std::make_unique<Analyser::Static::Commodore::Vic20Target>()
-	);
-	Add(ZX8081);
-	Add(ZXSpectrum);
-
-	if(!meaningful_without_media_only) {
-		Add(Atari2600);
-		options.emplace(
-			LongNameForTargetMachine(Analyser::Machine::ColecoVision),
-			std::make_unique<Analyser::Static::Target>(Analyser::Machine::ColecoVision)
-		);
-		AddMapped(MasterSystem, Sega);
-	}
-
-#undef Add
-#undef AddMapped
-
-	return options;
+	TargetList targets(meaningful_without_media_only);
+	MachineRegister::for_all_machines<TargetList::Adder>(targets);
+	return std::move(targets.targets);
 }

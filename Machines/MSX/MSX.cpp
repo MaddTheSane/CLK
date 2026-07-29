@@ -178,17 +178,18 @@ using Target = Analyser::Static::MSX::Target;
 
 template <Target::Model model, bool has_opll>
 class ConcreteMachine:
-	public Machine,
-	public CPU::Z80::BusHandler,
-	public MachineTypes::TimedMachine,
-	public MachineTypes::AudioProducer,
-	public MachineTypes::ScanProducer,
-	public MachineTypes::MediaTarget,
-	public MachineTypes::MappedKeyboardMachine,
-	public MachineTypes::JoystickMachine,
-	public Configurable::Device,
-	public ClockingHint::Observer,
 	public Activity::Source,
+	public ClockingHint::Observer,
+	public Configurable::Device,
+	public CPU::Z80::BusHandler,
+	public Machine,
+	public MachineTypes::AudioProducer,
+	public MachineTypes::JoystickMachine,
+	public MachineTypes::MappedKeyboardMachine,
+	public MachineTypes::MediaTarget,
+	public MachineTypes::ScanProducer,
+	public MachineTypes::SoftResettable,
+	public MachineTypes::TimedMachine,
 	public MSX::MemorySlotChangeHandler {
 private:
 	// Provide 512kb of memory for an MSX 2; 64kb for an MSX 1. 'Slightly' arbitrary.
@@ -351,9 +352,7 @@ public:
 		insert_media(target.media);
 
 		// Type whatever has been requested.
-		if(!target.loading_command.empty()) {
-			type_string(target.loading_command);
-		}
+		type_string(target.loading_command);
 
 		// Establish default paging.
 		page_primary(0);
@@ -364,19 +363,19 @@ public:
 	}
 
 	void set_scan_target(Outputs::Display::ScanTarget *scan_target) final {
-		vdp_->set_scan_target(scan_target);
+		vdp_.get()->set_scan_target(scan_target);
 	}
 
 	Outputs::Display::ScanStatus get_scaled_scan_status() const final {
-		return vdp_->get_scaled_scan_status();
+		return vdp_.get()->get_scaled_scan_status();
 	}
 
 	void set_display_type(Outputs::Display::DisplayType display_type) final {
-		vdp_.last_valid()->set_display_type(display_type);
+		vdp_.get()->set_display_type(display_type);
 	}
 
 	Outputs::Display::DisplayType get_display_type() const final {
-		return vdp_.last_valid()->get_display_type();
+		return vdp_.get()->get_display_type();
 	}
 
 	Outputs::Speaker::Speaker *get_speaker() final {
@@ -385,6 +384,11 @@ public:
 
 	void run_for(const Cycles cycles) final {
 		z80_.run_for(cycles);
+	}
+
+	void soft_reset() final {
+		page_primary(0);
+		z80_.set_power_on_reset();
 	}
 
 	float get_confidence() final {
@@ -404,7 +408,7 @@ public:
 
 	bool insert_media(const Analyser::Static::Media &media) final {
 		if(!media.cartridges.empty()) {
-			const auto &segment = media.cartridges.front()->get_segments().front();
+			const auto &segment = media.cartridges.front()->segments().front();
 			auto &slot = cartridge_slot();
 
 			slot.set_source(segment.data);
@@ -451,7 +455,7 @@ public:
 		return true;
 	}
 
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		std::transform(
 			string.begin(),
 			string.end(),
@@ -460,13 +464,13 @@ public:
 		);
 	}
 
-	bool can_type(char c) const final {
+	bool can_type(const wchar_t c) const final {
 		// Make an effort to type the entire printable ASCII range.
 		return c >= 32 && c < 127;
 	}
 
 	// MARK: Memory paging.
-	void page_primary(uint8_t value) {
+	void page_primary(const uint8_t value) {
 		primary_slots_ = value;
 		update_paging();
 	}
@@ -773,8 +777,9 @@ public:
 			}
 		}
 
-		if(!tape_player_is_sleeping_)
-			tape_player_.run_for(int(cycle.length.as_integral()));
+		if(!tape_player_is_sleeping_) {
+			tape_player_.run_for(cycle.length.reduce<Cycles>());
+		}
 
 		return addition;
 	}
@@ -807,7 +812,7 @@ public:
 		if(is_pressed) key_states_[line] &= ~mask; else key_states_[line] |= mask;
 	}
 
-	KeyboardMapper *get_keyboard_mapper() final {
+	KeyboardMapper *keyboard_mapper() final {
 		return &keyboard_mapper_;
 	}
 
@@ -848,7 +853,10 @@ public:
 
 private:
 	void update_audio() {
-		speaker_.speaker.run_for(speaker_.audio_queue, time_since_ay_update_.divide_cycles(Cycles(2)));
+		speaker_.speaker.run_for(
+			speaker_.audio_queue,
+			time_since_ay_update_.divide<Cycles>(2)
+		);
 	}
 
 	class i8255PortHandler: public Intel::i8255::PortHandler {
@@ -1035,19 +1043,32 @@ private:
 
 using namespace MSX;
 
-std::unique_ptr<Machine> Machine::MSX(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	const auto msx_target = dynamic_cast<const Target *>(target);
-	if(msx_target->has_msx_music) {
-		switch(msx_target->model) {
-			default:					return nullptr;
-			case Target::Model::MSX1:	return std::make_unique<ConcreteMachine<Target::Model::MSX1, true>>(*msx_target, rom_fetcher);
-			case Target::Model::MSX2:	return std::make_unique<ConcreteMachine<Target::Model::MSX2, true>>(*msx_target, rom_fetcher);
-		}
+namespace {
+
+template <bool has_msx_music>
+std::unique_ptr<Machine> create(
+	const Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	switch(target.model) {
+		using enum Target::Model;
+
+		default:	return nullptr;
+		case MSX1:	return std::make_unique<ConcreteMachine<MSX1, has_msx_music>>(target, rom_fetcher);
+		case MSX2:	return std::make_unique<ConcreteMachine<MSX2, has_msx_music>>(target, rom_fetcher);
+	}
+}
+
+}
+
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	const auto &msx_target = static_cast<const Target &>(target);
+	if(msx_target.has_msx_music) {
+		return ::create<true>(msx_target, rom_fetcher);
 	} else {
-		switch(msx_target->model) {
-			default:					return nullptr;
-			case Target::Model::MSX1:	return std::make_unique<ConcreteMachine<Target::Model::MSX1, false>>(*msx_target, rom_fetcher);
-			case Target::Model::MSX2:	return std::make_unique<ConcreteMachine<Target::Model::MSX2, false>>(*msx_target, rom_fetcher);
-		}
+		return ::create<false>(msx_target, rom_fetcher);
 	}
 }

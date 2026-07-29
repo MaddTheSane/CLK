@@ -14,14 +14,21 @@ using namespace Storage::Disk;
 
 MFMSectorDump::MFMSectorDump(const std::string &file_name) : file_(file_name) {}
 
-void MFMSectorDump::set_geometry(int sectors_per_track, uint8_t sector_size, uint8_t first_sector, Encodings::MFM::Density density) {
+void MFMSectorDump::set_geometry(
+	const int sectors_per_track,
+	const uint8_t sector_size,
+	const uint8_t first_sector,
+	const Encodings::MFM::Density density,
+	const int ideal_sector_spacing
+) {
 	sectors_per_track_ = sectors_per_track;
 	sector_size_ = sector_size;
 	density_ = density;
 	first_sector_ = first_sector;
+	ideal_sector_spacing_ = ideal_sector_spacing;
 }
 
-std::unique_ptr<Track> MFMSectorDump::track_at_position(Track::Address address) const {
+std::unique_ptr<Track> MFMSectorDump::track_at_position(const Track::Address address) const {
 	if(address.head >= head_count()) return nullptr;
 	if(address.position.as_largest() >= maximum_head_position().as_largest()) return nullptr;
 
@@ -42,7 +49,9 @@ std::unique_ptr<Track> MFMSectorDump::track_at_position(Track::Address address) 
 		uint8_t(address.head),
 		first_sector_,
 		sector_size_,
-		density_);
+		density_,
+		ideal_sector_spacing_
+	);
 }
 
 void MFMSectorDump::set_tracks(const std::map<Track::Address, std::unique_ptr<Track>> &tracks) {

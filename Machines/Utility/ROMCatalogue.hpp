@@ -33,12 +33,14 @@ enum Name {
 
 	// Acorn Electron.
 	AcornElectronMOS100,
-	PRESADFSSlot1,
-	PRESADFSSlot2,
 	AcornADFS,
-	PRESAdvancedPlus6,
 	Acorn1770DFS,
 	AcornIDEADFS103,
+	AcornPlus1,
+
+	PRESADFSSlot1,
+	PRESADFSSlot2,
+	PRESAdvancedPlus6,
 
 	// Amiga.
 	AmigaKickstart10,
@@ -102,6 +104,12 @@ enum Name {
 	DiskIIStateMachine13Sector,
 	DiskIIBoot13Sector,
 
+	// Dragon.
+	Dragon32,
+	Dragon64ROM1,
+	TanoDragon64ROM1,
+	Dragon64ROM2,
+
 	// Enterprise.
 	EnterpriseEXOS10,
 	EnterpriseEXOS20,
@@ -139,7 +147,9 @@ enum Name {
 	MSXMusic,
 
 	// Oric.
-	OricColourROM,
+	OricColourROM128,
+	OricColourROM256,
+	OricPravetzColourROM,
 	OricBASIC10,
 	OricBASIC11,
 	OricPravetzBASIC,
@@ -173,6 +183,30 @@ enum Name {
 	// Sinclair QL.
 	SinclairQLJS,
 
+	// Tandy CoCo.
+	TandyCoCoColourBasic10,
+	TandyCoCoColourBasic11,
+	TandyCoCoColourBasic12,
+	TandyCoCoColourBasic13,
+	TandyCoCoColourBasic14,
+
+	TandyExtendedBASIC10,
+	TandyExtendedBASIC11,
+
+	TandyCoCoDiskBASIC10,
+	TandyCoCoDiskBASIC11,
+	TandyCoCoDiskBASIC21,
+
+	// Thomson MO and TO machines.
+	ThomsonMO5v1,
+	ThomsonMO5v11,
+	ThomsonMO6v1,
+	ThomsonMO6v2,
+	ThomsonMO6v3,
+	OlivettiProdest128,
+
+	ThomsonCD90_640,
+
 	// Vic-20.
 	Vic20BASIC,
 	Vic20EnglishCharacters,
@@ -192,7 +226,7 @@ enum Name {
 	// ZX Spectrum.
 	Spectrum48k,
 	Spectrum128k,
-	SpecrumPlus2,
+	SpectrumPlus2,
 	SpectrumPlus3,
 
 };
@@ -265,10 +299,13 @@ private:
 std::vector<Description> all_descriptions();
 
 struct Request {
-	Request(Name name, bool optional = false);
+	Request(Name);
 	Request() = default;
 
 	// TODO: the following is definitely not const correct.
+
+	/// Returns this request, but makes it optional.
+	Request optional();
 
 	/// Forms the request that would be satisfied by @c this plus the right-hand side.
 	Request operator &&(const Request &);

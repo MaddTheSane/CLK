@@ -54,7 +54,7 @@ std::unique_ptr<DynamicMachine> MachineForTargets(
 	by @c target. It is the caller's responsibility to delete the class when finished.
 */
 std::unique_ptr<DynamicMachine> MachineForTarget(
-	const Analyser::Static::Target *,
+	const Analyser::Static::Target &,
 	const ROMMachine::ROMFetcher &,
 	Machine::Error &);
 
@@ -90,6 +90,12 @@ std::vector<std::string> AllMachines(Type type, bool long_names);
 	In all cases, user-friendly selections will have been filled in by default.
 */
 std::map<std::string, std::unique_ptr<Reflection::Struct>> AllOptionsByMachineName();
+
+/*!
+	Returns a map from long machine name to the list of options that machine exposes, for all machines.
+	In all cases, user-friendly selections will have been filled in by default.
+*/
+std::map<Analyser::Machine, std::unique_ptr<Reflection::Struct>> AllOptionsByMachine(bool include_incomplete = false);
 
 /*!
 	Returns a map from long machine name to appropriate instances of Target for the machine.

@@ -6,6 +6,8 @@
 //  Copyright 2017 Thomas Harte. All rights reserved.
 //
 
+#pragma once
+
 template <	class T,
 			bool uses_bus_request,
 			bool uses_wait_line> Processor <T, uses_bus_request, uses_wait_line>
@@ -948,7 +950,7 @@ template <	class T,
 		operation_indices.push_back(target.all_operations.size());
 		for(std::size_t t = 0; t < lengths[c];) {
 			// Skip zero-length bus cycles.
-			if(table[c][t].type == MicroOp::BusOperation && table[c][t].machine_cycle.length.as_integral() == 0) {
+			if(table[c][t].type == MicroOp::BusOperation && table[c][t].machine_cycle.length.get() == 0) {
 				t++;
 				continue;
 			}
@@ -1007,7 +1009,7 @@ bool ProcessorBase::get_halt_line() const {
 	return halt_mask_ == 0x00;
 }
 
-void ProcessorBase::set_interrupt_line(bool value, HalfCycles offset) {
+void ProcessorBase::set_interrupt_line(const bool value, const HalfCycles offset) {
 	if(irq_line_ == value) return;
 
 	// IRQ requests are level triggered and masked.
@@ -1030,7 +1032,7 @@ bool ProcessorBase::get_interrupt_line() const {
 	return irq_line_;
 }
 
-void ProcessorBase::set_non_maskable_interrupt_line(bool value, HalfCycles offset) {
+void ProcessorBase::set_non_maskable_interrupt_line(const bool value, const HalfCycles offset) {
 	// NMIs are edge triggered, so react to changes only, particularly changes to active.
 	if(nmi_line_ != value) {
 		nmi_line_ = value;
@@ -1059,8 +1061,12 @@ bool ProcessorBase::get_non_maskable_interrupt_line() const {
 	return nmi_line_;
 }
 
-void ProcessorBase::set_reset_line(bool value) {
+void ProcessorBase::set_reset_line(const bool value) {
 	// Reset requests are level triggered and cannot be masked.
 	if(value) request_status_ |= Interrupt::Reset;
 	else request_status_ &= ~Interrupt::Reset;
+}
+
+void ProcessorBase::set_power_on_reset() {
+	request_status_ |= Interrupt::PowerOn;
 }

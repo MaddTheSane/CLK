@@ -18,103 +18,106 @@
 
 namespace Apple::II::Video {
 
-class BusHandler {
-	public:
-		/*!
-			Requests fetching of the @c count bytes starting from @c address.
+struct BusHandler {
+	/*!
+		Requests fetching of the @c count bytes starting from @c address.
 
-			The handler should write the values from base memory to @c base_target, and those
-			from auxiliary memory to @c auxiliary_target. If the machine has no axiliary memory,
-			it needn't write anything to auxiliary_target.
-		*/
-		void perform_read([[maybe_unused]] uint16_t address, [[maybe_unused]] size_t count, [[maybe_unused]] uint8_t *base_target, [[maybe_unused]] uint8_t *auxiliary_target) {
-		}
+		The handler should write the values from base memory to @c base_target, and those
+		from auxiliary memory to @c auxiliary_target. If the machine has no axiliary memory,
+		it needn't write anything to auxiliary_target.
+	*/
+	void perform_read(
+		[[maybe_unused]] uint16_t address,
+		[[maybe_unused]] size_t count,
+		[[maybe_unused]] uint8_t *base_target,
+		[[maybe_unused]] uint8_t *auxiliary_target
+	) {}
 };
 
 class VideoBase: public VideoSwitches<Cycles> {
-	public:
-		VideoBase(bool is_iie, std::function<void(Cycles)> &&target);
+public:
+	VideoBase(bool is_iie, std::function<void(Cycles)> &&target);
 
-		void establish_framing();
+	void establish_framing();
 
-		/// Sets the scan target.
-		void set_scan_target(Outputs::Display::ScanTarget *);
+	/// Sets the scan target.
+	void set_scan_target(Outputs::Display::ScanTarget *);
 
-		/// Gets the current scan status.
-		Outputs::Display::ScanStatus get_scaled_scan_status() const;
+	/// Gets the current scan status.
+	Outputs::Display::ScanStatus get_scaled_scan_status() const;
 
-		/// Sets the type of output.
-		void set_display_type(Outputs::Display::DisplayType);
+	/// Sets the type of output.
+	void set_display_type(Outputs::Display::DisplayType);
 
-		/// Gets the type of output.
-		Outputs::Display::DisplayType get_display_type() const;
+	/// Gets the type of output.
+	Outputs::Display::DisplayType get_display_type() const;
 
-		/// Sets whether the current CRT should be recalibrated away from normative NTSC
-		/// to produce square pixels in 40-column text mode.
-		void set_use_square_pixels(bool);
-		bool get_use_square_pixels() const;
+	/// Sets whether the current CRT should be recalibrated away from normative NTSC
+	/// to produce square pixels in 40-column text mode.
+	void set_use_square_pixels(bool);
+	bool get_use_square_pixels() const;
 
-	protected:
-		Outputs::CRT::CRT crt_;
-		bool use_square_pixels_ = false;
+protected:
+	Outputs::CRT::CRT crt_;
+	bool use_square_pixels_ = false;
 
-		// State affecting output video stream generation.
-		uint8_t *pixel_pointer_ = nullptr;
+	// State affecting output video stream generation.
+	uint8_t *pixel_pointer_ = nullptr;
 
-		// State affecting logical state.
-		int row_ = 0, column_ = 0;
+	// State affecting logical state.
+	int row_ = 0, column_ = 0;
 
-		// Graphics carry is the final level output in a fetch window;
-		// it carries on into the next if it's high resolution with
-		// the delay bit set.
-		mutable uint8_t graphics_carry_ = 0;
-		bool was_double_ = false;
+	// Graphics carry is the final level output in a fetch window;
+	// it carries on into the next if it's high resolution with
+	// the delay bit set.
+	mutable uint8_t graphics_carry_ = 0;
+	bool was_double_ = false;
 
-		// Memory is fetched ahead of time into this array;
-		// this permits the correct delay between fetching
-		// without having to worry about a rolling buffer.
-		std::array<uint8_t, 40> base_stream_;
-		std::array<uint8_t, 40> auxiliary_stream_;
+	// Memory is fetched ahead of time into this array;
+	// this permits the correct delay between fetching
+	// without having to worry about a rolling buffer.
+	std::array<uint8_t, 40> base_stream_;
+	std::array<uint8_t, 40> auxiliary_stream_;
 
-		const bool is_iie_ = false;
+	const bool is_iie_ = false;
 
-		/*!
-			Outputs 40-column text to @c target, using @c length bytes from @c source.
-		*/
-		void output_text(uint8_t *target, const uint8_t *source, size_t length, size_t pixel_row) const;
+	/*!
+		Outputs 40-column text to @c target, using @c length bytes from @c source.
+	*/
+	void output_text(uint8_t *target, const uint8_t *source, size_t length, size_t pixel_row) const;
 
-		/*!
-			Outputs 80-column text to @c target, drawing @c length columns from @c source and @c auxiliary_source.
-		*/
-		void output_double_text(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length, size_t pixel_row) const;
+	/*!
+		Outputs 80-column text to @c target, drawing @c length columns from @c source and @c auxiliary_source.
+	*/
+	void output_double_text(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length, size_t pixel_row) const;
 
-		/*!
-			Outputs 40-column low-resolution graphics to @c target, drawing @c length columns from @c source.
-		*/
-		void output_low_resolution(uint8_t *target, const uint8_t *source, size_t length, int column, int row) const;
+	/*!
+		Outputs 40-column low-resolution graphics to @c target, drawing @c length columns from @c source.
+	*/
+	void output_low_resolution(uint8_t *target, const uint8_t *source, size_t length, int column, int row) const;
 
-		/*!
-			Outputs 80-column low-resolution graphics to @c target, drawing @c length columns from @c source and @c auxiliary_source.
-		*/
-		void output_double_low_resolution(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length, int column, int row) const;
+	/*!
+		Outputs 80-column low-resolution graphics to @c target, drawing @c length columns from @c source and @c auxiliary_source.
+	*/
+	void output_double_low_resolution(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length, int column, int row) const;
 
-		/*!
-			Outputs 40-column high-resolution graphics to @c target, drawing @c length columns from @c source.
-		*/
-		void output_high_resolution(uint8_t *target, const uint8_t *source, size_t length) const;
+	/*!
+		Outputs 40-column high-resolution graphics to @c target, drawing @c length columns from @c source.
+	*/
+	void output_high_resolution(uint8_t *target, const uint8_t *source, size_t length) const;
 
-		/*!
-			Outputs 80-column double-high-resolution graphics to @c target, drawing @c length columns from @c source.
-		*/
-		void output_double_high_resolution(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length) const;
+	/*!
+		Outputs 80-column double-high-resolution graphics to @c target, drawing @c length columns from @c source.
+	*/
+	void output_double_high_resolution(uint8_t *target, const uint8_t *source, const uint8_t *auxiliary_source, size_t length) const;
 
-		/*!
-			Outputs 40-column "fat low resolution" graphics to @c target, drawing @c length columns from @c source.
+	/*!
+		Outputs 40-column "fat low resolution" graphics to @c target, drawing @c length columns from @c source.
 
-			Fat low-resolution mode is like regular low-resolution mode except that data is shifted out on the 7M
-			clock rather than the 14M.
-		*/
-		void output_fat_low_resolution(uint8_t *target, const uint8_t *source, size_t length, int column, int row) const;
+		Fat low-resolution mode is like regular low-resolution mode except that data is shifted out on the 7M
+		clock rather than the 14M.
+	*/
+	void output_fat_low_resolution(uint8_t *target, const uint8_t *source, size_t length, int column, int row) const;
 };
 
 template <class BusHandler, bool is_iie> class Video: public VideoBase {
@@ -185,7 +188,7 @@ public:
 		// Source: ** Understanding the Apple IIe by Jim Sather
 
 		// Determine column at offset.
-		int mapped_column = column_ + int(offset.as_integral());
+		int mapped_column = column_ + offset.as<int>();
 
 		// Map that backwards from the internal pixels-at-start generation to pixels-at-end
 		// (so what was column 0 is now column 25).
@@ -244,7 +247,7 @@ public:
 	*/
 	bool get_is_vertical_blank(Cycles offset) {
 		// Determine column at offset.
-		int mapped_column = column_ + int(offset.as_integral());
+		int mapped_column = column_ + offset.as<int>();
 
 		// Map that backwards from the internal pixels-at-start generation to pixels-at-end
 		// (so what was column 0 is now column 25).
@@ -276,7 +279,7 @@ private:
 		static constexpr int first_sync_column = 49;	// Also a guess.
 		static constexpr int sync_length = 4;			// One of the two likely candidates.
 
-		int int_cycles = int(cycles.as_integral());
+		auto int_cycles = cycles.as<int>();
 		while(int_cycles) {
 			const int cycles_this_line = std::min(65 - column_, int_cycles);
 			const int ending_column = column_ + cycles_this_line;
@@ -471,17 +474,7 @@ private:
 					const int colour_burst_start = std::max(first_sync_column + sync_length + 1, column_);
 					const int colour_burst_end = std::min(first_sync_column + sync_length + 4, ending_column);
 					if(colour_burst_end > colour_burst_start) {
-						// UGLY HACK AHOY!
-						// The OpenGL scan target introduces a phase error of 1/8th of a wave. The Metal one does not.
-						// Supply the real phase value if this is an Apple build.
-						// TODO: eliminate UGLY HACK.
-#if defined(__APPLE__) && !defined(IGNORE_APPLE)
-						static constexpr uint8_t phase = 224;
-#else
-						static constexpr uint8_t phase = 192;
-#endif
-
-						crt_.output_colour_burst((colour_burst_end - colour_burst_start) * 14, phase);
+						crt_.output_colour_burst((colour_burst_end - colour_burst_start) * 14, 224);
 					}
 
 					second_blank_start = std::max(first_sync_column + sync_length + 3, column_);

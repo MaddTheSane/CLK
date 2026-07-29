@@ -35,6 +35,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <concepts>
 #include <cstdint>
 #include <optional>
 
@@ -170,7 +172,7 @@ public:
 
 	/// Called by the 6522 to set output. The value of Port B selects which part of the keyboard to read.
 	template <MOS::MOS6522::Port port> void set_port_output(const uint8_t value, const uint8_t mask) {
-		if(port) activation_mask_ = (value & mask) | (~mask);
+		if(port) activation_mask_ = uint8_t((value & mask) | ~mask);
 	}
 
 	/// Called by the 6522 to set control line output. Which affects the serial port.
@@ -428,9 +430,7 @@ public:
 
 		// Insert media last so that if there's a conflict between cartridges and RAM, the cartridge wins.
 		insert_media(target.media);
-		if(!target.loading_command.empty()) {
-			type_string(target.loading_command);
-		}
+		type_string(target.loading_command);
 	}
 
 	bool insert_media(const Analyser::Static::Media &media) final {
@@ -444,7 +444,7 @@ public:
 
 		if(!media.cartridges.empty()) {
 			rom_address_ = 0xa000;
-			std::vector<uint8_t> rom_image = media.cartridges.front()->get_segments().front().data;
+			std::vector<uint8_t> rom_image = media.cartridges.front()->segments().front().data;
 			rom_length_ = uint16_t(rom_image.size());
 
 			rom_ = rom_image;
@@ -524,7 +524,7 @@ public:
 			value = result;
 
 			// Consider applying the fast tape hack.
-			if(use_fast_tape_hack_ && operation == CPU::MOS6502Mk2::BusOperation::ReadOpcode) {
+			if(use_fast_tape_hack_.load(std::memory_order_relaxed) && operation == CPU::MOS6502Mk2::BusOperation::ReadOpcode) {
 				if(address == 0xf7b2) {
 					// Address 0xf7b2 contains a JSR to 0xf8c0 ('RDTPBLKS') that will fill the tape buffer with the
 					// next header. Skip that via a three-byte NOP and fill in the next header programmatically.
@@ -675,11 +675,11 @@ public:
 		m6502_.template set<CPU::MOS6502Mk2::Line::IRQ>(keyboard_via_.get_interrupt_line());
 	}
 
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		Utility::TypeRecipient<CharacterMapper>::add_typer(string);
 	}
 
-	bool can_type(const char c) const final {
+	bool can_type(const wchar_t c) const final {
 		return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 	}
 
@@ -687,7 +687,7 @@ public:
 		keyboard_via_.set_control_line_input<MOS::MOS6522::Port::A, MOS::MOS6522::Line::One>(!tape.input());
 	}
 
-	KeyboardMapper *get_keyboard_mapper() final {
+	KeyboardMapper *keyboard_mapper() final {
 		return &keyboard_mapper_;
 	}
 
@@ -740,7 +740,9 @@ private:
 	const uint8_t *processor_read_memory_map_[64]{};
 	uint8_t *processor_write_memory_map_[64]{};
 
-	void write_to_map(const std::function<void(uint16_t, size_t)> &store, uint16_t address, size_t length) {
+	template <typename FuncT>
+	requires std::invocable<FuncT, uint16_t, size_t>
+	void write_to_map(FuncT &&store, uint16_t address, size_t length) {
 		address >>= 10;
 		length >>= 10;
 		size_t offset = 0;
@@ -787,12 +789,15 @@ private:
 
 	// Tape
 	std::shared_ptr<Storage::Tape::BinaryTapePlayer> tape_;
-	bool use_fast_tape_hack_ = false;
+	std::atomic<bool> use_fast_tape_hack_ = false;
 	bool hold_tape_ = false;
 	bool allow_fast_tape_hack_ = false;
 	bool tape_is_sleeping_ = true;
 	void set_use_fast_tape() {
-		use_fast_tape_hack_ = !tape_is_sleeping_ && allow_fast_tape_hack_ && tape_->has_tape();
+		use_fast_tape_hack_.store(
+			!tape_is_sleeping_ && allow_fast_tape_hack_ && tape_->has_tape(),
+			std::memory_order_relaxed
+		);
 	}
 
 	// Disk
@@ -810,11 +815,11 @@ private:
 
 using namespace Commodore::Vic20;
 
-std::unique_ptr<Machine> Machine::Vic20(
-	const Analyser::Static::Target *const target,
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
 	const ROMMachine::ROMFetcher &rom_fetcher
 ) {
 	using Target = Analyser::Static::Commodore::Vic20Target;
-	const Target *const commodore_target = dynamic_cast<const Target *>(target);
-	return std::make_unique<Vic20::ConcreteMachine>(*commodore_target, rom_fetcher);
+	const auto &commodore_target = static_cast<const Target &>(target);
+	return std::make_unique<Vic20::ConcreteMachine>(commodore_target, rom_fetcher);
 }

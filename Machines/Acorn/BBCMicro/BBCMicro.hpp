@@ -20,10 +20,7 @@ namespace BBCMicro {
 struct Machine {
 	virtual ~Machine() = default;
 
-	static std::unique_ptr<Machine> BBCMicro(
-		const Analyser::Static::Target *target,
-		const ROMMachine::ROMFetcher &rom_fetcher
-	);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	class Options:
 		public Reflection::StructImpl<Options>,
@@ -36,7 +33,7 @@ struct Machine {
 	private:
 		friend Configurable::Options::DynamicCrop<Options>;
 
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {

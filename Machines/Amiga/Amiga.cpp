@@ -233,16 +233,16 @@ private:
 	// MARK: - Keyboard.
 
 	Amiga::KeyboardMapper keyboard_mapper_;
-	KeyboardMapper *get_keyboard_mapper() {
+	KeyboardMapper *keyboard_mapper() {
 		return &keyboard_mapper_;
 	}
 
 	void set_key_state(uint16_t key, bool is_pressed) {
-		chipset_.get_keyboard().set_key_state(key, is_pressed);
+		chipset_.keyboard().set_key_state(key, is_pressed);
 	}
 
 	void clear_all_keys() {
-		chipset_.get_keyboard().clear_all_keys();
+		chipset_.keyboard().clear_all_keys();
 	}
 };
 
@@ -251,8 +251,11 @@ private:
 
 using namespace Amiga;
 
-std::unique_ptr<Machine> Machine::Amiga(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
 	using Target = Analyser::Static::Amiga::Target;
-	const Target *const amiga_target = dynamic_cast<const Target *>(target);
-	return std::make_unique<Amiga::ConcreteMachine>(*amiga_target, rom_fetcher);
+	const auto &amiga_target = static_cast<const Target &>(target);
+	return std::make_unique<Amiga::ConcreteMachine>(amiga_target, rom_fetcher);
 }

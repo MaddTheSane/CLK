@@ -27,7 +27,7 @@ public:
 	/*!
 		Sets the clock rate of the input audio.
 	*/
-	void set_input_rate(float cycles_per_second) {
+	void set_input_rate(const float cycles_per_second) {
 		std::lock_guard lock_guard(filter_parameters_mutex_);
 		if(filter_parameters_.input_cycles_per_second == cycles_per_second) {
 			return;
@@ -43,7 +43,7 @@ public:
 		an alternative cut-off. This allows machines with a low-pass filter on their audio output
 		path to be explicit about its effect, and get that simulation for free.
 	*/
-	void set_high_frequency_cutoff(float high_frequency) {
+	void set_high_frequency_cutoff(const float high_frequency) {
 		std::lock_guard lock_guard(filter_parameters_mutex_);
 		if(filter_parameters_.high_frequency_cutoff == high_frequency) {
 			return;
@@ -53,7 +53,7 @@ public:
 	}
 
 private:
-	float get_ideal_clock_rate_in_range(float minimum, float maximum) final {
+	float get_ideal_clock_rate_in_range(const float minimum, const float maximum) final {
 		std::lock_guard lock_guard(filter_parameters_mutex_);
 
 		// Return twice the cut off, if applicable.
@@ -76,7 +76,7 @@ private:
 	}
 
 	// Implemented as per Speaker.
-	void set_computed_output_rate(float cycles_per_second, int buffer_size, bool) final {
+	void set_computed_output_rate(const float cycles_per_second, const int buffer_size, bool) final {
 		std::lock_guard lock_guard(filter_parameters_mutex_);
 		if(filter_parameters_.output_cycles_per_second == cycles_per_second && size_t(buffer_size) == output_buffer_.size()) {
 			return;
@@ -96,7 +96,7 @@ private:
 
 	float step_rate_ = 0.0f;
 	float position_error_ = 0.0f;
-	std::unique_ptr<SignalProcessing::FIRFilter> filter_;
+	SignalProcessing::FIRFilter<SignalProcessing::ScalarType::Int16> filter_;
 
 	std::mutex filter_parameters_mutex_;
 	struct FilterParameters {
@@ -123,12 +123,11 @@ private:
 		step_rate_ = filter_parameters.input_cycles_per_second / filter_parameters.output_cycles_per_second;
 		position_error_ = 0.0f;
 
-		filter_ = std::make_unique<SignalProcessing::FIRFilter>(
-			unsigned(number_of_taps),
+		filter_ = SignalProcessing::KaiserBessel::filter<SignalProcessing::ScalarType::Int16>(
+			size_t(number_of_taps),
 			filter_parameters.input_cycles_per_second,
 			0.0,
-			high_pass_frequency,
-			SignalProcessing::FIRFilter::DefaultAttenuation);
+			high_pass_frequency);
 
 		// Pick the new conversion function.
 		if(	filter_parameters.input_cycles_per_second == filter_parameters.output_cycles_per_second &&
@@ -174,11 +173,11 @@ private:
 		}
 
 		if constexpr (is_stereo) {
-			output_buffer_[output_buffer_pointer_ + 0] = filter_->apply(input_buffer_.data(), 2);
-			output_buffer_[output_buffer_pointer_ + 1] = filter_->apply(input_buffer_.data() + 1, 2);
+			output_buffer_[output_buffer_pointer_ + 0] = filter_.apply(input_buffer_.data(), 2);
+			output_buffer_[output_buffer_pointer_ + 1] = filter_.apply(input_buffer_.data() + 1, 2);
 			output_buffer_pointer_+= 2;
 		} else {
-			output_buffer_[output_buffer_pointer_] = filter_->apply(input_buffer_.data());
+			output_buffer_[output_buffer_pointer_] = filter_.apply(input_buffer_.data());
 			output_buffer_pointer_++;
 		}
 
@@ -318,7 +317,7 @@ private:
 	}
 
 public:
-	void set_output_volume(float volume) final {
+	void set_output_volume(const float volume) final {
 		scale_.store(int(std::clamp(volume * 65536.0f, 0.0f, 65536.0f)));
 	}
 
@@ -334,7 +333,7 @@ public:
 			it is safe to read from @c buffer, and in stereo it will be half the number — it is a count
 			of the number of time points at which audio was sampled.
 	*/
-	void push(const int16_t *buffer, size_t length) {
+	void push(const int16_t *const buffer, const size_t length) {
 		buffer_ = buffer;
 #ifndef NDEBUG
 		const bool did_process =
@@ -357,10 +356,8 @@ public:
 		sample_source.set_sample_volume_range(32767);
 	}
 
-	void set_output_volume(float volume) final {
-		// Clamp to the acceptable range, and set.
-		volume = std::clamp(volume, 0.0f, 1.0f);
-		sample_source_.set_sample_volume_range(int16_t(32767.0f * volume));
+	void set_output_volume(const float volume) final {
+		sample_source_.set_sample_volume_range(int16_t(32767.0f * std::clamp(volume, 0.0f, 1.0f)));
 	}
 
 	bool get_is_stereo() final {
@@ -392,12 +389,12 @@ private:
 		at construction, filtering it and passing it on to the speaker's delegate if there is one.
 	*/
 	void run_for(const Cycles cycles) {
-		process(size_t(cycles.as_integral()));
+		process(cycles.as<size_t>());
 	}
 
 	SampleSource &sample_source_;
 
-	void skip_samples(size_t count) {
+	void skip_samples(const size_t count) {
 		sample_source_.template apply_samples<Action::Ignore>(count, nullptr);
 	}
 
@@ -405,7 +402,7 @@ private:
 		return int(65536.0 / sample_source_.average_output_peak());
 	}
 
-	void get_samples(size_t length, int16_t *target) {
+	void get_samples(const size_t length, int16_t *const target) {
 		if constexpr (SampleSource::is_stereo) {
 			StereoSample *const stereo_target = reinterpret_cast<StereoSample *>(target);
 			sample_source_.template apply_samples<Action::Store>(length, stereo_target);

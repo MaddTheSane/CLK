@@ -33,6 +33,8 @@
 #include "Analyser/Static/Oric/StaticAnalyser.hpp"
 #include "Analyser/Static/PCCompatible/StaticAnalyser.hpp"
 #include "Analyser/Static/Sega/StaticAnalyser.hpp"
+#include "Analyser/Static/TandyCoCo/StaticAnalyser.hpp"
+#include "Analyser/Static/Thomson/StaticAnalyser.hpp"
 #include "Analyser/Static/ZX8081/StaticAnalyser.hpp"
 #include "Analyser/Static/ZXSpectrum/StaticAnalyser.hpp"
 
@@ -45,20 +47,24 @@
 #include "Storage/Disk/DiskImage/Formats/AcornADF.hpp"
 #include "Storage/Disk/DiskImage/Formats/AmigaADF.hpp"
 #include "Storage/Disk/DiskImage/Formats/AppleDSK.hpp"
+#include "Storage/Disk/DiskImage/Formats/CoCoDSK.hpp"
 #include "Storage/Disk/DiskImage/Formats/CPCDSK.hpp"
 #include "Storage/Disk/DiskImage/Formats/D64.hpp"
 #include "Storage/Disk/DiskImage/Formats/G64.hpp"
 #include "Storage/Disk/DiskImage/Formats/DMK.hpp"
 #include "Storage/Disk/DiskImage/Formats/FAT12.hpp"
+#include "Storage/Disk/DiskImage/Formats/FD.hpp"
 #include "Storage/Disk/DiskImage/Formats/HFE.hpp"
 #include "Storage/Disk/DiskImage/Formats/IPF.hpp"
 #include "Storage/Disk/DiskImage/Formats/IMD.hpp"
 #include "Storage/Disk/DiskImage/Formats/JFD.hpp"
 #include "Storage/Disk/DiskImage/Formats/MacintoshIMG.hpp"
+#include "Storage/Disk/DiskImage/Formats/MOOF.hpp"
 #include "Storage/Disk/DiskImage/Formats/MSA.hpp"
 #include "Storage/Disk/DiskImage/Formats/NIB.hpp"
 #include "Storage/Disk/DiskImage/Formats/OricMFMDSK.hpp"
 #include "Storage/Disk/DiskImage/Formats/PCBooter.hpp"
+#include "Storage/Disk/DiskImage/Formats/SAP.hpp"
 #include "Storage/Disk/DiskImage/Formats/SSD.hpp"
 #include "Storage/Disk/DiskImage/Formats/STX.hpp"
 #include "Storage/Disk/DiskImage/Formats/WOZ.hpp"
@@ -79,9 +85,12 @@
 #include "Storage/State/Z80.hpp"
 
 // Tapes
-#include "Storage/Tape/Formats/CAS.hpp"
+#include "Storage/Tape/Formats/CoCoCAS.hpp"
 #include "Storage/Tape/Formats/CommodoreTAP.hpp"
 #include "Storage/Tape/Formats/CSW.hpp"
+#include "Storage/Tape/Formats/K7.hpp"
+#include "Storage/Tape/Formats/LEP.hpp"
+#include "Storage/Tape/Formats/MSXCAS.hpp"
 #include "Storage/Tape/Formats/OricTAP.hpp"
 #include "Storage/Tape/Formats/TapePRG.hpp"
 #include "Storage/Tape/Formats/TapeUEF.hpp"
@@ -217,7 +226,9 @@ static Media GetMediaAndPlatforms(const std::string &file_name, TargetPlatform::
 	accumulator.try_standard<FileBundle::LocalFSFileBundle>(TargetPlatform::Enterprise, "bas");
 	accumulator.try_standard<Cartridge::BinaryDump>(TargetPlatform::AllCartridge, "bin");
 
-	accumulator.try_standard<Tape::CAS>(TargetPlatform::MSX, "cas");
+	accumulator.try_standard<Tape::MSXCAS>(TargetPlatform::MSX, "cas");
+	accumulator.try_standard<Tape::CoCoCAS>(TargetPlatform::TandyCoCo, "cas");
+	accumulator.try_standard<Cartridge::BinaryDump>(TargetPlatform::TandyCoCo, "ccc");
 	accumulator.try_standard<Tape::TZX>(TargetPlatform::AmstradCPC, "cdt");
 	accumulator.try_standard<Cartridge::BinaryDump>(TargetPlatform::Coleco, "col");
 	accumulator.try_standard<FileBundle::LocalFSFileBundle>(TargetPlatform::Enterprise, "com");
@@ -227,6 +238,7 @@ static Media GetMediaAndPlatforms(const std::string &file_name, TargetPlatform::
 	accumulator.try_standard<MassStorage::DAT>(TargetPlatform::Acorn, "dat");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::DMK>>(TargetPlatform::MSX, "dmk");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::AppleDSK>>(TargetPlatform::DiskII, "do");
+	accumulator.try_standard<Disk::DiskImageHolder<Disk::CoCoDSK>>(TargetPlatform::TandyCoCo, "dsk");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::SSD>>(TargetPlatform::Acorn, "dsd");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::CPCDSK>>(
 		TargetPlatform::AmstradCPC | TargetPlatform::Oric | TargetPlatform::ZXSpectrum, "dsk");
@@ -236,6 +248,8 @@ static Media GetMediaAndPlatforms(const std::string &file_name, TargetPlatform::
 	accumulator.try_standard<MassStorage::DSK>(TargetPlatform::Macintosh, "dsk");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::FAT12>>(TargetPlatform::MSX, "dsk");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::OricMFMDSK>>(TargetPlatform::Oric, "dsk");
+
+	accumulator.try_standard<Disk::DiskImageHolder<Disk::FD>>(TargetPlatform::ThomsonMO, "fd");
 
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::G64>>(TargetPlatform::Commodore8bit, "g64");
 
@@ -264,6 +278,14 @@ static Media GetMediaAndPlatforms(const std::string &file_name, TargetPlatform::
 		"ipf");
 
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::JFD>>(TargetPlatform::Archimedes, "jfd");
+
+	accumulator.try_standard<Tape::K7>(TargetPlatform::ThomsonMO /* | TargetPlatform::ThomsonTO */, "k5");
+	accumulator.try_standard<Tape::K7>(TargetPlatform::ThomsonMO /* | TargetPlatform::ThomsonTO */, "k7");
+
+	accumulator.try_standard<Tape::LEP>(TargetPlatform::ThomsonMO /* | TargetPlatform::ThomsonTO */, "lep");
+
+	accumulator.try_standard<Cartridge::BinaryDump>(TargetPlatform::ThomsonMO, "m5");
+	accumulator.try_standard<Disk::DiskImageHolder<Disk::MOOF>>(TargetPlatform::Macintosh, "moof");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::MSA>>(TargetPlatform::AtariST, "msa");
 	accumulator.try_standard<Cartridge::BinaryDump>(TargetPlatform::MSX, "mx2");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::NIB>>(TargetPlatform::DiskII, "nib");
@@ -293,9 +315,10 @@ static Media GetMediaAndPlatforms(const std::string &file_name, TargetPlatform::
 	}
 
 	accumulator.try_standard<Cartridge::BinaryDump>(
-		TargetPlatform::AcornElectron | TargetPlatform::Coleco | TargetPlatform::MSX,
+		TargetPlatform::AcornElectron | TargetPlatform::Coleco | TargetPlatform::MSX | TargetPlatform::ThomsonMO,
 		"rom");
 
+	accumulator.try_standard<Disk::DiskImageHolder<Disk::SAP>>(TargetPlatform::ThomsonMO, "sap");
 	accumulator.try_standard<Cartridge::BinaryDump>(TargetPlatform::Sega, "sg");
 	accumulator.try_standard<Cartridge::BinaryDump>(TargetPlatform::Sega, "sms");
 	accumulator.try_standard<Disk::DiskImageHolder<Disk::SSD>>(TargetPlatform::Acorn, "ssd");
@@ -390,6 +413,8 @@ TargetList Analyser::Static::GetTargets(const std::string &file_name) {
 	append(TargetPlatform::Oric, Oric::GetTargets);
 	append(TargetPlatform::PCCompatible, PCCompatible::GetTargets);
 	append(TargetPlatform::Sega, Sega::GetTargets);
+	append(TargetPlatform::TandyCoCo, TandyCoCo::GetTargets);
+	append(TargetPlatform::ThomsonMO | TargetPlatform::ThomsonTO, Thomson::GetTargets);
 	append(TargetPlatform::ZX8081, ZX8081::GetTargets);
 	append(TargetPlatform::ZXSpectrum, ZXSpectrum::GetTargets);
 

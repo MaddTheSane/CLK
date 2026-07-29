@@ -24,12 +24,12 @@
 
 #include "Machines/Utility/Typer.hpp"
 #include "Analyser/Static/Acorn/Target.hpp"
+#include "Machines/Acorn/Floppy/1770.hpp"
 
 #include "ClockReceiver/JustInTime.hpp"
 
 #include "Interrupts.hpp"
 #include "Keyboard.hpp"
-#include "Plus3.hpp"
 #include "SoundGenerator.hpp"
 #include "Tape.hpp"
 #include "Video.hpp"
@@ -105,7 +105,7 @@ public:
 				* if sideways RAM was asked for, all otherwise unused slots are populated with sideways RAM.
 		*/
 		if(target.has_dfs || target.has_acorn_adfs || target.has_pres_adfs) {
-			plus3_ = std::make_unique<Plus3>();
+			plus3_ = std::make_unique<Acorn::Floppy::Floppy1770>();
 
 			if(target.has_dfs) {
 				set_rom(ROM::Slot0, roms.find(::ROM::Name::Acorn1770DFS)->second, true);
@@ -132,10 +132,7 @@ public:
 
 		insert_media(target.media);
 
-		if(!target.loading_command.empty()) {
-			type_string(target.loading_command);
-		}
-
+		type_string(target.loading_command);
 		if(target.should_shift_restart) {
 			shift_restart_counter_ = 1000000;
 		}
@@ -206,7 +203,7 @@ public:
 				slot = ROM((int(slot) + 1) & 15);
 				if(slot == first_slot_tried) return false;
 			}
-			set_rom(slot, cartridge->get_segments().front().data, false);
+			set_rom(slot, cartridge->segments().front().data, false);
 		}
 
 		// TODO: allow this only at machine startup?
@@ -570,7 +567,7 @@ public:
 		evaluate_interrupts();
 	}
 
-	HalfCycles get_typer_delay(const std::string &text) const final {
+	HalfCycles typer_delay(const std::wstring &text) const final {
 		if(!m6502_.get_is_resetting()) {
 			return Cycles(0);
 		}
@@ -579,23 +576,23 @@ public:
 		// empirically this seems to be a requirement, in order to avoid a collision with
 		// the system's built-in modifier-at-startup test (e.g. to perform shift+break).
 		CharacterMapper test_mapper;
-		const uint16_t *const sequence = test_mapper.sequence_for_character(text[0]);
+		const auto sequence = test_mapper.sequence_for_character(text[0]);
 		return is_modifier(Key(sequence[0])) ? Cycles(1'000'000) : Cycles(750'000);
 	}
 
-	HalfCycles get_typer_frequency() const final {
+	HalfCycles typer_frequency() const final {
 		return Cycles(60'000);
 	}
 
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		Utility::TypeRecipient<CharacterMapper>::add_typer(string);
 	}
 
-	bool can_type(char c) const final {
+	bool can_type(const wchar_t c) const final {
 		return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 	}
 
-	KeyboardMapper *get_keyboard_mapper() final {
+	KeyboardMapper *keyboard_mapper() final {
 		return &keyboard_mapper_;
 	}
 
@@ -688,7 +685,7 @@ private:
 
 	// MARK: - Work deferral updates.
 	inline void update_audio() {
-		speaker_.run_for(audio_queue_, cycles_since_audio_update_.divide(Cycles(SoundGenerator::clock_rate_divider)));
+		speaker_.run_for(audio_queue_, cycles_since_audio_update_.divide(SoundGenerator::clock_rate_divider));
 	}
 
 	inline void signal_interrupt(uint8_t interrupt) {
@@ -750,7 +747,7 @@ private:
 	bool fast_load_is_in_data_ = false;
 
 	// Disk
-	std::unique_ptr<Plus3> plus3_;
+	std::unique_ptr<Acorn::Floppy::Floppy1770> plus3_;
 	bool is_holding_shift_ = false;
 	int shift_restart_counter_ = 0;
 
@@ -792,13 +789,15 @@ private:
 
 using namespace Electron;
 
-std::unique_ptr<Machine> Machine::Electron(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	using Target = Analyser::Static::Acorn::ElectronTarget;
-	const Target *const acorn_target = dynamic_cast<const Target *>(target);
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	const auto &acorn_target = static_cast<const Analyser::Static::Acorn::ElectronTarget &>(target);
 
-	if(acorn_target->media.mass_storage_devices.empty()) {
-		return std::make_unique<Electron::ConcreteMachine<false>>(*acorn_target, rom_fetcher);
+	if(acorn_target.media.mass_storage_devices.empty()) {
+		return std::make_unique<Electron::ConcreteMachine<false>>(acorn_target, rom_fetcher);
 	} else {
-		return std::make_unique<Electron::ConcreteMachine<true>>(*acorn_target, rom_fetcher);
+		return std::make_unique<Electron::ConcreteMachine<true>>(acorn_target, rom_fetcher);
 	}
 }

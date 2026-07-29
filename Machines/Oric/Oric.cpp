@@ -268,20 +268,21 @@ private:
 };
 
 template <Analyser::Static::Oric::Target::DiskInterface disk_interface, CPU::MOS6502Esque::Type processor_type> class ConcreteMachine:
-	public MachineTypes::TimedMachine,
-	public MachineTypes::ScanProducer,
-	public MachineTypes::AudioProducer,
-	public MachineTypes::JoystickMachine,
-	public MachineTypes::MediaTarget,
-	public MachineTypes::MappedKeyboardMachine,
+	public Activity::Source,
 	public Configurable::Device,
 	public CPU::MOS6502::BusHandler,
-	public MOS::MOS6522::IRQDelegatePortHandler::Delegate,
-	public Storage::Tape::BinaryTapePlayer::Delegate,
 	public DiskController::Delegate,
-	public Activity::Source,
+	public Keyboard::SpecialKeyHandler,
 	public Machine,
-	public Keyboard::SpecialKeyHandler {
+	public MachineTypes::AudioProducer,
+	public MachineTypes::JoystickMachine,
+	public MachineTypes::MappedKeyboardMachine,
+	public MachineTypes::MediaTarget,
+	public MachineTypes::ScanProducer,
+	public MachineTypes::SoftResettable,
+	public MachineTypes::TimedMachine,
+	public MOS::MOS6522::IRQDelegatePortHandler::Delegate,
+	public Storage::Tape::BinaryTapePlayer::Delegate {
 
 public:
 	ConcreteMachine(const Analyser::Static::Oric::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
@@ -308,29 +309,36 @@ public:
 			c |= 0x40;
 		}
 
-		::ROM::Request request = ::ROM::Request(::ROM::Name::OricColourROM, true);
-		::ROM::Name basic;
-		switch(target.rom) {
-			case Analyser::Static::Oric::Target::ROM::BASIC10:	basic = ::ROM::Name::OricBASIC10;		break;
-			default:
-			case Analyser::Static::Oric::Target::ROM::BASIC11:	basic = ::ROM::Name::OricBASIC11;		break;
-			case Analyser::Static::Oric::Target::ROM::Pravetz:	basic = ::ROM::Name::OricPravetzBASIC;	break;
-		}
-		request = request && ::ROM::Request(basic);
+		using Request = ::ROM::Request;
+		using Name = ::ROM::Name;
+		auto request = (
+			Request(Name::OricColourROM128) ||
+			Request(Name::OricColourROM256) ||
+			Request(Name::OricPravetzColourROM)
+		).optional();
+		const auto basic = [&]() {
+			switch(target.rom) {
+				case Analyser::Static::Oric::Target::ROM::BASIC10:	return Name::OricBASIC10;
+				default:
+				case Analyser::Static::Oric::Target::ROM::BASIC11:	return Name::OricBASIC11;
+				case Analyser::Static::Oric::Target::ROM::Pravetz:	return Name::OricPravetzBASIC;
+			}
+		} ();
+		request = request && Request(basic);
 
 		switch(disk_interface) {
 			default: break;
 			case DiskInterface::BD500:
-				request = request && ::ROM::Request(::ROM::Name::OricByteDrive500);
+				request = request && Request(Name::OricByteDrive500);
 			break;
 			case DiskInterface::Jasmin:
-				request = request && ::ROM::Request(::ROM::Name::OricJasmin);
+				request = request && Request(Name::OricJasmin);
 			break;
 			case DiskInterface::Microdisc:
-				request = request && ::ROM::Request(::ROM::Name::OricMicrodisc);
+				request = request && Request(Name::OricMicrodisc);
 			break;
 			case DiskInterface::Pravetz:
-				request = request && ::ROM::Request(::ROM::Name::Oric8DOSBoot) && ::ROM::Request(::ROM::Name::DiskIIStateMachine16Sector);
+				request = request && Request(Name::Oric8DOSBoot) && Request(Name::DiskIIStateMachine16Sector);
 			break;
 		}
 
@@ -341,7 +349,11 @@ public:
 
 		// The colour ROM is optional; an alternative composite encoding can be used if
 		// it is absent.
-		const auto colour_rom = roms.find(::ROM::Name::OricColourROM);
+		const auto colour_rom = [&] {
+			if(const auto rom = roms.find(Name::OricColourROM128); rom != roms.end()) return rom;
+			if(const auto rom = roms.find(Name::OricColourROM256); rom != roms.end()) return rom;
+			return roms.find(Name::OricPravetzColourROM);
+		} ();
 		if(colour_rom != roms.end()) {
 			video_->set_colour_rom(colour_rom->second);
 		}
@@ -350,19 +362,19 @@ public:
 		switch(disk_interface) {
 			default: break;
 			case DiskInterface::BD500:
-				disk_rom_ = std::move(roms.find(::ROM::Name::OricByteDrive500)->second);
+				disk_rom_ = std::move(roms.find(Name::OricByteDrive500)->second);
 			break;
 			case DiskInterface::Jasmin:
-				disk_rom_ = std::move(roms.find(::ROM::Name::OricJasmin)->second);
+				disk_rom_ = std::move(roms.find(Name::OricJasmin)->second);
 			break;
 			case DiskInterface::Microdisc:
-				disk_rom_ = std::move(roms.find(::ROM::Name::OricMicrodisc)->second);
+				disk_rom_ = std::move(roms.find(Name::OricMicrodisc)->second);
 			break;
 			case DiskInterface::Pravetz: {
-				pravetz_rom_ = std::move(roms.find(::ROM::Name::Oric8DOSBoot)->second);
+				pravetz_rom_ = std::move(roms.find(Name::Oric8DOSBoot)->second);
 				pravetz_rom_.resize(512);
 
-				diskii_->set_state_machine(roms.find(::ROM::Name::DiskIIStateMachine16Sector)->second);
+				diskii_->set_state_machine(roms.find(Name::DiskIIStateMachine16Sector)->second);
 			} break;
 		}
 
@@ -381,9 +393,7 @@ public:
 			break;
 		}
 
-		if(!target.loading_command.empty()) {
-			type_string(target.loading_command);
-		}
+		type_string(target.loading_command);
 
 		if(target.should_start_jasmin) {
 			// If Jasmin autostart is requested then plan to do so in 3 seconds; empirically long enough
@@ -450,7 +460,7 @@ public:
 				case DiskInterface::BD500:		inserted |= insert_disks(media, bd500_, 4);		break;
 				case DiskInterface::Jasmin:		inserted |= insert_disks(media, jasmin_, 4);	break;
 				case DiskInterface::Microdisc:	inserted |= insert_disks(media, microdisc_, 4);	break;
-				case DiskInterface::Pravetz:	inserted |= insert_disks(media, *diskii_.last_valid(), 2);	break;
+				case DiskInterface::Pravetz:	inserted |= insert_disks(media, *diskii_.get(), 2);	break;
 				default: break;
 			}
 		}
@@ -543,7 +553,7 @@ public:
 		// read rather than the decode and write: (i) nothing is lost while BASIC is parsing; and
 		// (ii) keyboard input is much more rapid.
 		if(string_serialiser_ && address == 0x02df && operation == CPU::MOS6502::BusOperation::Read) {
-			*value = string_serialiser_->head() | 0x80;
+			*value = uint8_t(string_serialiser_->head()) | 0x80;
 			if(!string_serialiser_->advance()) string_serialiser_.reset();
 		}
 
@@ -596,19 +606,19 @@ public:
 
 	// to satisfy CRTMachine::Machine
 	void set_scan_target(Outputs::Display::ScanTarget *scan_target) final {
-		video_.last_valid()->set_scan_target(scan_target);
+		video_.get()->set_scan_target(scan_target);
 	}
 
 	Outputs::Display::ScanStatus get_scaled_scan_status() const final {
-		return video_.last_valid()->get_scaled_scan_status();
+		return video_.get()->get_scaled_scan_status();
 	}
 
 	void set_display_type(Outputs::Display::DisplayType display_type) final {
-		video_.last_valid()->set_display_type(display_type);
+		video_.get()->set_display_type(display_type);
 	}
 
 	Outputs::Display::DisplayType get_display_type() const final {
-		return video_.last_valid()->get_display_type();
+		return video_.get()->get_display_type();
 	}
 
 	Outputs::Speaker::Speaker *get_speaker() final {
@@ -617,6 +627,12 @@ public:
 
 	void run_for(const Cycles cycles) final {
 		m6502_.run_for(cycles);
+	}
+
+	void soft_reset() final {
+		// Toggle the NMI line; it's edge activated.
+		m6502_.set_nmi_line(true);
+		m6502_.set_nmi_line(false);
 	}
 
 	// to satisfy MOS::MOS6522IRQDelegate::Delegate
@@ -639,11 +655,11 @@ public:
 	}
 
 	// for Utility::TypeRecipient::Delegate
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		string_serialiser_ = std::make_unique<Utility::StringSerialiser>(string, true);
 	}
 
-	bool can_type(char c) const final {
+	bool can_type(const wchar_t c) const final {
 		// Make an effort to type the entire printable ASCII range.
 		return c >= 32 && c < 127;
 	}
@@ -672,7 +688,7 @@ public:
 		set_interrupt_line();
 	}
 
-	KeyboardMapper *get_keyboard_mapper() final {
+	KeyboardMapper *keyboard_mapper() final {
 		return &keyboard_mapper_;
 	}
 
@@ -824,12 +840,15 @@ std::unique_ptr<Machine> machine(const Analyser::Static::Oric::Target &target, c
 
 }
 
-std::unique_ptr<Machine> Machine::Oric(const Analyser::Static::Target *target_hint, const ROMMachine::ROMFetcher &rom_fetcher) {
-	auto *const oric_target = dynamic_cast<const Analyser::Static::Oric::Target *>(target_hint);
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target_hint,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	const auto &oric_target = static_cast<const Analyser::Static::Oric::Target &>(target_hint);
 
-	switch(oric_target->processor) {
-		case Processor::WDC65816:	return machine<CPU::MOS6502Esque::Type::TWDC65816>(*oric_target, rom_fetcher);
-		case Processor::MOS6502:	return machine<CPU::MOS6502Esque::Type::T6502>(*oric_target, rom_fetcher);
+	switch(oric_target.processor) {
+		case Processor::WDC65816:	return machine<CPU::MOS6502Esque::Type::TWDC65816>(oric_target, rom_fetcher);
+		case Processor::MOS6502:	return machine<CPU::MOS6502Esque::Type::T6502>(oric_target, rom_fetcher);
 	}
 
 	return nullptr;

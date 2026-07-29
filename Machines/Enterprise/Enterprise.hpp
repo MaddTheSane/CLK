@@ -25,7 +25,7 @@ namespace Enterprise {
 */
 struct Machine {
 	virtual ~Machine() = default;
-	static std::unique_ptr<Machine> Enterprise(const Analyser::Static::Target *, const ROMMachine::ROMFetcher &);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	/// Defines the runtime options available for an Enterprise.
 	class Options: public Reflection::StructImpl<Options>, public Configurable::Options::Display<Options> {
@@ -37,7 +37,7 @@ struct Machine {
 					Configurable::Display::RGB : Configurable::Display::CompositeColour) {}
 
 	private:
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {

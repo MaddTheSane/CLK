@@ -173,13 +173,14 @@ class ConcreteMachine:
 	public BusController,
 	public Configurable::Device,
 	public CPU::MOS6502::BusHandler,
+	public Machine,
 	public MachineTypes::AudioProducer,
 	public MachineTypes::JoystickMachine,
 	public MachineTypes::MappedKeyboardMachine,
-	public MachineTypes::TimedMachine,
-	public MachineTypes::ScanProducer,
 	public MachineTypes::MediaTarget,
-	public Machine,
+	public MachineTypes::ScanProducer,
+	public MachineTypes::SoftResettable,
+	public MachineTypes::TimedMachine,
 	public Utility::TypeRecipient<CharacterMapper> {
 public:
 	ConcreteMachine(const Analyser::Static::Commodore::Plus4Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
@@ -211,10 +212,7 @@ public:
 		basic_ = roms.find(basic)->second;
 
 		Memory::Fuzz(ram_);
-		map_.page<PagerSide::ReadWrite, 0, 65536>(ram_.data());
-		page_cpu_rom();
-
-		video_map_.page<PagerSide::ReadWrite, 0, 65536>(ram_.data());
+		soft_reset();
 
 		if(target.has_c1541) {
 			c1541_ = std::make_unique<C1540::Machine>(C1540::Personality::C1541, roms);
@@ -231,7 +229,7 @@ public:
 		insert_media(target.media);
 		if(!target.loading_command.empty()) {
 			// Prefix a space as a delaying technique.
-			type_string(std::string(" ") + target.loading_command);
+			type_string(L" " + target.loading_command);
 		}
 	}
 
@@ -398,7 +396,7 @@ public:
 					case 0xff06:	value = video_.read<0xff06>();	break;
 					case 0xff07:	value = video_.read<0xff07>();	break;
 					case 0xff08: {
-						const uint8_t keyboard_input =
+						const auto keyboard_input = uint8_t(
 							~(
 								((keyboard_mask_ & 0x01) ? 0x00 : key_states_[0]) |
 								((keyboard_mask_ & 0x02) ? 0x00 : key_states_[1]) |
@@ -408,7 +406,8 @@ public:
 								((keyboard_mask_ & 0x20) ? 0x00 : key_states_[5]) |
 								((keyboard_mask_ & 0x40) ? 0x00 : key_states_[6]) |
 								((keyboard_mask_ & 0x80) ? 0x00 : key_states_[7])
-							);
+							)
+						);
 
 						const uint8_t joystick_mask =
 							0xff &
@@ -623,11 +622,18 @@ private:
 		audio_queue_.perform();
 	}
 
-	void flush_output(int outputs) override {
+	void flush_output(const int outputs) override {
 		if(outputs & Output::Audio) {
 			update_audio();
 			audio_queue_.perform();
 		}
+	}
+
+	void soft_reset() override {
+		m6502_.template set<CPU::MOS6502Mk2::Line::PowerOn>(true);
+		map_.page<PagerSide::ReadWrite, 0, 65536>(ram_.data());
+		page_cpu_rom();
+		video_map_.page<PagerSide::ReadWrite, 0, 65536>(ram_.data());
 	}
 
 	bool insert_media(const Analyser::Static::Media &media) final {
@@ -663,16 +669,16 @@ private:
 	}
 
 	// MARK: - MappedKeyboardMachine.
-	MappedKeyboardMachine::KeyboardMapper *get_keyboard_mapper() override {
+	MappedKeyboardMachine::KeyboardMapper *keyboard_mapper() override {
 		static Plus4::KeyboardMapper keyboard_mapper_;
 		return &keyboard_mapper_;
 	}
 
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		Utility::TypeRecipient<CharacterMapper>::add_typer(string);
 	}
 
-	bool can_type(const char c) const final {
+	bool can_type(const wchar_t c) const final {
 		return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 	}
 
@@ -750,11 +756,11 @@ private:
 };
 }
 
-std::unique_ptr<Machine> Machine::Plus4(
-	const Analyser::Static::Target *target,
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
 	const ROMMachine::ROMFetcher &rom_fetcher
 ) {
 	using Target = Analyser::Static::Commodore::Plus4Target;
-	const Target *const commodore_target = dynamic_cast<const Target *>(target);
-	return std::make_unique<ConcreteMachine>(*commodore_target, rom_fetcher);
+	const auto &commodore_target = static_cast<const Target &>(target);
+	return std::make_unique<ConcreteMachine>(commodore_target, rom_fetcher);
 }

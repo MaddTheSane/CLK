@@ -46,7 +46,12 @@ public:
 	/*!
 		Advances the event loop by @c number_of_cycles cycles.
 	*/
-	void run_for(const Cycles);
+	void run_for(Cycles);
+
+	/*!
+		Extends the amount of time until the next event fires.
+	*/
+	void add_delay(Cycles);
 
 	/*!
 		@returns the number of whole cycles remaining until the next event is triggered.
@@ -106,12 +111,17 @@ protected:
 	*/
 	Time get_time_into_next_event();
 
+#ifndef NDEBUG
+	Cycles get_reset_cycles_total();
+#endif
+
 private:
 	Cycles::IntType input_clock_rate_ = 0;
 	Cycles::IntType cycles_until_event_ = 0;
 	float subcycles_until_event_ = 0.0f;
 #ifndef NDEBUG
 	int event_count_ = 0;
+	Cycles::IntType cycles_total_ = 0.0f;
 #endif
 };
 

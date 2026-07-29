@@ -1,0 +1,1234 @@
+//
+//  CoCo.cpp
+//  Clock Signal
+//
+//  Created by Thomas Harte on 01/05/2026.
+//  Copyright © 2026 Thomas Harte. All rights reserved.
+//
+
+#include "CoCo.hpp"
+
+#include "DiskController.hpp"
+#include "Keyboard.hpp"
+
+#include "Processors/6809/6809.hpp"
+#include "Components/6821/6821.hpp"
+#include "Components/6847/6847.hpp"
+
+#include "Activity/Source.hpp"
+#include "Analyser/Static/TandyCoCo/Target.hpp"
+#include "ClockReceiver/JustInTime.hpp"
+#include "Machines/MachineTypes.hpp"
+#include "Machines/Utility/MemoryFuzzer.hpp"
+
+#include "Components/AudioToggle/AudioToggle.hpp"
+#include "Outputs/Speaker/Implementation/LowpassSpeaker.hpp"
+#include "Outputs/Speaker/Implementation/BufferSource.hpp"
+
+#include <cassert>
+
+using namespace Tandy::CoCo;
+
+namespace {
+
+struct MemoryMap {
+	uint8_t read(const uint16_t address) const {
+		return read_[address >> 13] ? read_[address >> 13][address] : 0xff;
+	}
+
+	void write(const uint16_t address, uint8_t value) {
+		if(!write_[address >> 13]) return;
+		write_[address >> 13][address] = value;
+	}
+
+	void set_read(const size_t begin, const size_t end, const uint8_t *data) {
+		assert(!(begin & 0x1fff));
+		assert(begin >= 0 && begin <= 0x10000);
+		assert(!(end & 0x1fff));
+		assert(end >= 0 && end <= 0x10000);
+		for(auto page = begin >> 13; page < end >> 13; page++) {
+			read_[page] = data - begin;
+		}
+	}
+
+	void set_readwrite(const size_t begin, const size_t end, uint8_t *data) {
+		assert(!(begin & 0x1fff));
+		assert(begin >= 0 && begin <= 0x10000);
+		assert(!(end & 0x1fff));
+		assert(end >= 0 && end <= 0x10000);
+		for(auto page = begin >> 13; page < end >> 13; page++) {
+			read_[page] = write_[page] = data - begin;
+		}
+	}
+
+	void reset() {
+		std::fill(std::begin(write_), std::end(write_), nullptr);
+		std::fill(std::begin(read_), std::end(read_), nullptr);
+	}
+
+private:
+	uint8_t *write_[8]{};
+	const uint8_t *read_[8]{};
+};
+
+struct Joystick: public Inputs::ConcreteJoystick {
+	Joystick() :
+		ConcreteJoystick({
+			Input(Input::Horizontal),
+			Input(Input::Vertical),
+			Input(Input::Fire, 0),
+			Input(Input::Fire, 1)
+		}) {}
+
+	void did_set_input(const Input &input, const float value) final {
+		const size_t index = input.type == Input::Type::Vertical;
+		axes[index] = std::clamp<uint8_t>(uint8_t(value * 63.0), 0, 63);
+	}
+
+	void did_set_input(const Input &input, const bool value) final {
+		if(input.type != Input::Type::Fire) {
+			return;
+		}
+		buttons[input.info.control.index] = value;
+	}
+
+	float digital_minimum() const { return 0.0f; }
+	float digital_maximum() const { return 1.0f; }
+
+	uint8_t axes[2]{32, 32};
+	bool buttons[2]{};
+};
+
+// On the CoCo the most significant VDG data bit is connected to the VDG's '!alpha/semi_g' input.
+// This allows it to switch automatically between alphanumeric mode and semi-graphics mode based
+// on the most significant data bit, allowing mixed text and block-graphics on the same screen.
+//
+//	Cf. https://web.archive.org/web/20210214054301/http://www.cs.unc.edu/~yakowenk/coco/text/semigraphics.html
+struct ModeMapper {
+	Motorola::MC6847::Mode::IntT operator()(const uint8_t data, const Motorola::MC6847::Mode::IntT mode) {
+		return mode | (data & 0x80 ? Motorola::MC6847::Mode::Semigraphics : 0);
+	}
+};
+
+struct SAM {
+	SAM(MemoryMap &memory, const bool is_64kb) : memory_(memory), is_64kb_(is_64kb) {
+		Memory::Fuzz(ram_);
+		update_memory();
+	}
+
+	void reset() {
+		speed_ = ClockSpeed::Half;
+		set_all_ram(false);
+		page_ram(0);
+	}
+
+	uint8_t operator[](const uint16_t address) {
+		b1b3_ += ((previous_6847_address_ ^ address) & previous_6847_address_ & 1) << 1;
+		previous_6847_address_ = address;
+
+		x_ += b1b3_ >> 4;
+		b1b3_ &= 0b0'1110;
+
+		if(x_ == x_divider_) {
+			x_ = 0;
+
+			b4_ += 0b1'0000;
+			y_ += b4_ >> 5;
+			b4_ &= 0b1'0000;
+
+			if(y_ == y_divider_) {
+				y_ = 0;
+				b5b15_ += 0b10'0000;
+			}
+		}
+
+		// TODO: determine whether this should be able to read ROM.
+		return memory_.read((address & 1) | b1b3_ | b4_ | b5b15_);
+	}
+	template <bool active> void set_hsync() {
+		if(active) {
+			b1b3_ &= clear_mask_;
+			b4_ &= clear_mask_;
+			previous_6847_address_ = 0;
+		}
+	}
+	template <bool active> void set_field_sync() {
+		if(!active) {
+			b5b15_ = graphics_address_;
+			b4_ = 0;
+			b1b3_ = 0;
+			previous_6847_address_ = 0;
+			x_ = y_ = 0;
+		}
+	}
+	template <bool active> void set_row_preset() {}
+
+	template <uint16_t address, CPU::M6809::ReadWrite read_write>
+	void access() {
+		if(!is_write(read_write)) {
+			return;
+		}
+
+		const auto set = [&](auto &target, auto bit) {
+			target = target & ~bit;
+			target |= address & 1 ? bit : 0;
+		};
+		const auto configure_counter = [&] {
+			switch(graphics_mode_) {
+				case 0:	x_divider_ = 1;	y_divider_ = 12;	clear_mask_ = 0b1111'1111'1110'0000; break;
+				case 1:	x_divider_ = 3;	y_divider_ = 1; 	clear_mask_ = 0b1111'1111'1111'0000; break;
+				case 2:	x_divider_ = 1;	y_divider_ = 3;		clear_mask_ = 0b1111'1111'1110'0000; break;
+				case 3:	x_divider_ = 2;	y_divider_ = 1;		clear_mask_ = 0b1111'1111'1111'0000; break;
+				case 4:	x_divider_ = 1;	y_divider_ = 2; 	clear_mask_ = 0b1111'1111'1110'0000; break;
+				case 5:	x_divider_ = 1;	y_divider_ = 1;		clear_mask_ = 0b1111'1111'1111'0000; break;
+				case 6:	x_divider_ = 1;	y_divider_ = 1;		clear_mask_ = 0b1111'1111'1110'0000; break;
+				case 7:	x_divider_ = 1;	y_divider_ = 1;		clear_mask_ = 0b1111'1111'1111'1111; break;
+				default: __builtin_unreachable();
+			}
+		};
+
+		switch((address >> 1) & 0xf) {
+			default:
+				printf("Unhandled SAM access %04x\n", address);
+			break;
+
+			case 0:	set(graphics_mode_, 1);	configure_counter(); break;
+			case 1:	set(graphics_mode_, 2);	configure_counter(); break;
+			case 2:	set(graphics_mode_, 4);	configure_counter(); break;
+
+			case 3:	set(graphics_address_, 0x0200);	break;
+			case 4:	set(graphics_address_, 0x0400);	break;
+			case 5:	set(graphics_address_, 0x0800);	break;
+			case 6:	set(graphics_address_, 0x1000);	break;
+			case 7:	set(graphics_address_, 0x2000);	break;
+			case 8:	set(graphics_address_, 0x4000);	break;
+			case 9:	set(graphics_address_, 0x8000);	break;
+
+			case 11: { int tc = int(speed_); set(tc, 1); speed_ = ClockSpeed(tc); }	break;
+			case 12: { int tc = int(speed_); set(tc, 2); speed_ = ClockSpeed(tc); }	break;
+
+			// Likely these are to effect refresh; TODO: look into this.
+			case 13: set(ram_size_, 1);	break;
+			case 14: set(ram_size_, 2);	break;
+
+			case 10:	page_ram(address & 1);		break;
+			case 15:	set_all_ram(address & 1);	break;
+		}
+	}
+
+	template <
+		CPU::M6809::BusPhase bus_phase,
+		CPU::M6809::ReadWrite read_write,
+		typename AddressT
+	> Cycles cycle_cost(const AddressT address, const Cycles phase) {
+		//
+		// Without documentation I've made a guess here that the half-speed bus has an alignment requirement,
+		// so switching from full-speed to half-speed might result in a two-cycle access but might result in
+		// a three-cycle access (followed by two-cycle accesses).
+		//
+		// If that proves to be untrue, `phase` can be eliminated as an argument.
+		//
+		switch(speed_) {
+			case ClockSpeed::Full1:
+			case ClockSpeed::Full2:
+			return Cycles(0);
+
+			case ClockSpeed::Half:
+			return duration<Cycles>(bus_phase) + phase;
+
+			case ClockSpeed::HalfInRAM:
+				if constexpr (read_write == CPU::M6809::ReadWrite::NoData) {
+					return Cycles(0);
+				} else {
+					if(address < 0x8000 || all_ram_) {
+						return duration<Cycles>(bus_phase) + phase;
+					} else {
+						return Cycles(0);
+					}
+				}
+			break;
+
+			default: break;
+		}
+		__builtin_unreachable();
+	}
+
+	uint16_t graphics_address() const {
+		return graphics_address_;
+	}
+
+	bool insert_cartridge(const std::vector<uint8_t> &contents) {
+		if(contents.size() > 16 * 1024) {
+			return false;
+		}
+
+		// My memory map requires things to be a multiple of 0x2000 bytes; pad to that.
+		cartridge_ = contents;
+		if(cartridge_.size() & 0x1fff) {
+			const auto new_size = (cartridge_.size() + 0x2000) & ~size_t(0x1fff);
+			cartridge_.resize(new_size, 0xff);
+		}
+
+		update_memory();
+		return true;
+	}
+
+	bool has_cartridge() const {
+		return !cartridge_.empty();
+	}
+
+	void set_basic(const std::vector<uint8_t> rom) {
+		std::fill(basic_.begin(), basic_.end(), 0xff);
+		std::copy_n(rom.begin(), rom.size(), basic_.end() - rom.size());
+	}
+
+	void set_extended_basic(const std::vector<uint8_t> rom) {
+		std::copy_n(rom.begin(), rom.size(), basic_.begin());
+	}
+
+	void set_alternate_basic(const std::vector<uint8_t> rom) {
+		std::fill(alternate_basic_.begin(), alternate_basic_.end(), 0xff);
+		std::copy_n(rom.begin(), rom.size(), alternate_basic_.end() - rom.size());
+	}
+
+	void set_no_alternate_basic() {
+		std::copy(basic_.begin(), basic_.end(), alternate_basic_.begin());
+	}
+
+private:
+	MemoryMap &memory_;
+
+	enum class ClockSpeed {
+		Half,
+		HalfInRAM,
+		Full1,
+		Full2,
+	};
+
+	int graphics_mode_ = 0;
+	uint16_t graphics_address_ = 0;
+	ClockSpeed speed_ = ClockSpeed::Half;
+	int ram_size_ = 0;
+
+	// 'X' and 'Y' are the data sheet names for these values, which is unfortunate given that they're involved
+	// in data fetch but don't correlate with dimensions.
+	//
+	// Requirements:
+	//
+	//	The low bit of the address coming from the 6847 acts as the low bit of the address fetched.
+	//	It also clocks counting.
+	//
+	//	Above that is a three-bit counter, which it clocks.
+	//
+	//	That three bit counter feeds into the 'x' divider. So if the x divider is 3 then that counter must overflow
+	//	three times in order to propagate carry upwards.
+	//
+	//	Carry from that counter is fed into a one-bit counter.
+	//
+	//	That one bit counter then clocks the 'y' divider, carry from which clocks the remaining 11 bits of output.
+	//
+	// At field sync the top seven bits of the counter are reloaded from the programmed base address.
+	// At horizontal sync the programmed mask is applied to the counters.
+	// Upon row preset, both x and y dividers are reset to 0.
+	//
+	// Observations: the hsync clearing mask never affects the top 11 bits — the portiona after the y divider.
+
+	uint16_t b1b3_, x_, b4_, y_, b5b15_;
+	uint16_t x_divider_ = 1, y_divider_ = 1;
+	uint16_t clear_mask_ = 0xffff;
+
+	uint16_t previous_6847_address_ = 0;
+
+	std::vector<uint8_t> cartridge_;
+	std::array<uint8_t, 16 * 1024> basic_;
+	std::array<uint8_t, 16 * 1024> alternate_basic_;
+	std::array<uint8_t, 64 * 1024> ram_;
+
+	int ram_page_ = 0;
+	bool all_ram_ = false;
+	bool is_64kb_ = true;
+	void page_ram(const int page) {
+		ram_page_ = page;
+		update_memory();
+	}
+	void set_all_ram(const bool all_ram) {
+		all_ram_ = all_ram;
+		update_memory();
+	}
+	void update_memory() {
+		memory_.reset();
+		if(all_ram_ && is_64kb_) {
+			memory_.set_readwrite(0x0000, 0x1'0000, ram_.data());
+		} else {
+			memory_.set_readwrite(0x0000, 0x8000, ram_.data() + (is_64kb_ ? ram_page_ : 0) * 32768);
+			if(ram_page_) {
+				memory_.set_read(0x8000, 0xc000, alternate_basic_.data());
+			} else {
+				memory_.set_read(0x8000, 0xc000, basic_.data());
+			}
+			memory_.set_read(0xc000, 0xc000 + cartridge_.size(), cartridge_.data());
+		}
+	}
+};
+
+constexpr bool is_64kb(const Analyser::Static::TandyCoCo::Target::MemorySize size) {
+	return size == Analyser::Static::TandyCoCo::Target::MemorySize::SixtyFourKB;
+}
+
+static constexpr uint8_t MaxDACLevel = 0b111'111;
+static constexpr double ClockRate = 1'789'772.5;
+static constexpr auto AudioDivider = Cycles(1);
+
+}
+
+namespace TandyCoCo {
+
+template <bool is_pal, bool has_disk_drive>
+class ConcreteMachine:
+	public Activity::Source,
+	public Configurable::Device,
+	public Machine,
+	public MachineTypes::AudioProducer,
+	public MachineTypes::JoystickMachine,
+	public MachineTypes::MappedKeyboardMachine,
+	public MachineTypes::MediaChangeObserver,
+	public MachineTypes::MediaTarget,
+	public MachineTypes::ScanProducer,
+	public MachineTypes::SoftResettable,
+	public MachineTypes::TimedMachine,
+	public Utility::TypeRecipient<Tandy::CoCo::Keyboard::CharacterMapper>
+{
+public:
+	ConcreteMachine(const Analyser::Static::TandyCoCo::Target &target, const ROMMachine::ROMFetcher &rom_fetcher) :
+		m6809_(*this),
+		pia0_handler_(*this),
+		pia0_(pia0_handler_),
+		pia1_handler_(*this),
+		pia1_(pia1_handler_),
+		sam_(memory_, is_64kb(target.memory_size)),
+		m6847_(sam_, sam_),
+		tape_player_(int(ClockRate)),
+		audio_(audio_queue_, MaxDACLevel),
+		speaker_(audio_)
+	{
+		set_clock_rate(ClockRate);
+		speaker_.set_input_rate(ClockRate / AudioDivider.as<double>());
+		construct_joysticks();
+		is_dragon_ = Analyser::Static::TandyCoCo::is_dragon(target.model);
+
+		auto request = [&]() {
+			if(is_dragon_) {
+				if(is_64kb(target.memory_size)) {
+					return ROM::Request(ROM::Name::Dragon64ROM1) && ROM::Request(ROM::Name::Dragon64ROM2);
+				} else {
+					return ROM::Request(ROM::Name::Dragon32);
+				}
+			}
+
+			auto request = ROM::Request(ROM::Name::TandyExtendedBASIC10) || ROM::Request(ROM::Name::TandyExtendedBASIC11);
+			if(!has_disk_drive) request = request.optional();
+
+			if(has_disk_drive) {
+				auto disk_request = ROM::Request(ROM::Name::TandyCoCoDiskBASIC10) || ROM::Request(ROM::Name::TandyCoCoDiskBASIC11)  || ROM::Request(ROM::Name::TandyCoCoDiskBASIC21);
+				request = request && disk_request;
+			}
+
+			// BASIC 1.3 is not used unless explicitly requested for now, as it doesn't 'just work' with disks
+			// as the rest of this code proceeds. I don't know whether its fussy about other ROMs or whether I've
+			// got a blocking implementation issue elsewhere.
+			switch(target.rom_version) {
+				using enum Analyser::Static::TandyCoCo::Target::ROMVersion;
+
+				case V10: request = request && ROM::Request(ROM::Name::TandyCoCoColourBasic10);	break;
+				case V11: request = request && ROM::Request(ROM::Name::TandyCoCoColourBasic11);	break;
+				case V12: request = request && ROM::Request(ROM::Name::TandyCoCoColourBasic12);	break;
+				case V13: request = request && ROM::Request(ROM::Name::TandyCoCoColourBasic13);	break;
+
+				default: {
+					auto basic_request =
+						ROM::Request(ROM::Name::TandyCoCoColourBasic11) ||
+						ROM::Request(ROM::Name::TandyCoCoColourBasic12);
+
+					if(target.rom_version != V11OrAbove) {
+						basic_request = basic_request || ROM::Request(ROM::Name::TandyCoCoColourBasic10);
+					}
+					request = request && basic_request;
+				} break;
+			}
+
+			return request;
+		} ();
+
+		auto roms = rom_fetcher(request);
+		if(!request.validate(roms)) {
+			throw ROMMachine::Error::MissingROMs;
+		}
+
+		const auto any_of = [&](const std::initializer_list<ROM::Name> &options) -> std::optional<std::vector<uint8_t>> {
+			for(auto &key: options) {
+				const auto rom = roms.find(key);
+				if(rom != roms.end()) {
+					return rom->second;
+				}
+			}
+			return std::nullopt;
+		};
+
+		const auto basic = any_of({
+			ROM::Name::Dragon64ROM1,
+			ROM::Name::Dragon32,
+			ROM::Name::TandyCoCoColourBasic13,
+			ROM::Name::TandyCoCoColourBasic12,
+			ROM::Name::TandyCoCoColourBasic11,
+			ROM::Name::TandyCoCoColourBasic10,
+		});
+		sam_.set_basic(*basic);
+
+		const auto extended_basic = any_of({
+			ROM::Name::TandyExtendedBASIC11,
+			ROM::Name::TandyExtendedBASIC10,
+		});
+		if(extended_basic.has_value()) {
+			sam_.set_extended_basic(*extended_basic);
+		}
+
+		const auto alternate_basic = any_of({
+			ROM::Name::Dragon64ROM2,
+		});
+		if(alternate_basic.has_value()) {
+			sam_.set_alternate_basic(*alternate_basic);
+		} else {
+			sam_.set_no_alternate_basic();
+		}
+
+		const auto disk_rom = any_of({
+			ROM::Name::TandyCoCoDiskBASIC21,
+			ROM::Name::TandyCoCoDiskBASIC11,
+			ROM::Name::TandyCoCoDiskBASIC10,
+		});
+		if(disk_rom.has_value()) {
+			sam_.insert_cartridge(*disk_rom);
+		}
+
+		insert_media(target.media);
+		type_string(target.loading_command);
+	}
+
+	~ConcreteMachine() {
+		audio_queue_.lock_flush();
+	}
+
+	template <
+		CPU::M6809::BusPhase bus_phase,
+		CPU::M6809::LIC lic,
+		CPU::M6809::ReadWrite read_write,
+		CPU::M6809::BusState bus_state,
+		typename AddressT
+	>
+	Cycles perform(
+		const AddressT address,
+		CPU::M6809::data_t<read_write> value
+	) {
+		// TODO, maybe: pull the switch inside this SAM call outside the loop?
+		const auto delay = sam_.cycle_cost<bus_phase, read_write>(address, bus_phase_);
+		const auto duration = delay + CPU::M6809::duration<Cycles>(bus_phase);
+
+		bus_phase_ += duration;
+		bus_phase_ &= 1;
+
+		if constexpr (has_disk_drive) {
+			// Update after the fact due to the internal mechanics of WD177x posting; these signals from the WD should
+			// occur when it observes that the access cycle is over. It is now over because the next has begun.
+			m6809_.template set<CPU::M6809::Line::NMI>(disk_controller_.nmi());
+			m6809_.template set<CPU::M6809::Line::Halt>(disk_controller_.halt());
+
+			// Multiply by 4.5 to get very close to 8Mhz for the controller.
+			cycles_16mhz_ += duration * 9;
+			disk_controller_.run_for(cycles_16mhz_.divide(2));
+		}
+
+		if(m6847_ += duration) {
+			pia0_.template set<Motorola::MC6821::Control::CA1>(m6847_.get()->hsync());
+			pia0_.template set<Motorola::MC6821::Control::CB1>(m6847_.get()->fsync());
+		}
+		tape_player_.run_for(duration);
+		if(typer_) {
+			typer_->run_for(duration);
+		}
+		time_since_audio_update_ += duration;
+
+		if(!has_disk_drive && sam_.has_cartridge()) {
+			// When a cartridge is inserted: "the clock signal (Q) is shorted to the cartridge interrupt pin."
+			pia1_.template set<Motorola::MC6821::Control::CB1>(true);
+			pia1_.template set<Motorola::MC6821::Control::CB1>(false);
+		}
+
+		using namespace CPU::M6809;
+		if(address >> 8 == 0xff) {
+			if constexpr (read_write != ReadWrite::NoData) {
+				switch(address) {
+					default: printf("Unhandled at %04x\n", +address);	break;
+
+					case 0xff00:	case 0xff04:	case 0xff08:	case 0xff0c:
+					case 0xff10:	case 0xff14:	case 0xff18:	case 0xff1c:
+						access<0xff00, read_write>(pia0_, value);
+					break;
+					case 0xff01:	case 0xff05:	case 0xff09:	case 0xff0d:
+					case 0xff11:	case 0xff15:	case 0xff19:	case 0xff1d:
+						access<0xff01, read_write>(pia0_, value);
+					break;
+					case 0xff02:	case 0xff06:	case 0xff0a:	case 0xff0e:
+					case 0xff12:	case 0xff16:	case 0xff1a:	case 0xff1e:
+						access<0xff02, read_write>(pia0_, value);
+					break;
+					case 0xff03:	case 0xff07:	case 0xff0b:	case 0xff0f:
+					case 0xff13:	case 0xff17:	case 0xff1b:	case 0xff1f:
+						access<0xff03, read_write>(pia0_, value);
+					break;
+
+					case 0xff20:	case 0xff24:	case 0xff28:	case 0xff2c:
+					case 0xff30:	case 0xff34:	case 0xff38:	case 0xff3c:
+						access<0xff20, read_write>(pia1_, value);
+					break;
+					case 0xff21:	case 0xff25:	case 0xff29:	case 0xff2d:
+					case 0xff31:	case 0xff35:	case 0xff39:	case 0xff3d:
+						access<0xff21, read_write>(pia1_, value);
+					break;
+					case 0xff22:	case 0xff26:	case 0xff2a:	case 0xff2e:
+					case 0xff32:	case 0xff36:	case 0xff3a:	case 0xff3e:
+						access<0xff22, read_write>(pia1_, value);
+					break;
+					case 0xff23:	case 0xff27:	case 0xff2b:	case 0xff2f:
+					case 0xff33:	case 0xff37:	case 0xff3b:	case 0xff3f:
+						access<0xff23, read_write>(pia1_, value);
+					break;
+
+					case 0xff40:	if(has_disk_drive) access<0xff40, read_write>(disk_controller_, value); break;
+					case 0xff48:	if(has_disk_drive) access<0xff48, read_write>(disk_controller_, value); break;
+					case 0xff49:	if(has_disk_drive) access<0xff49, read_write>(disk_controller_, value); break;
+					case 0xff4a:	if(has_disk_drive) access<0xff4a, read_write>(disk_controller_, value); break;
+					case 0xff4b:	if(has_disk_drive) access<0xff4b, read_write>(disk_controller_, value); break;
+
+					case 0xffc0:	sam_.access<0xffc0, read_write>();	break;		case 0xffc1:	sam_.access<0xffc1, read_write>();	break;
+					case 0xffc2:	sam_.access<0xffc2, read_write>();	break;		case 0xffc3:	sam_.access<0xffc3, read_write>();	break;
+					case 0xffc4:	sam_.access<0xffc4, read_write>();	break;		case 0xffc5:	sam_.access<0xffc5, read_write>();	break;
+					case 0xffc6:	sam_.access<0xffc6, read_write>();	break;		case 0xffc7:	sam_.access<0xffc7, read_write>();	break;
+					case 0xffc8:	sam_.access<0xffc8, read_write>();	break;		case 0xffc9:	sam_.access<0xffc9, read_write>();	break;
+					case 0xffca:	sam_.access<0xffca, read_write>();	break;		case 0xffcb:	sam_.access<0xffcb, read_write>();	break;
+					case 0xffcc:	sam_.access<0xffcc, read_write>();	break;		case 0xffcd:	sam_.access<0xffcd, read_write>();	break;
+					case 0xffce:	sam_.access<0xffce, read_write>();	break;		case 0xffcf:	sam_.access<0xffcf, read_write>();	break;
+					case 0xffd0:	sam_.access<0xffd0, read_write>();	break;		case 0xffd1:	sam_.access<0xffd1, read_write>();	break;
+					case 0xffd2:	sam_.access<0xffd2, read_write>();	break;		case 0xffd3:	sam_.access<0xffd3, read_write>();	break;
+					case 0xffd4:	sam_.access<0xffd4, read_write>();	break;		case 0xffd5:	sam_.access<0xffd5, read_write>();	break;
+					case 0xffd6:	sam_.access<0xffd6, read_write>();	break;		case 0xffd7:	sam_.access<0xffd7, read_write>();	break;
+					case 0xffd8:	sam_.access<0xffd8, read_write>();	break;		case 0xffd9:	sam_.access<0xffd9, read_write>();	break;
+					case 0xffda:	sam_.access<0xffda, read_write>();	break;		case 0xffdb:	sam_.access<0xffdb, read_write>();	break;
+					case 0xffdc:	sam_.access<0xffdc, read_write>();	break;		case 0xffdd:	sam_.access<0xffdd, read_write>();	break;
+					case 0xffde:	sam_.access<0xffde, read_write>();	break;		case 0xffdf:	sam_.access<0xffdf, read_write>();	break;
+
+					case 0xfff2:	case 0xfff3:	case 0xfff4:	case 0xfff5:
+					case 0xfff6:	case 0xfff7:	case 0xfff8:	case 0xfff9:
+					case 0xfffa:	case 0xfffb:	case 0xfffc:	case 0xfffd:
+					case 0xfffe:	case 0xffff:
+						if constexpr (is_read(read_write)) {
+							value = memory_.read(address - 0x4000);
+						}
+					break;
+				}
+			}
+		} else {
+			if constexpr (is_read(read_write)) {
+				value = memory_.read(address);
+
+				if constexpr (lic == CPU::M6809::LIC::InstructionFetch) {
+					if(allow_fast_tape_loading_ && tape_player_.motor_control() && address == 0xa75d) {
+						// To reproduce:
+						//
+						// LA75D 	CLR CPERTM		; RESET PERIOD TIMER
+						//			TST CBTPHA		; CHECK TO SEE IF SYNC’ED ON THE HI-LO TRANSITION OR LO-HI
+						//			BNE LA773		; BRANCH ON HI-LO TRANSITION
+						//
+						// * LO - HI TRANSITION
+						// LA763	BSR LA76C		; READ CASSETTE INPUT BIT					8D 07;		7 cycles
+						//			BCS LA763		; LOOP UNTIL IT IS LO						25 FC;		3 cycles
+						// LA767	BSR LA76C		; READ CASSETTE INPUT DATA
+						//			BCC LA767		; WAIT UNTIL IT GOES HI
+						//			RTS
+						//
+						// * READ CASSETTE INPUT BIT OF THE PIA
+						// LA76C 	INC CPERTM		; INCREMENT PERIOD TIMER					0C 83;		6 cycles
+						//			LDB PIA1		; GET CASSETTE INPUT BIT					F6 FF 20;	5 cycles
+						//			RORB			; PUT CASSETTE BIT INTO THE CARRY FLAG		56;			2 cycles
+						//			RTS															39;			5 cycles
+						//
+						// * WAIT FOR HI - LO TRANSITION
+						// LA773 	BSR LA76C		; READ CASSETTE INPUT DATA
+						//			BCC LA773		; LOOP UNTIL IT IS HI
+						// LA777 	BSR LA76C		; READ CASSETTE INPUT
+						//			BCS LA777		; LOOP UNTIL IT IS LO
+						//			RTS
+						//
+						// where: CPERTM = $0083; CBTPHA = $0084.
+						//
+						// The value of B is immediately discared by the caller so all that's needed is to set
+						// CPERTM to the amount of time taken to observe the two transitions required, divided
+						// by 28 cycles = 28/894886.25 s.
+						//
+
+						bool polarity = memory_.read(0x0084);
+
+						Cycles::IntType total = 0;
+						for(int c = 0; c < 2; c++) {
+							while(tape_player_.input() != polarity) {
+								total += tape_player_.get_cycles_until_next_event();
+								tape_player_.run_for_input_pulse();
+							}
+							polarity ^= true;
+						}
+
+						memory_.write(0x0083, uint8_t(total / 56));
+						value = 0x39;
+					}
+				}
+			}
+
+			if constexpr (is_write(read_write)) {
+				// TODO: could do better with the test below by having SAM calculate a range?
+				const uint16_t video_start = sam_.graphics_address();
+				if(address >= video_start && address < video_start + 6144) {
+					m6847_.flush();
+				}
+
+				memory_.write(address, value);
+			}
+		}
+
+		return delay;
+	}
+
+private:
+	struct M6809Traits {
+		static constexpr bool uses_mrdy = false;
+		static constexpr auto pause_precision = CPU::M6809::PausePrecision::BetweenInstructions;
+		using BusHandlerT = ConcreteMachine;
+	};
+	CPU::M6809::Processor<M6809Traits> m6809_;
+	MemoryMap memory_;
+
+	// MARK: - TimedMachine.
+
+	void run_for(const Cycles cycles) final {
+		m6809_.run_for(cycles);
+	}
+
+	void flush_output(const int outputs) final {
+		if(outputs & Output::Video) {
+			m6847_.flush();
+		}
+		if(outputs & Output::Audio) {
+			update_audio();
+			audio_queue_.perform();
+		}
+	}
+
+	// MARK: - Resettable.
+
+	void soft_reset() final {
+		m6847_->toggle_colour_phase();
+		sam_.reset();
+		m6809_.template set<CPU::M6809::Line::PowerOnReset>(true);
+	}
+
+	// MARK: - PIAs.
+
+	friend struct PIA0Handler;
+	struct PIA0Handler {
+		PIA0Handler(ConcreteMachine &machine) : machine_(machine) {
+			clear_all_keys();
+		}
+
+		//
+		// Port A:
+		//
+		//	b7: joystick comparison input
+		//	b0–b6: keyboard row [input?]
+		//	b0–b1, b2–b3: joystick button inputs;
+		//		0 and 2 = right joystick; 1 and 3 = left joystick;
+		//		0 and 1 = switch 1; 2 and 3 = switch 2.
+		//
+		//	CA1: horizontal sync
+		//	CA2: select line LSB of joystick MUX
+
+		//
+		// Port B:
+		//
+		//	b0-b7: keyboard column [output?]
+		//
+		//	CB1: field sync
+		//	CB2: select line MSB of joystick MUX
+
+		// Interrupt outputs both connected to IRQ.
+
+		template <Motorola::MC6821::Port port>
+		uint8_t input() {
+			if constexpr (port == Motorola::MC6821::Port::A) {
+				return
+					(keyboard_column_ & 0x80 ? 0xff : key_columns_[7]) &
+					(keyboard_column_ & 0x40 ? 0xff : key_columns_[6]) &
+					(keyboard_column_ & 0x20 ? 0xff : key_columns_[5]) &
+					(keyboard_column_ & 0x10 ? 0xff : key_columns_[4]) &
+					(keyboard_column_ & 0x08 ? 0xff : key_columns_[3]) &
+					(keyboard_column_ & 0x04 ? 0xff : key_columns_[2]) &
+					(keyboard_column_ & 0x02 ? 0xff : key_columns_[1]) &
+					(keyboard_column_ & 0x01 ? 0xff : key_columns_[0]) &
+					(
+						machine_.dac_level_ > machine_.joystick(joystick_).axes[axis_]
+							? 0x7f : 0xff
+					) &
+					(machine_.joystick(1).buttons[1] ? 0xf7 : 0xff) &
+					(machine_.joystick(0).buttons[1] ? 0xfb : 0xff) &
+					(machine_.joystick(1).buttons[0] ? 0xfd : 0xff) &
+					(machine_.joystick(0).buttons[0] ? 0xfe : 0xff);
+			}
+
+			if constexpr (port == Motorola::MC6821::Port::B) {
+				return
+					(keyboard_row_ & 0x80 ? 0xff : key_rows_[7]) &
+					(keyboard_row_ & 0x40 ? 0xff : key_rows_[6]) &
+					(keyboard_row_ & 0x20 ? 0xff : key_rows_[5]) &
+					(keyboard_row_ & 0x10 ? 0xff : key_rows_[4]) &
+					(keyboard_row_ & 0x08 ? 0xff : key_rows_[3]) &
+					(keyboard_row_ & 0x04 ? 0xff : key_rows_[2]) &
+					(keyboard_row_ & 0x02 ? 0xff : key_rows_[1]) &
+					(keyboard_row_ & 0x01 ? 0xff : key_rows_[0]);
+			}
+
+			__builtin_unreachable();
+		}
+
+		template <Motorola::MC6821::Port port>
+		void output(const uint8_t value) {
+			if constexpr (port == Motorola::MC6821::Port::A) {
+				keyboard_row_ = value;
+			}
+			if constexpr (port == Motorola::MC6821::Port::B) {
+				keyboard_column_ = value;
+			}
+		}
+
+		template <Motorola::MC6821::IRQ irq>
+		void set(const bool active) {
+			if constexpr (irq == Motorola::MC6821::IRQ::A) {
+				machine_.set_irq<0>(active);
+			}
+
+			if constexpr (irq == Motorola::MC6821::IRQ::B) {
+				machine_.set_irq<1>(active);
+			}
+		}
+
+		template <Motorola::MC6821::Control control>
+		void observe(const bool value) {
+			if constexpr (control == Motorola::MC6821::Control::CA2) {
+				axis_ = value;
+				machine_.mux_ = (machine_.mux_ & 1) | (value ? 2 : 0);
+			}
+			if constexpr (control == Motorola::MC6821::Control::CB2) {
+				joystick_ = value;
+				machine_.mux_ = (machine_.mux_ & 2) | (value ? 1 : 0);
+			}
+
+			// Changes to the MUX might affect audio output, so give it a bump.
+			machine_.set_audio(std::nullopt, std::nullopt);
+		}
+
+		void set_key_pressed(const int column, const int row, bool is_pressed) {
+			const auto column_mask = uint8_t(1 << column);
+			const auto row_mask = uint8_t(1 << row);
+
+			key_columns_[row] &= ~column_mask;
+			key_rows_[column] &= ~row_mask;
+			if(!is_pressed) {
+				key_columns_[row] |= column_mask;
+				key_rows_[column] |= row_mask;
+			}
+		}
+
+		void clear_all_keys() {
+			std::fill(std::begin(key_columns_), std::end(key_columns_), 0xff);
+			std::fill(std::begin(key_rows_), std::end(key_rows_), 0xff);
+		}
+
+	private:
+		ConcreteMachine &machine_;
+		uint8_t keyboard_column_ = 0xff, keyboard_row_ = 0xff;
+		uint8_t key_columns_[8]{}, key_rows_[8]{};
+
+		uint8_t joystick_ = 0;
+		uint8_t axis_ = 0;
+	};
+	PIA0Handler pia0_handler_;
+	Motorola::MC6821::MC6821<PIA0Handler> pia0_;
+
+	bool irqs_[2]{};
+	template <int slot>
+	void set_irq(const bool active) {
+		irqs_[slot] = active;
+		m6809_.template set<CPU::M6809::Line::IRQ>(irqs_[0] || irqs_[1]);
+	}
+
+	bool firqs_[2]{};
+	template <int slot>
+	void set_firq(const bool active) {
+		firqs_[slot] = active;
+		m6809_.template set<CPU::M6809::Line::FIRQ>(firqs_[0] || firqs_[1]);
+	}
+
+	friend struct PIA1Handler;
+	struct PIA1Handler {
+		PIA1Handler(ConcreteMachine &machine) : machine_(machine) {}
+
+		//
+		// Port A:
+		//
+		//	b2-b7: 6-bit DAC output
+		//	b1: RS232 data output
+		//	b0: tape input
+		//
+		//	CA1: RS232 carrier detect
+		//	CA2: tape motor control
+
+		//
+		// Port B:
+		//
+		//	b7: 6847 alpha/graphics select (0 = alphanumeric)
+		//	b4–b6: VDG GM inputs; also b5 = 6847 invert; b4 = 6847 shift toggle
+		//	b3: colour set select (and RGB monitor detecting input? Probably CoCo3)
+		//	b2: ram size input
+		//	b1: 1-bit audio output
+		//	b0: RS232 data input
+		//
+		// Note to self: semigraphic 6847 line is connected to b7 of the data bus; it is set or unset depending on
+		// the data fetched for that column.
+		//
+		//	CB1: cartridge interrupt input
+		//	CB2: sound enable
+
+		// Interrupt output connected to FIRQ.
+
+		template <Motorola::MC6821::Port port>
+		uint8_t input() {
+			if constexpr (port == Motorola::MC6821::Port::A) {
+				return
+					0xfe |
+					(machine_.tape_player_.input() ? 0x01 : 0x00);
+			}
+
+			if constexpr (port == Motorola::MC6821::Port::B) {
+				return 0xff;
+			}
+
+			__builtin_unreachable();
+		}
+
+		template <Motorola::MC6821::Port port>
+		void output(const uint8_t value) {
+			if constexpr (port == Motorola::MC6821::Port::A) {
+				machine_.dac_level_ = value >> 2;
+
+				// The DAC might be the output, so allow it to inspect.
+				machine_.set_audio(std::nullopt, std::nullopt);
+			}
+
+			if constexpr (port == Motorola::MC6821::Port::B) {
+				machine_.set_audio(std::nullopt, value & 0x2);
+				machine_.m6847_->set_mode(
+					value & 0x80,		// Alpha/graphics.
+					false,				// Graphics/semigraphics.
+					value & 0x10,		// External ROM.
+					false,				// Invert.
+					(value >> 4) & 7,	// Graphics mode.
+					value & 0x08		// Colour select.
+				);
+			}
+		}
+
+		template <Motorola::MC6821::IRQ irq>
+		void set(const bool active) {
+			if constexpr (irq == Motorola::MC6821::IRQ::A) {
+				machine_.set_firq<0>(active);
+			}
+
+			if constexpr (irq == Motorola::MC6821::IRQ::B) {
+				machine_.set_firq<1>(active);
+			}
+		}
+
+		template <Motorola::MC6821::Control control>
+		void observe(const bool value) {
+			if constexpr (control == Motorola::MC6821::Control::CA2) {
+				machine_.tape_player_.set_motor_control(value);
+			}
+
+			if constexpr (control == Motorola::MC6821::Control::CB2) {
+				machine_.set_audio(value, std::nullopt);
+			}
+		}
+
+	private:
+		ConcreteMachine &machine_;
+	};
+	PIA1Handler pia1_handler_;
+	Motorola::MC6821::MC6821<PIA1Handler> pia1_;
+
+	// MARK: - SAM.
+
+	Cycles bus_phase_;
+	SAM sam_;
+
+	// MARK: - Video and ScanProducer.
+
+	JustInTimeActor<
+		Motorola::MC6847::MC6847<
+			is_pal ? Motorola::MC6847::FrameTiming::PALPaddedVsync : Motorola::MC6847::FrameTiming::NTSC,
+			SAM,
+			SAM,
+			ModeMapper
+		>,
+		Cycles,
+		4
+	> m6847_;
+
+	void set_scan_target(Outputs::Display::ScanTarget *const target) final {
+		m6847_.get()->set_scan_target(target);
+	}
+
+	Outputs::Display::ScanStatus get_scaled_scan_status() const final {
+		return m6847_.get()->get_scaled_scan_status() / 4.0;
+	}
+
+	void set_display_type(Outputs::Display::DisplayType display_type) final {
+		m6847_.get()->set_display_type(display_type);
+	}
+
+	Outputs::Display::DisplayType get_display_type() const final {
+		return m6847_.get()->get_display_type();
+	}
+
+	// MARK: - MappedKeyboardMachine.
+
+	bool is_dragon_ = false;
+	Tandy::CoCo::Keyboard::KeyboardMapper keyboard_mapper_;
+	KeyboardMapper *keyboard_mapper() final {
+		return &keyboard_mapper_;
+	}
+
+	void set_key_state(const uint16_t key, const bool is_pressed) final {
+		// The CoCo and Dragon differ in columns; a mapping from CoCo to Dragon column is:
+		//
+		//	0 -> 2
+		//	1 -> 3
+		//	2 -> 4
+		//	3 -> 5
+		//	4 -> 0
+		// 	5 -> 1
+		//	6 -> 6
+		//	7 -> 7
+
+		const auto mapped_column = [&](const int column) {
+			if(!is_dragon_ || column >= 6) {
+				return column;
+			}
+			return (column + 2) % 6;
+		};
+
+		pia0_handler_.set_key_pressed(
+			mapped_column(Keyboard::column(key)),
+			Keyboard::row(key),
+			is_pressed
+		);
+	}
+
+	void clear_all_keys() final {
+		pia0_handler_.clear_all_keys();
+	}
+
+	void type_string(const std::wstring &string) final {
+		Utility::TypeRecipient<Tandy::CoCo::Keyboard::CharacterMapper>::add_typer(string);
+	}
+
+	bool can_type(const wchar_t c) const final {
+		return Utility::TypeRecipient<Tandy::CoCo::Keyboard::CharacterMapper>::can_type(c);
+	}
+
+	HalfCycles typer_delay(const std::wstring &) const final {
+		if(m6809_.template get<CPU::M6809::Line::PowerOnReset>()) {
+			return Cycles(2'750'000);
+		} else {
+			return Cycles(0);
+		}
+	}
+
+	HalfCycles typer_frequency() const final {
+		return Cycles(40'000);
+	}
+
+	// MARK: - MediaTarget and MediaChangeObserver.
+
+	Storage::Tape::BinaryTapePlayer tape_player_;
+	bool allow_fast_tape_loading_ = true;
+
+	bool insert_media(const Analyser::Static::Media &media) override {
+		if(!media.tapes.empty()) {
+			tape_player_.set_tape(media.tapes.front(), TargetPlatform::ThomsonMO);
+		}
+
+		if(has_disk_drive && !media.disks.empty()) {
+			for(size_t c = 0; c < media.disks.size() && c < 4; c++) {
+				disk_controller_.set_disk(media.disks[c], c);
+			}
+		}
+
+		const bool had_cartridge =
+			!has_disk_drive &&
+			!media.cartridges.empty() &&
+			sam_.insert_cartridge(media.cartridges.front()->segments().front().data);
+
+		return !media.tapes.empty() || had_cartridge || (has_disk_drive && !media.disks.empty());
+	}
+
+	ChangeEffect effect_for_file_did_change(const std::string &) const override {
+		return ChangeEffect::RestartMachine;
+	}
+
+	// MARK: - Configuration options.
+
+	std::unique_ptr<Reflection::Struct> get_options() const final {
+		auto options = std::make_unique<Options>(Configurable::OptionsType::UserFriendly);
+		options->quick_load = allow_fast_tape_loading_;
+		options->output = get_video_signal_configurable();
+		return options;
+	}
+
+	void set_options(const std::unique_ptr<Reflection::Struct> &str) final {
+		const auto options = dynamic_cast<Options *>(str.get());
+		allow_fast_tape_loading_ = options->quick_load;
+		set_video_signal_configurable(options->output);
+	}
+
+	// MARK: - Activity Source.
+
+	void set_activity_observer(Activity::Observer *const observer) override {
+		tape_player_.set_activity_observer(observer);
+		if(has_disk_drive) {
+			disk_controller_.set_activity_observer(observer);
+		}
+	}
+
+	// MARK: - Joysticks.
+
+	std::vector<std::unique_ptr<Inputs::Joystick>> joysticks_;
+
+	void construct_joysticks() {
+		joysticks_.emplace_back(new Joystick);
+		joysticks_.emplace_back(new Joystick);
+	}
+
+	const std::vector<std::unique_ptr<Inputs::Joystick>> &get_joysticks() final {
+		return joysticks_;
+	}
+
+	Joystick &joystick(const size_t index) {
+		return *static_cast<Joystick *>(joysticks_[index].get());
+	}
+
+	// MARK: - AudioProducer.
+
+	Concurrency::AsyncTaskQueue<false> audio_queue_;
+	Audio::DAC audio_;
+	Outputs::Speaker::PullLowpass<Audio::DAC> speaker_;
+
+	Cycles time_since_audio_update_;
+	void update_audio() {
+		const auto cycles = time_since_audio_update_.divide(AudioDivider);
+		speaker_.run_for(audio_queue_, cycles);
+	}
+
+	Outputs::Speaker::Speaker *get_speaker() override {
+		return &speaker_;
+	}
+
+	uint8_t dac_level_ = 0;
+	uint8_t mux_ = 0;
+
+	bool audio_enabled_ = false;
+	bool audio_toggle_ = false;
+
+	uint8_t audio_output_ = 0;
+	void set_audio(const std::optional<bool> enabled, std::optional<bool> toggle) {
+		const auto new_audio_enabled = enabled.value_or(audio_enabled_);
+		audio_enabled_ = new_audio_enabled;
+		const auto new_audio_toggle = toggle.value_or(audio_toggle_);
+		audio_toggle_ = new_audio_toggle;
+
+		// When audio is enabled, the MUX determines the audio source. Source 0 is the DAC.
+		const auto new_audio_output = [&]() -> uint8_t {
+			if(!audio_enabled_) {
+				return audio_toggle_ ? 48 : 0;
+			}
+
+			switch(mux_) {
+				default: return 0;
+				case 0: return dac_level_;
+
+				// Omitted at present (with a possibility that I've read the two mux lines the wrong way around):
+				//
+				//	1 -> cassette;
+				//	2 -> cartridge;
+				//	3 -> not used.
+			}
+		} ();
+		if(new_audio_output == audio_output_) {
+			return;
+		}
+
+		audio_output_ = new_audio_output;
+		update_audio();
+		audio_.set_output(new_audio_output);
+	}
+
+	// MARK: - Disk.
+
+	DiskController disk_controller_;
+	Cycles cycles_16mhz_;
+};
+
+}
+
+namespace {
+
+template <bool has_disk_drive>
+std::unique_ptr<Machine> create(
+	const Analyser::Static::TandyCoCo::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	if(Analyser::Static::TandyCoCo::is_pal(target.model)) {
+		return std::make_unique<TandyCoCo::ConcreteMachine<true, has_disk_drive>>(target, rom_fetcher);
+	} else {
+		return std::make_unique<TandyCoCo::ConcreteMachine<false, has_disk_drive>>(target, rom_fetcher);
+	}
+}
+
+}
+
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	const auto &coco_target = static_cast<const Analyser::Static::TandyCoCo::Target &>(target);
+	if(coco_target.has_disk_drive) {
+		return ::create<true>(coco_target, rom_fetcher);
+	} else {
+		return ::create<false>(coco_target, rom_fetcher);
+	}
+}

@@ -44,7 +44,7 @@ static constexpr std::array<int16_t, 256> generate_levels() {
 
 		const int level = start * (16 - point) + end * point;
 		result[c] = static_cast<int16_t>((level * 32767) / 3832);
-		if(is_negative) result[c] = -result[c];
+		if(is_negative) result[c] = int16_t(-result[c]);
 	}
 
 	return result;
@@ -205,7 +205,7 @@ private:
 
 	using SampleBuffer = std::array<Outputs::Speaker::StereoSample, 4096>;
 	std::array<SampleBuffer, 2> samples_;
-	std::atomic_flag is_posting_ = ATOMIC_FLAG_INIT;
+	std::atomic_flag is_posting_;
 };
 
 }

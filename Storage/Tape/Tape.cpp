@@ -20,7 +20,7 @@ TapeSerialiser::TapeSerialiser(std::unique_ptr<FormatSerialiser> &&serialiser) :
 
 std::unique_ptr<TapeSerialiser> Tape::serialiser(const TargetPlatform::Type platform) const {
 	auto serialiser = format_serialiser();
-	if(auto *recipient = dynamic_cast<TargetPlatform::Recipient *>(serialiser.get())) {
+	if(auto recipient = dynamic_cast<TargetPlatform::Recipient *>(serialiser.get())) {
 		recipient->set_target_platforms(platform);
 	}
 
@@ -57,7 +57,7 @@ void TapeSerialiser::reset() {
 
 Pulse TapeSerialiser::next_pulse() {
 	pulse_ = serialiser_->next_pulse();
-	offset_++;
+	++offset_;
 	return pulse_;
 }
 
@@ -84,7 +84,7 @@ ClockingHint::Preference TapePlayer::preferred_clocking() const {
 	return (!tape_ || serialiser_->is_at_end()) ? ClockingHint::Preference::None : ClockingHint::Preference::JustInTime;
 }
 
-void TapePlayer::set_tape(std::shared_ptr<Storage::Tape::Tape> tape, TargetPlatform::Type platform) {
+void TapePlayer::set_tape(std::shared_ptr<Storage::Tape::Tape> tape, const TargetPlatform::Type platform) {
 	tape_ = tape;
 	serialiser_ = tape->serialiser(platform);
 
@@ -106,7 +106,6 @@ bool TapePlayer::has_tape() const {
 }
 
 void TapePlayer::next_pulse() {
-	// get the new pulse
 	if(tape_) {
 		current_pulse_ = serialiser_->next_pulse();
 		if(serialiser_->is_at_end()) update_clocking_observer();
@@ -133,6 +132,12 @@ void TapePlayer::run_for(const Cycles cycles) {
 	}
 }
 
+void TapePlayer::run_for(const Time time) {
+	run_for(Cycles(
+		(get_input_clock_rate() * time.length) / time.clock_rate
+	));
+}
+
 void TapePlayer::run_for_input_pulse() {
 	jump_to_next_event();
 }
@@ -143,6 +148,10 @@ void TapePlayer::process_next_event() {
 }
 
 // MARK: - Binary Player
+
+namespace {
+constexpr char LEDName[] = "Tape motor";
+}
 
 BinaryTapePlayer::BinaryTapePlayer(const int input_clock_rate) :
 	TapePlayer(input_clock_rate)
@@ -159,16 +168,25 @@ void BinaryTapePlayer::set_motor_control(const bool enabled) {
 		update_clocking_observer();
 
 		if(observer_) {
-			observer_->set_led_status("Tape motor", enabled);
+			update_observer();
 		}
+	}
+}
+
+void BinaryTapePlayer::update_observer() {
+	const bool lit = motor_is_running_ && !is_at_end();
+	if(observer_ && lit != observer_lit_) {
+		observer_->set_led_status(LEDName, lit);
+		observer_lit_ = lit;
 	}
 }
 
 void BinaryTapePlayer::set_activity_observer(Activity::Observer *const observer) {
 	observer_ = observer;
 	if(observer) {
-		observer->register_led("Tape motor");
-		observer_->set_led_status("Tape motor", motor_is_running_);
+		observer->register_led(LEDName);
+		observer_lit_ ^= true;
+		update_observer();
 	}
 }
 
@@ -188,14 +206,20 @@ void BinaryTapePlayer::run_for(const Cycles cycles) {
 	if(motor_is_running_) TapePlayer::run_for(cycles);
 }
 
+void BinaryTapePlayer::run_for(const Time time) {
+	if(motor_is_running_) TapePlayer::run_for(time);
+}
+
 void BinaryTapePlayer::set_delegate(Delegate *const delegate) {
 	delegate_ = delegate;
 }
 
 void BinaryTapePlayer::process(const Storage::Tape::Pulse &pulse) {
-	bool new_input_level = pulse.type == Pulse::High;
+	const bool new_input_level = pulse.type == Pulse::High;
 	if(input_level_ != new_input_level) {
 		input_level_ = new_input_level;
 		if(delegate_) delegate_->tape_did_change_input(*this);
 	}
+	// Potentially update observer again, as this might be end-of-tape.
+	update_observer();
 }

@@ -13,9 +13,10 @@
 #include "ClockReceiver/ScanSynchroniser.hpp"
 
 #include "Machines/MachineTypes.hpp"
+#include "Machines/Utility/ROMLibrary.hpp"
 
 #include "Activity/Observer.hpp"
-#include "Outputs/OpenGL/Primitives/Rectangle.hpp"
+#include "Outputs/OpenGL/Shaders/Rectangle.hpp"
 #include "Outputs/OpenGL/ScanTarget.hpp"
 #include "Outputs/OpenGL/Screenshot.hpp"
 
@@ -25,6 +26,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <codecvt>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -50,7 +52,7 @@ struct MachineRunner {
 
 	void start() {
 		last_time_ = Time::nanos_now();
-		timer_ = SDL_AddTimer(timer_period, &sdl_callback, reinterpret_cast<void *>(this));
+		timer_ = SDL_AddTimer(timer_period, &sdl_callback, static_cast<void *>(this));
 	}
 
 	void stop() {
@@ -119,7 +121,7 @@ private:
 
 	static constexpr Uint32 timer_period = 4;
 	static Uint32 sdl_callback(Uint32, void *param) {
-		reinterpret_cast<MachineRunner *>(param)->update();
+		static_cast<MachineRunner *>(param)->update();
 		return timer_period;
 	}
 
@@ -204,7 +206,7 @@ struct SpeakerDelegate: public Outputs::Speaker::Speaker::Delegate {
 	}
 
 	static void SDL_audio_callback(void *const userdata, Uint8 *const stream, const int len) {
-		reinterpret_cast<SpeakerDelegate *>(userdata)->audio_callback(stream, len);
+		static_cast<SpeakerDelegate *>(userdata)->audio_callback(stream, len);
 	}
 
 	SDL_AudioDeviceID audio_device;
@@ -541,21 +543,30 @@ private:
 }
 
 int main(int argc, char *argv[]) {
-	SDL_Window *window = nullptr;
-
 	// Attempt to parse arguments.
 	const ParsedArguments arguments = parse_arguments(argc, argv);
 
 	// This may be printed either as
-	const std::string usage_suffix = " [file or --new={machine}] [OPTIONS] [--rompath={path to ROMs}] [--speed={speed multiplier, e.g. 1.5}] [--logical-keyboard] [--volume={0.0 to 1.0}]";
+	const std::string usage_suffix =
+		" [file or --new={machine}]"
+		" [OPTIONS]"
+		" [--rompath={path to ROMs}]"
+		" [--speed={speed multiplier, e.g. 1.5}]"
+		" [--logical-keyboard]"
+		" [--volume={0.0 to 1.0}]";
 
 	// Print a help message if requested.
-	if(arguments.selections.find("help") != arguments.selections.end() || arguments.selections.find("h") != arguments.selections.end()) {
+	if(
+		arguments.selections.find("help") != arguments.selections.end() ||
+		arguments.selections.find("h") != arguments.selections.end()
+	) {
 		const auto all_machines = Machine::AllMachines(Machine::Type::DoesntRequireMedia, false);
 
 		std::cout << "Usage: " << final_path_component(argv[0]) << usage_suffix << std::endl << std::endl;
 		std::cout <<
-			"Use alt+enter to toggle full screen display. Use control+shift+V to paste text." << std::endl << std::endl;
+			"Use: alt+enter to toggle full screen display; "
+			"control+shift+V to paste text; "
+			"control+shift+R to perform a soft reset." << std::endl << std::endl;
 		std::cout <<
 			"Required machine type and hardware options are determined from the file if specified; otherwise use:"
 				<< std::endl << std::endl;
@@ -772,6 +783,14 @@ int main(int argc, char *argv[]) {
 						std::ranges::copy(rom_checked_paths, std::back_inserter(checked_paths));
 					}
 				}
+
+				// Fallback: check the ROM catalogue.
+				if(results.find(description.name) == results.end()) {
+					auto data = ROM::included_rom_image(description.name);
+					if(data.has_value()) {
+						results[description.name] = std::move(*data);
+					}
+				}
 			}
 
 			missing_roms = roms.subtract(results);
@@ -887,37 +906,65 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	// Ask for no depth buffer, a core profile and vsync-aligned rendering.
+	// Ask for no depth buffer but at least 1 bit of stencil.
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 	SDL_GL_SetSwapInterval(1);
 
-	window = SDL_CreateWindow(	long_machine_name.empty() ? final_path_component(arguments.file_names.front()).c_str() : long_machine_name.c_str(),
-								SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-								400, 300,
-								SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-
-	DynamicWindowTitler window_titler(window);
-
+	SDL_Window *window = nullptr;
 	SDL_GLContext gl_context = nullptr;
-	if(window) {
-		gl_context = SDL_GL_CreateContext(window);
+	const auto create_window = [&] {
+		if(window) {
+			SDL_DestroyWindow(window);
+		}
+		window = SDL_CreateWindow(
+			long_machine_name.empty() ?
+				final_path_component(arguments.file_names.front()).c_str() : long_machine_name.c_str(),
+			SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+			400, 300,
+			SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
+		);
+		if(window) {
+			gl_context = SDL_GL_CreateContext(window);
+		}
+	};
+
+	// Try to get an OpenGL ES context first; this is preferable since it's slightly more direct in driver terms on
+	// Wayland, and is hardware accelerated on Raspberry Pis and similar whereas regular OpenGL isn't necessarily.
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+	create_window();
+
+	if(!window || !gl_context) {
+		// Fallback: OpenGL 3.2. This might be supported even if ES isn't, e.g. on the Mac.
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+		create_window();
 	}
+
 	if(!window || !gl_context) {
 		std::cerr << "Could not create " << (window ? "OpenGL context" : "window");
 		std::cerr << "; reported error: \"" << SDL_GetError() << "\"" << std::endl;
 		return EXIT_FAILURE;
 	}
 
+	DynamicWindowTitler window_titler(window);
 	SDL_GL_MakeCurrent(window, gl_context);
 
 	GLint target_framebuffer = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &target_framebuffer);
 
 	// Setup output, assuming a CRT machine for now, and prepare a best-effort updater.
-	const auto api = Outputs::Display::OpenGL::API::OpenGL32Core;
+	// Ask SDL what sort of profile the program ended up with, to decouple from whatever code is above.
+	const auto api = []{
+		int selected_context_profile_mask;
+		SDL_GL_GetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, &selected_context_profile_mask);
+		return selected_context_profile_mask;
+	}() == SDL_GL_CONTEXT_PROFILE_ES ?
+		Outputs::Display::OpenGL::API::OpenGLES3 :
+		Outputs::Display::OpenGL::API::OpenGL32Core;
+
 	Outputs::Display::OpenGL::ScanTarget scan_target(api, target_framebuffer);
 	std::unique_ptr<ActivityObserver> activity_observer;
 	bool uses_mouse;
@@ -1086,11 +1133,24 @@ int main(int argc, char *argv[]) {
 				case SDL_KEYDOWN:
 				case SDL_KEYUP: {
 					if(event.type == SDL_KEYDOWN) {
-						// Syphon off the key-press if it's control+shift+V (paste).
-						if(event.key.keysym.sym == SDLK_v && (SDL_GetModState()&KMOD_CTRL) && (SDL_GetModState()&KMOD_SHIFT)) {
-							if(keyboard_machine) {
-								keyboard_machine->type_string(SDL_GetClipboardText());
-								break;
+						// Syphon off the key-press if it's control+shift+V (paste) or +R (soft reset).
+						if((SDL_GetModState()&KMOD_CTRL) && (SDL_GetModState()&KMOD_SHIFT)) {
+							if(event.key.keysym.sym == SDLK_v) {
+								if(keyboard_machine) {
+									char *const utf8 = SDL_GetClipboardText();
+									std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+									keyboard_machine->type_string(converter.from_bytes(utf8));
+									SDL_free(utf8);
+									break;
+								}
+							}
+
+							if(event.key.keysym.sym == SDLK_r) {
+								auto *resettable = machine->soft_resettable();
+								if(resettable) {
+									resettable->soft_reset();
+									break;
+								}
 							}
 						}
 
@@ -1156,7 +1216,7 @@ int main(int argc, char *argv[]) {
 						// Announce a potential discontinuity in keyboard input.
 						const auto keyboard_machine = machine->keyboard_machine();
 						if(keyboard_machine) {
-							keyboard_machine->get_keyboard().reset_all_keys();
+							keyboard_machine->keyboard().reset_all_keys();
 						}
 						break;
 					}
@@ -1265,7 +1325,7 @@ int main(int argc, char *argv[]) {
 						// This is a slightly terrible way of obtaining a symbol for the key, e.g. for letters it will always return
 						// the capital letter version, at least empirically. But it'll have to do for now.
 						const char *key_name = SDL_GetKeyName(keypress.keycode);
-						if(keyboard_machine->get_keyboard().set_key_pressed(key, (strlen(key_name) == 1) ? key_name[0] : 0, keypress.is_down, keypress.repeat)) {
+						if(keyboard_machine->keyboard().set_key_pressed(key, (strlen(key_name) == 1) ? key_name[0] : 0, keypress.is_down, keypress.repeat)) {
 							continue;
 						}
 					}

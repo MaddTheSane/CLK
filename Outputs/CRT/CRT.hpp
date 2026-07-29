@@ -9,17 +9,22 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
+
+#include "Concurrency/SpinLock.hpp"
 
 #include "Outputs/ScanTarget.hpp"
 #include "Outputs/CRT/Internals/Flywheel.hpp"
 #include "Outputs/CRT/Internals/RectAccumulator.hpp"
 
 #include "Numeric/CubicCurve.hpp"
+
 
 namespace Outputs::CRT {
 
@@ -227,7 +232,8 @@ public:
 		@param required_length The number of samples to allocate.
 		@returns A pointer to the allocated area if room is available; @c nullptr otherwise.
 	*/
-	inline uint8_t *begin_data(std::size_t required_length, std::size_t required_alignment = 1) {
+	inline uint8_t *begin_data(const std::size_t required_length, const std::size_t required_alignment = 1) {
+		std::lock_guard guard(scan_target_lock_);
 		const auto result = scan_target_->begin_data(required_length, required_alignment);
 #ifndef NDEBUG
 		// If data was allocated, make a record of how much so as to be able to hold the caller to that
@@ -242,7 +248,7 @@ public:
 	/*!	Sets the gamma exponent for the simulated screen. */
 	void set_input_gamma(float);
 
-	enum CompositeSourceType {
+	enum class CompositeSourceType {
 		/// The composite function provides continuous output.
 		Continuous,
 		/// The composite function provides discrete output with four unique values per colour cycle.
@@ -293,7 +299,7 @@ public:
 		int number_of_cycles) const;
 
 	/*!	Sets the CRT delegate; set to @c nullptr if no delegate is desired. */
-	inline void set_delegate(Delegate *delegate) {
+	inline void set_delegate(Delegate *const delegate) {
 		delegate_ = delegate;
 	}
 
@@ -385,6 +391,7 @@ private:
 
 	int cycles_per_line_ = 1;
 
+	Concurrency::SpinLock<Concurrency::Barrier::AcquireRelease> scan_target_lock_;
 	Outputs::Display::ScanTarget *scan_target_ = &Outputs::Display::NullScanTarget::singleton;
 	Outputs::Display::ScanTarget::Modals scan_target_modals_;
 
@@ -453,6 +460,24 @@ private:
 	Framing framing_ = Framing::CalibratingAutomaticFixed;
 	bool has_first_reading_ = false;
 	void posit(Display::Rect);
+
+	struct ScanTargetPreferences: public Display::ScanTarget::Delegate {
+		static constexpr bool DefaultForceHorizontalScans = false;
+		std::atomic<bool> force_horizontal_scans = DefaultForceHorizontalScans;
+
+		void set(const Preferences &preferences) override {
+			force_horizontal_scans.store(
+				preferences.force_horizontal_scans.value_or(DefaultForceHorizontalScans),
+				std::memory_order_relaxed
+			);
+		}
+	} preferences_;
+	uint16_t start_of_line_y_;
+	uint16_t current_vertical_flywheel() const {
+		return uint16_t(
+			std::min(vertical_flywheel_.current_output_position() / vertical_flywheel_output_divider_, 65535)
+		);
+	}
 
 #ifndef NDEBUG
 	size_t allocated_data_length_ = std::numeric_limits<size_t>::min();

@@ -154,7 +154,7 @@ private:
 	}
 	static constexpr int audio_divider = has_mockingboard ? 1 : 8;
 	void update_audio() {
-		speaker_.run_for(audio_queue_, cycles_since_audio_update_.divide(Cycles(audio_divider)));
+		speaker_.run_for(audio_queue_, cycles_since_audio_update_.divide<Cycles>(audio_divider));
 	}
 	void update_just_in_time_cards() {
 		if(cycles_since_card_update_ > Cycles(0)) {
@@ -456,7 +456,7 @@ private:
 				case Key::PageUp:
 				case Key::PageDown:
 				case Key::End:
-					// Accept a bunch non-symbolic other keys, as
+					// Accept a bunch of non-symbolic other keys, as
 					// reset, in the hope that the user can find
 					// at least one usable key.
 					m6502_.set_reset_line(is_pressed);
@@ -518,7 +518,7 @@ private:
 
 		uint8_t get_keyboard_input() {
 			if(string_serialiser_) {
-				return string_serialiser_->head() | 0x80;
+				return uint8_t(string_serialiser_->head()) | 0x80;
 			} else {
 				return keyboard_input_;
 			}
@@ -1034,15 +1034,15 @@ public:
 		return is_iie(model);
 	}
 
-	Inputs::Keyboard &get_keyboard() final {
+	Inputs::Keyboard &keyboard() final {
 		return keyboard_;
 	}
 
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		keyboard_.set_string_serialiser(std::make_unique<Utility::StringSerialiser>(string, true));
 	}
 
-	bool can_type(char c) const final {
+	bool can_type(const wchar_t c) const final {
 		// Make an effort to type the entire printable ASCII range.
 		return c >= 32 && c < 127;
 	}
@@ -1094,25 +1094,32 @@ public:
 
 using namespace Apple::II;
 
-std::unique_ptr<Machine> Machine::AppleII(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	using Target = Analyser::Static::AppleII::Target;
-	const Target *const appleii_target = dynamic_cast<const Target *>(target);
+namespace {
+template <bool has_mockingboard>
+std::unique_ptr<Machine> create(
+	const Analyser::Static::AppleII::Target &target,
+	const ROMMachine::ROMFetcher &fetcher
+) {
+	switch(target.model) {
+		default: return nullptr;
+		using enum Analyser::Static::AppleII::Target::Model;
+		case II:			return std::make_unique<ConcreteMachine<II, has_mockingboard>>(target, fetcher);
+		case IIplus:		return std::make_unique<ConcreteMachine<IIplus, has_mockingboard>>(target, fetcher);
+		case IIe:			return std::make_unique<ConcreteMachine<IIe, has_mockingboard>>(target, fetcher);
+		case EnhancedIIe:	return std::make_unique<ConcreteMachine<EnhancedIIe, has_mockingboard>>(target, fetcher);
+	}
+}
+}
 
-	if(appleii_target->has_mockingboard) {
-		switch(appleii_target->model) {
-			default: return nullptr;
-			case Target::Model::II: return std::make_unique<ConcreteMachine<Target::Model::II, true>>(*appleii_target, rom_fetcher);
-			case Target::Model::IIplus: return std::make_unique<ConcreteMachine<Target::Model::IIplus, true>>(*appleii_target, rom_fetcher);
-			case Target::Model::IIe: return std::make_unique<ConcreteMachine<Target::Model::IIe, true>>(*appleii_target, rom_fetcher);
-			case Target::Model::EnhancedIIe: return std::make_unique<ConcreteMachine<Target::Model::EnhancedIIe, true>>(*appleii_target, rom_fetcher);
-		}
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	using Target = Analyser::Static::AppleII::Target;
+	const auto &appleii_target = static_cast<const Target &>(target);
+	if(appleii_target.has_mockingboard) {
+		return ::create<true>(appleii_target, rom_fetcher);
 	} else {
-		switch(appleii_target->model) {
-			default: return nullptr;
-			case Target::Model::II: return std::make_unique<ConcreteMachine<Target::Model::II, false>>(*appleii_target, rom_fetcher);
-			case Target::Model::IIplus: return std::make_unique<ConcreteMachine<Target::Model::IIplus, false>>(*appleii_target, rom_fetcher);
-			case Target::Model::IIe: return std::make_unique<ConcreteMachine<Target::Model::IIe, false>>(*appleii_target, rom_fetcher);
-			case Target::Model::EnhancedIIe: return std::make_unique<ConcreteMachine<Target::Model::EnhancedIIe, false>>(*appleii_target, rom_fetcher);
-		}
+		return ::create<false>(appleii_target, rom_fetcher);
 	}
 }

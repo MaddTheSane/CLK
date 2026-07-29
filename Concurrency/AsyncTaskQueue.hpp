@@ -9,6 +9,7 @@
 #pragma once
 
 #include <atomic>
+#include <concepts>
 #include <condition_variable>
 #include <functional>
 #include <thread>
@@ -41,8 +42,8 @@ private:
 template <> struct TaskQueueStorage<void> {
 	TaskQueueStorage() {}
 
-	protected:
-		void update() {}
+protected:
+	void update() {}
 };
 
 /*!
@@ -50,7 +51,8 @@ template <> struct TaskQueueStorage<void> {
 	to be performed serially and asynchronously from the caller.
 
 	If @c perform_automatically is true, functions will be performed as soon as is possible,
-	at the cost of thread synchronisation.
+	at the cost of thread synchronisation. If false then they'll be enqueued but not performed until
+	either: (i) the queue becomes quite long; or (ii) an explicit perform is requested.
 
 	If @c perform_automatically is false, functions will be queued up but not dispatched
 	until a call to perform().
@@ -78,38 +80,45 @@ public:
 		}
 	}
 
-	/// Enqueus @c post_action to be performed asynchronously at some point
+	/// Enqueues @c action to be performed asynchronously at some point
 	/// in the future. If @c perform_automatically is @c true then the action
-	/// will be performed as soon as possible. Otherwise it will sit unsheculed until
-	/// a call to @c perform().
+	/// will be performed as soon as possible. Otherwise it will sit enqueued but
+	/// unscheduled until a call to @c perform().
 	///
 	/// Actions may be elided.
 	///
 	/// If this TaskQueue has a @c Performer then the action will be performed
 	/// on the same thread as the performer, after the performer has been updated
 	/// to 'now'.
-	void enqueue(const std::function<void(void)> &post_action) {
+	template <typename FuncT>
+	requires std::invocable<FuncT>
+	void enqueue(FuncT &&action) {
 		const std::lock_guard guard(condition_mutex_);
-		actions_.push_back(post_action);
+		actions_.emplace_back(std::forward<FuncT>(action));
 
 		if constexpr (perform_automatically) {
-			condition_.notify_all();
+			condition_.notify_one();
+		} else {
+			if(actions_.size() >= MaximumEnqueueActions) {
+				condition_.notify_one();
+			}
 		}
 	}
 
 	/// @returns The number of items currently enqueued.
-	size_t size() {
+	size_t size() const {
 		const std::lock_guard guard(condition_mutex_);
 		return actions_.size();
 	}
 
 	/// Causes any enqueued actions that are not yet scheduled to be scheduled.
 	void perform() {
+		const std::lock_guard guard(condition_mutex_);
 		static_assert(!perform_automatically);
 		if(actions_.empty()) {
 			return;
 		}
-		condition_.notify_all();
+		condition_.notify_one();
 	}
 
 	/// Permanently stops this task queue, blocking until that has happened.
@@ -118,7 +127,7 @@ public:
 	/// The queue cannot be restarted; this is a destructive action.
 	void stop() {
 		if(thread_.joinable()) {
-			should_quit_.store(true, std::memory_order_relaxed);
+			should_quit_.test_and_set();
 			enqueue([] {});
 			if constexpr (!perform_automatically) {
 				perform();
@@ -146,7 +155,7 @@ public:
 		enqueue([&flush_mutex, &flush_condition, &has_run] () {
 			std::unique_lock inner_lock(flush_mutex);
 			has_run = true;
-			flush_condition.notify_all();
+			flush_condition.notify_one();
 		});
 
 		if constexpr (!perform_automatically) {
@@ -160,17 +169,17 @@ public:
 	/// until all scheduled work has been performed, placing a memory barrier
 	/// in between.
 	void spin_flush() {
-		std::atomic<bool> has_run = false;
+		std::atomic_flag has_run{};
 
 		enqueue([&has_run] () {
-			has_run.store(true, std::memory_order::release);
+			has_run.test_and_set(std::memory_order::release);
 		});
 
 		if constexpr (!perform_automatically) {
 			perform();
 		}
 
-		while(!has_run.load(std::memory_order::acquire));
+		while(!has_run.test(std::memory_order::acquire));
 	}
 
 	~AsyncTaskQueue() {
@@ -178,17 +187,19 @@ public:
 	}
 
 private:
+	static constexpr size_t MaximumEnqueueActions = 1000;
+
 	void start_impl() {
 		thread_ = std::thread{
 			[this] {
 				ActionVector actions;
 
 				// Continue until told to quit.
-				while(!should_quit_.load(std::memory_order_relaxed)) {
+				while(!should_quit_.test(std::memory_order_relaxed)) {
 					// Wait for new actions to be signalled, and grab them.
 					std::unique_lock lock(condition_mutex_);
 					condition_.wait(lock, [&] {
-						return !actions_.empty() || should_quit_.load(std::memory_order_relaxed);
+						return !actions_.empty() || should_quit_.test(std::memory_order_relaxed);
 					});
 					std::swap(actions, actions_);
 					lock.unlock();
@@ -212,8 +223,8 @@ private:
 	ActionVector actions_;
 
 	// Necessary synchronisation parts.
-	std::atomic<bool> should_quit_ = false;
-	std::mutex condition_mutex_;
+	std::atomic_flag should_quit_;
+	mutable std::mutex condition_mutex_;
 	std::condition_variable condition_;
 
 	// Ensure the thread isn't constructed until after the mutex

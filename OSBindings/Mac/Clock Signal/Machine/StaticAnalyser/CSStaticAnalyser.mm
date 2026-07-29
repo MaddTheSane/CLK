@@ -25,8 +25,14 @@
 #include "Analyser/Static/MSX/Target.hpp"
 #include "Analyser/Static/Oric/Target.hpp"
 #include "Analyser/Static/PCCompatible/Target.hpp"
+#include "Analyser/Static/TandyCoCo/Target.hpp"
+#include "Analyser/Static/Thomson/Target.hpp"
 #include "Analyser/Static/ZX8081/Target.hpp"
 #include "Analyser/Static/ZXSpectrum/Target.hpp"
+
+#include "Configurable/Configurable.hpp"
+#include "Configurable/StandardOptions.hpp"
+#include "Machines/Utility/MachineForTarget.hpp"
 
 #include "Storage/FileBundle/FileBundle.hpp"
 
@@ -546,6 +552,45 @@ PermissionDelegate permission_delegate;
 	return self;
 }
 
+- (instancetype)initWithTandyCoCoMemorySize:(Kilobytes)memorySize hasDiskDrive:(BOOL)hasDiskDrive {
+	self = [super init];
+	if(self) {
+		using Target = Analyser::Static::TandyCoCo::Target;
+		auto target = std::make_unique<Target>();
+
+		auto memory_size = target->memory_size;
+		switch(memorySize) {
+			default:	break;
+			case 32:	memory_size = Target::MemorySize::ThirtyTwoKB;		break;
+			case 64:	memory_size = Target::MemorySize::SixtyFourKB;		break;
+		}
+		target->memory_size = memory_size;
+
+		target->has_disk_drive = hasDiskDrive;
+		_targets.push_back(std::move(target));
+	}
+	return self;
+}
+
+- (instancetype)initWithThomsonMOModel:(CSMachineThomsonModel)model hasDiskDrive:(BOOL)hasDiskDrive {
+	self = [super init];
+	if(self) {
+		using Target = Analyser::Static::Thomson::MOTarget;
+		auto target = std::make_unique<Target>();
+		target->model = [&]() {
+			switch(model) {
+				case CSMachineThomsonModelMO5: return Target::Model::MO5v11;
+				case CSMachineThomsonModelMO6: return Target::Model::MO6v3;
+				case CSMachineThomsonModelProdest128: return Target::Model::Prodest128;
+				default: __builtin_unreachable();
+			}
+		} ();
+		target->floppy = hasDiskDrive ? Target::Floppy::CD90_640 : Target::Floppy::None;
+		_targets.push_back(std::move(target));
+	}
+	return self;
+}
+
 - (instancetype)initWithVic20Region:(CSMachineVic20Region)region
 	memorySize:(Kilobytes)memorySize
 	hasC1540:(BOOL)hasC1540
@@ -613,28 +658,43 @@ static Analyser::Static::ZX8081::Target::MemoryModel ZX8081MemoryModelFromSize(K
 // MARK: - NIB mapping
 
 - (NSString *)optionsNibName {
-	// TODO: the below could be worked out dynamically, I think. It's a bit of a hangover from before configuration
-	// options were reflective.
 	switch(_targets.front()->machine) {
-		case Analyser::Machine::AmstradCPC:		return @"CompositeDynamicCropOptions";
-		case Analyser::Machine::Archimedes:		return @"QuickLoadOptions";
 		case Analyser::Machine::AppleII:		return @"AppleIIOptions";
 		case Analyser::Machine::Atari2600:		return @"Atari2600Options";
-		case Analyser::Machine::AtariST:		return @"CompositeOptions";
-		case Analyser::Machine::BBCMicro:		return @"DynamicCropOptions";
-		case Analyser::Machine::ColecoVision:	return @"CompositeOptions";
-		case Analyser::Machine::Electron:		return @"QuickLoadCompositeOptions";
-		case Analyser::Machine::Enterprise:		return @"CompositeOptions";
 		case Analyser::Machine::Macintosh:		return @"MacintoshOptions";
-		case Analyser::Machine::MasterSystem:	return @"CompositeOptions";
-		case Analyser::Machine::MSX:			return @"QuickLoadCompositeOptions";
 		case Analyser::Machine::Oric:			return @"OricOptions";
-		case Analyser::Machine::Plus4:			return @"QuickLoadCompositeOptions";
-		case Analyser::Machine::PCCompatible:	return @"CompositeOptions";
-		case Analyser::Machine::Vic20:			return @"QuickLoadCompositeOptions";
 		case Analyser::Machine::ZX8081:			return @"ZX8081Options";
-		case Analyser::Machine::ZXSpectrum:		return @"QuickLoadCompositeOptions"; // TODO: @"ZXSpectrumOptions";
-		default: return nil;
+		default: {
+			const auto allOptions = Machine::AllOptionsByMachine(true);
+			auto options = allOptions.find(_targets.front()->machine);
+			if(options == allOptions.end()) {
+				return nil;
+			}
+
+			const auto allKeys = options->second->all_keys();
+
+			const bool hasDynamicCrop =
+				std::find(allKeys.begin(), allKeys.end(), Configurable::Options::DynamicCropOptionName)
+					!= allKeys.end();
+			const auto hasDisplay = !options->second->values_for(Configurable::Options::DisplayOptionName).empty();
+			const bool hasQuickLoad =
+				std::find(allKeys.begin(), allKeys.end(), Configurable::Options::QuickLoadOptionName)
+					!= allKeys.end();
+
+			const auto type = (hasDynamicCrop ? 1 : 0) | (hasDisplay ? 2 : 0) | (hasQuickLoad ? 4 : 0);
+			switch(type) {
+				default:
+					NSLog(@"No NIB defined for options %d", type);
+					[[fallthrough]];
+				case 0: return nil;
+				case 1:	return @"DynamicCropOptions";
+				case 2:	return @"CompositeOptions";
+				case 3:	return @"CompositeDynamicCropOptions";
+				case 4:	return @"QuickLoadOptions";
+				case 6: return @"QuickLoadCompositeOptions";
+				case 7: return @"QuickLoadCompositeDynamicCropOptions";
+			}
+		}
 	}
 }
 

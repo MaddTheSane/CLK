@@ -71,9 +71,11 @@ enum class Source {
 	MultiMachine,
 	MFP68901,
 	MOS6526,
+	MO5,
 	MSX,
 	NCR5380,
 	OpenGL,
+	OpenGLUniforms,
 	PCCompatible,
 	PCPOST,
 	PIC,
@@ -119,6 +121,7 @@ constexpr EnabledLevel enabled_level(const Source source) {
 		case Source::SCSI:
 		case Source::I2C:
 //		case Source::PCPOST:
+		case Source::OpenGLUniforms:
 			return EnabledLevel::None;
 
 		case Source::Floppy:
@@ -160,11 +163,13 @@ constexpr const char *prefix(const Source source) {
 		case Source::Macintosh:					return "Macintosh";
 		case Source::MasterSystem:				return "SMS";
 		case Source::MOS6526:					return "MOS6526";
+		case Source::MO5:						return "MO5";
 		case Source::MFP68901:					return "MFP68901";
 		case Source::MultiMachine:				return "Multi-machine";
 		case Source::MSX:						return "MSX";
 		case Source::NCR5380:					return "5380";
 		case Source::OpenGL:					return "OpenGL";
+		case Source::OpenGLUniforms:			return "OpenGL Uniforms";
 		case Source::Plus4:						return "Plus4";
 		case Source::PCCompatible:				return "PC";
 		case Source::PCPOST:					return "POST";
@@ -205,12 +210,7 @@ public:
 	explicit LogLine(const bool is_info) noexcept : is_info_(is_info) {}
 
 	~LogLine() {
-		if(output_ == accumulator_.last && source == accumulator_.source && is_info_ == accumulator_.is_info) {
-			++accumulator_.count;
-			return;
-		}
-
-		if(!accumulator_.last.empty()) {
+		const auto output = [&] {
 			const char *const unadorned_prefix = prefix(accumulator_.source);
 			std::string prefix;
 			if(unadorned_prefix) {
@@ -226,12 +226,33 @@ public:
 				out << " [* " << accumulator_.count << "]";
 			}
 			if(EndLine) out << EndLine;
+
+			accumulator_.last = "";
+		};
+
+		if(
+			output_ == accumulator_.last &&
+			source == accumulator_.source &&
+			is_info_ == accumulator_.is_info
+		) {
+			++accumulator_.count;
+			if(accumulator_.count < 1000) {	// Always print when the count reaches 1000.
+				return;
+			}
+		}
+
+		if(!accumulator_.last.empty()) {
+			output();
 		}
 
 		accumulator_.count = 1;
 		accumulator_.last = output_;
 		accumulator_.source = source;
 		accumulator_.is_info = is_info_;
+
+		if(!is_info_) {
+			output();
+		}
 	}
 
 	template <size_t size, typename... Args>

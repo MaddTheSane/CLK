@@ -8,6 +8,7 @@ set(CLK_SOURCES
 	Analyser/Dynamic/MultiMachine/Implementation/MultiKeyboardMachine.cpp
 	Analyser/Dynamic/MultiMachine/Implementation/MultiMediaTarget.cpp
 	Analyser/Dynamic/MultiMachine/Implementation/MultiProducer.cpp
+	Analyser/Dynamic/MultiMachine/Implementation/MultiResettable.cpp
 	Analyser/Dynamic/MultiMachine/Implementation/MultiSpeaker.cpp
 	Analyser/Dynamic/MultiMachine/MultiMachine.cpp
 	Analyser/Static/Acorn/Disk.cpp
@@ -35,6 +36,8 @@ set(CLK_SOURCES
 	Analyser/Static/Oric/Tape.cpp
 	Analyser/Static/PCCompatible/StaticAnalyser.cpp
 	Analyser/Static/Sega/StaticAnalyser.cpp
+	Analyser/Static/TandyCoCo/StaticAnalyser.cpp
+	Analyser/Static/Thomson/StaticAnalyser.cpp
 	Analyser/Static/StaticAnalyser.cpp
 	Analyser/Static/ZX8081/StaticAnalyser.cpp
 	Analyser/Static/ZXSpectrum/StaticAnalyser.cpp
@@ -43,6 +46,7 @@ set(CLK_SOURCES
 	Components/5380/ncr5380.cpp
 	Components/6522/Implementation/IRQDelegatePortHandler.cpp
 	Components/6560/6560.cpp
+	Components/6847/6847.cpp
 	Components/6850/6850.cpp
 	Components/68901/MFP68901.cpp
 	Components/8272/i8272.cpp
@@ -78,10 +82,10 @@ set(CLK_SOURCES
 	Machines/Acorn/BBCMicro/BBCMicro.cpp
 	Machines/Acorn/Electron/Electron.cpp
 	Machines/Acorn/Electron/Keyboard.cpp
-	Machines/Acorn/Electron/Plus3.cpp
 	Machines/Acorn/Electron/SoundGenerator.cpp
 	Machines/Acorn/Electron/Tape.cpp
 	Machines/Acorn/Electron/Video.cpp
+	Machines/Acorn/Floppy/1770.cpp
 	Machines/Amiga/Amiga.cpp
 	Machines/Amiga/Audio.cpp
 	Machines/Amiga/Bitplanes.cpp
@@ -150,22 +154,34 @@ set(CLK_SOURCES
 	Machines/Sinclair/ZX8081/Video.cpp
 	Machines/Sinclair/ZX8081/ZX8081.cpp
 	Machines/Sinclair/ZXSpectrum/ZXSpectrum.cpp
+	Machines/Tandy/CoCo/DiskController.cpp
+	Machines/Tandy/CoCo/CoCo.cpp
+	Machines/Thomson/MO/CD90-640.cpp
+	Machines/Thomson/MO/MO.cpp
+	Machines/Thomson/MO/Video.cpp
 	Machines/Utility/MachineForTarget.cpp
 	Machines/Utility/MemoryFuzzer.cpp
 	Machines/Utility/MemoryPacker.cpp
 	Machines/Utility/ROMCatalogue.cpp
+	Machines/Utility/ROMLibrary.cpp
 	Machines/Utility/StringSerialiser.cpp
 	Machines/Utility/Typer.cpp
 
 	Outputs/CRT/CRT.cpp
 	Outputs/DisplayMetrics.cpp
-	Outputs/OpenGL/Primitives/Rectangle.cpp
 	Outputs/OpenGL/Primitives/Shader.cpp
+	Outputs/OpenGL/Primitives/Texture.cpp
 	Outputs/OpenGL/Primitives/TextureTarget.cpp
+	Outputs/OpenGL/Primitives/VertexArray.cpp
+	Outputs/OpenGL/Shaders/CompositionShader.cpp
+	Outputs/OpenGL/Shaders/CopyShader.cpp
+	Outputs/OpenGL/Shaders/KernelShaders.cpp
+	Outputs/OpenGL/Shaders/LineOutputShader.cpp
+	Outputs/OpenGL/Shaders/Rectangle.cpp
 	Outputs/OpenGL/ScanTarget.cpp
-	Outputs/OpenGL/ScanTargetGLSLFragments.cpp
 	Outputs/ScanTarget.cpp
 	Outputs/ScanTargets/BufferingScanTarget.cpp
+	Outputs/ScanTargets/FilterGenerator.cpp
 
 	Processors/6502/Implementation/6502Storage.cpp
 	Processors/6502/State/State.cpp
@@ -192,21 +208,25 @@ set(CLK_SOURCES
 	Storage/Disk/DiskImage/Formats/AcornADF.cpp
 	Storage/Disk/DiskImage/Formats/AmigaADF.cpp
 	Storage/Disk/DiskImage/Formats/AppleDSK.cpp
+	Storage/Disk/DiskImage/Formats/CoCoDSK.cpp
 	Storage/Disk/DiskImage/Formats/CPCDSK.cpp
 	Storage/Disk/DiskImage/Formats/D64.cpp
 	Storage/Disk/DiskImage/Formats/DMK.cpp
 	Storage/Disk/DiskImage/Formats/FAT12.cpp
+	Storage/Disk/DiskImage/Formats/FD.cpp
 	Storage/Disk/DiskImage/Formats/G64.cpp
 	Storage/Disk/DiskImage/Formats/HFE.cpp
 	Storage/Disk/DiskImage/Formats/IMD.cpp
 	Storage/Disk/DiskImage/Formats/IPF.cpp
 	Storage/Disk/DiskImage/Formats/JFD.cpp
 	Storage/Disk/DiskImage/Formats/MFMSectorDump.cpp
+	Storage/Disk/DiskImage/Formats/MOOF.cpp
 	Storage/Disk/DiskImage/Formats/MSA.cpp
 	Storage/Disk/DiskImage/Formats/MacintoshIMG.cpp
 	Storage/Disk/DiskImage/Formats/NIB.cpp
 	Storage/Disk/DiskImage/Formats/OricMFMDSK.cpp
 	Storage/Disk/DiskImage/Formats/PCBooter.cpp
+	Storage/Disk/DiskImage/Formats/SAP.cpp
 	Storage/Disk/DiskImage/Formats/SSD.cpp
 	Storage/Disk/DiskImage/Formats/STX.cpp
 	Storage/Disk/DiskImage/Formats/Utility/ImplicitSectors.cpp
@@ -221,6 +241,7 @@ set(CLK_SOURCES
 	Storage/Disk/Encodings/MFM/Shifter.cpp
 	Storage/Disk/Parsers/CPM.cpp
 	Storage/Disk/Parsers/FAT.cpp
+	Storage/Disk/Parsers/TandyCoCo.cpp
 	Storage/Disk/Track/PCMSegment.cpp
 	Storage/Disk/Track/PCMTrack.cpp
 	Storage/Disk/Track/TrackSerialiser.cpp
@@ -240,9 +261,12 @@ set(CLK_SOURCES
 	Storage/State/SNA.cpp
 	Storage/State/SZX.cpp
 	Storage/State/Z80.cpp
-	Storage/Tape/Formats/CAS.cpp
+	Storage/Tape/Formats/CoCoCAS.cpp
 	Storage/Tape/Formats/CSW.cpp
 	Storage/Tape/Formats/CommodoreTAP.cpp
+	Storage/Tape/Formats/K7.cpp
+	Storage/Tape/Formats/LEP.cpp
+	Storage/Tape/Formats/MSXCAS.cpp
 	Storage/Tape/Formats/OricTAP.cpp
 	Storage/Tape/Formats/TZX.cpp
 	Storage/Tape/Formats/TapePRG.cpp
@@ -254,6 +278,8 @@ set(CLK_SOURCES
 	Storage/Tape/Parsers/MSX.cpp
 	Storage/Tape/Parsers/Oric.cpp
 	Storage/Tape/Parsers/Spectrum.cpp
+	Storage/Tape/Parsers/TandyCoCo.cpp
+	Storage/Tape/Parsers/ThomsonMO.cpp
 	Storage/Tape/Parsers/ZX8081.cpp
 	Storage/Tape/PulseQueuedTape.cpp
 	Storage/Tape/Tape.cpp

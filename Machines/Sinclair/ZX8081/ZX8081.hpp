@@ -20,7 +20,7 @@ namespace Sinclair::ZX8081 {
 /// The ZX80/81 machine.
 struct Machine {
 	virtual ~Machine() = default;
-	static std::unique_ptr<Machine> ZX8081(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	virtual void set_tape_is_playing(bool is_playing) = 0;
 	virtual bool get_tape_is_playing() = 0;
@@ -36,7 +36,7 @@ struct Machine {
 			automatic_tape_motor_control(type == Configurable::OptionsType::UserFriendly) {}
 
 	private:
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {

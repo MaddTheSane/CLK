@@ -17,6 +17,7 @@
 
 #include "Processors/6502Mk2/6502Mk2.hpp"
 
+#include "Machines/Acorn/Floppy/1770.hpp"
 #include "Machines/Acorn/Tube/ULA.hpp"
 #include "Machines/Acorn/Tube/Tube6502.hpp"
 #include "Machines/Acorn/Tube/TubeZ80.hpp"
@@ -28,9 +29,6 @@
 #include "Components/SAA5050/SAA5050.hpp"
 #include "Components/SN76489/SN76489.hpp"
 #include "Components/uPD7002/uPD7002.hpp"
-
-// TODO: factor this more appropriately.
-#include "Machines/Acorn/Electron/Plus3.hpp"
 
 #include "Analyser/Static/Acorn/Target.hpp"
 #include "Outputs/Log.hpp"
@@ -172,7 +170,7 @@ public:
 
 private:
 	void post_time() {
-		speaker_.run_for(audio_queue_, time_since_update_.divide(Cycles(2)));
+		speaker_.run_for(audio_queue_, time_since_update_.divide(2));
 	}
 
 	Concurrency::AsyncTaskQueue<false> audio_queue_;
@@ -871,9 +869,7 @@ public:
 		}
 
 		insert_media(target.media);
-		if(!target.loading_command.empty()) {
-			type_string(target.loading_command);
-		}
+		type_string(target.loading_command);
 	}
 
 	// MARK: - 6502 bus.
@@ -910,7 +906,7 @@ public:
 		//
 		// 1Mhz devices.
 		//
-		const auto half_cycles = HalfCycles(duration.as_integral());
+		const auto half_cycles = HalfCycles(duration.get());
 		system_via_.run_for(half_cycles);
 		system_via_port_handler_.advance_keyboard_scan(half_cycles);
 		user_via_.run_for(half_cycles);
@@ -1105,12 +1101,12 @@ private:
 
 	// MARK: - KeyboardMachine.
 	BBCMicro::KeyboardMapper mapper_;
-	KeyboardMapper *get_keyboard_mapper() override {
+	KeyboardMapper *keyboard_mapper() override {
 		return &mapper_;
 	}
 
 	void set_key_state(const uint16_t key, const bool is_pressed) override {
-		switch(Key(key)) {
+		switch(key) {
 			case Key::SwitchOffCaps:
 				// Store current caps lock state for a potential restore; press caps lock
 				// now if there's a need to exit caps lock mode.
@@ -1150,7 +1146,7 @@ private:
 		}
 	}
 
-	HalfCycles get_typer_delay(const std::string &text) const final {
+	HalfCycles typer_delay(const std::wstring &text) const final {
 		if(!m6502_.is_resetting()) {
 			return Cycles(0);
 		}
@@ -1159,19 +1155,19 @@ private:
 		// empirically this seems to be a requirement, in order to avoid a collision with
 		// the system's built-in modifier-at-startup test (e.g. to perform shift+break).
 		CharacterMapper test_mapper;
-		const uint16_t *const sequence = test_mapper.sequence_for_character(text[0]);
-		return is_modifier(Key(sequence[0])) ? Cycles(1'000'000) : Cycles(750'000);
+		const auto front = test_mapper.sequence_for_character(text[0])[0];
+		return is_modifier(Key::Key(front)) ? Cycles(1'000'000) : Cycles(750'000);
 	}
 
-	HalfCycles get_typer_frequency() const final {
+	HalfCycles typer_frequency() const final {
 		return Cycles(60'000);
 	}
 
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		Utility::TypeRecipient<CharacterMapper>::add_typer(string);
 	}
 
-	bool can_type(const char c) const final {
+	bool can_type(const wchar_t c) const final {
 		return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 	}
 
@@ -1287,7 +1283,7 @@ private:
 	NEC::uPD7002 adc_;
 
 	// MARK: - WD1770.
-	Electron::Plus3 wd1770_;
+	Acorn::Floppy::Floppy1770 wd1770_;
 	void wd1770_did_change_output(WD::WD1770 &) override {
 		m6502_.template set<CPU::MOS6502Mk2::Line::NMI>(
 			wd1770_.get_interrupt_request_line() || wd1770_.get_data_request_line()
@@ -1349,15 +1345,15 @@ std::unique_ptr<Machine> machine(const Target &target, const ROMMachine::ROMFetc
 }
 }
 
-std::unique_ptr<Machine> Machine::BBCMicro(
-	const Analyser::Static::Target *target,
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
 	const ROMMachine::ROMFetcher &rom_fetcher
 ) {
-	const Target *const acorn_target = dynamic_cast<const Target *>(target);
-	switch(acorn_target->tube_processor) {
-		case TubeProcessor::None:		return machine<TubeProcessor::None>(*acorn_target, rom_fetcher);
-		case TubeProcessor::WDC65C02:	return machine<TubeProcessor::WDC65C02>(*acorn_target, rom_fetcher);
-		case TubeProcessor::Z80:		return machine<TubeProcessor::Z80>(*acorn_target, rom_fetcher);
+	const auto &acorn_target = static_cast<const Target &>(target);
+	switch(acorn_target.tube_processor) {
+		case TubeProcessor::None:		return machine<TubeProcessor::None>(acorn_target, rom_fetcher);
+		case TubeProcessor::WDC65C02:	return machine<TubeProcessor::WDC65C02>(acorn_target, rom_fetcher);
+		case TubeProcessor::Z80:		return machine<TubeProcessor::Z80>(acorn_target, rom_fetcher);
 		default:	return nullptr;
 	}
 }

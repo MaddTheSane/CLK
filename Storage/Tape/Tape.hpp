@@ -23,7 +23,7 @@ namespace Storage::Tape {
 struct Pulse {
 	enum Type {
 		High, Low, Zero
-	} type;
+	} type = Type::High;
 	Time length;
 
 	Pulse(Type type, Time length) : type(type), length(length) {}
@@ -129,6 +129,7 @@ public:
 	TapeSerialiser *serialiser();
 
 	void run_for(Cycles);
+	void run_for(Time);		// Converts the Time to an integral number of cycles; some precision is lost.
 	void run_for_input_pulse();
 
 	ClockingHint::Preference preferred_clocking() const override;
@@ -166,6 +167,7 @@ public:
 	bool input() const;
 
 	void run_for(Cycles);
+	void run_for(Time);		// Converts the Time to an integral number of cycles; some precision is lost.
 
 	struct Delegate {
 		virtual void tape_did_change_input(BinaryTapePlayer &) = 0;
@@ -183,6 +185,8 @@ protected:
 	bool motor_is_running_ = false;
 
 	Activity::Observer *observer_ = nullptr;
+	bool observer_lit_ = false;
+	void update_observer();
 };
 
 }

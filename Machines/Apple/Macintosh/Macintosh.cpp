@@ -66,19 +66,22 @@ namespace Apple {
 namespace Macintosh {
 
 template <Analyser::Static::Macintosh::Target::Model model> class ConcreteMachine:
+	public Activity::Source,
+	public ClockingHint::Observer,
+	public Configurable::Device,
+	public CPU::MC68000::BusHandler,
+	public DriveSpeedAccumulator::Delegate,
 	public Machine,
-	public MachineTypes::TimedMachine,
-	public MachineTypes::ScanProducer,
 	public MachineTypes::AudioProducer,
+	public MachineTypes::HardResettable,
+	public MachineTypes::MappedKeyboardMachine,
 	public MachineTypes::MediaTarget,
 	public MachineTypes::MouseMachine,
-	public MachineTypes::MappedKeyboardMachine,
-	public CPU::MC68000::BusHandler,
-	public Zilog::SCC::z8530::Delegate,
-	public Activity::Source,
-	public Configurable::Device,
-	public DriveSpeedAccumulator::Delegate,
-	public ClockingHint::Observer {
+	public MachineTypes::ScanProducer,
+	public MachineTypes::SoftResettable,
+	public MachineTypes::TimedMachine,
+	public Zilog::SCC::z8530::Delegate
+{
 public:
 	using Target = Analyser::Static::Macintosh::Target;
 
@@ -189,6 +192,21 @@ public:
 
 	void run_for(const Cycles cycles) final {
 		mc68000_.run_for(cycles);
+
+		if(soft_reset_) {
+			soft_reset_ = false;
+			update_interrupt_input();
+		}
+	}
+
+	void soft_reset() final {
+		soft_reset_ = true;
+		update_interrupt_input();
+	}
+
+	void hard_reset() final {
+		setup_memory_map();
+		mc68000_.reset();
 	}
 
 	template <typename Microcycle> HalfCycles perform_bus_operation(const Microcycle &cycle, int) {
@@ -383,7 +401,7 @@ public:
 		iwm_.flush();
 	}
 
-	void set_rom_is_overlay(bool rom_is_overlay) {
+	void set_rom_is_overlay(const bool rom_is_overlay) {
 		ROM_is_overlay_ = rom_is_overlay;
 
 		using Model = Analyser::Static::Macintosh::Target::Model;
@@ -466,7 +484,7 @@ public:
 
 	// MARK: Keyboard input.
 
-	KeyboardMapper *get_keyboard_mapper() final {
+	KeyboardMapper *keyboard_mapper() final {
 		return &keyboard_mapper_;
 	}
 
@@ -485,7 +503,9 @@ public:
 	void update_interrupt_input() {
 		// Update interrupt input.
 		// TODO: does this really cascade like this?
-		if(scc_.get_interrupt_line()) {
+		if(soft_reset_) {
+			mc68000_.set_interrupt_level(7);
+		} else if(scc_.get_interrupt_line()) {
 			mc68000_.set_interrupt_level(2);
 		} else if(via_.get_interrupt_line()) {
 			mc68000_.set_interrupt_level(1);
@@ -556,7 +576,7 @@ private:
 	forceinline void advance_time(HalfCycles duration) {
 		time_since_video_update_ += duration;
 		iwm_ += duration;
-		ram_subcycle_ = (ram_subcycle_ + duration.as_integral()) & 15;
+		ram_subcycle_ = (ram_subcycle_ + duration.get()) & 15;
 
 		// The VIA runs at one-tenth of the 68000's clock speed, in sync with the E clock.
 		// See: Guide to the Macintosh Hardware Family p149 (PDF p188). Some extra division
@@ -565,7 +585,7 @@ private:
 		// Possibly route vsync.
 		if(time_since_video_update_ < time_until_video_event_) {
 			via_clock_ += duration;
-			via_.run_for(via_clock_.divide(HalfCycles(10)));
+			via_.run_for(via_clock_.divide(10));
 		} else {
 			auto via_time_base = time_since_video_update_ - duration;
 			auto via_cycles_outstanding = duration;
@@ -575,7 +595,7 @@ private:
 				via_cycles_outstanding -= via_cycles;
 
 				via_clock_ += via_cycles;
-				via_.run_for(via_clock_.divide(HalfCycles(10)));
+				via_.run_for(via_clock_.divide(10));
 
 				video_.run_for(time_until_video_event_);
 				time_since_video_update_ -= time_until_video_event_;
@@ -585,7 +605,7 @@ private:
 			}
 
 			via_clock_ += via_cycles_outstanding;
-			via_.run_for(via_clock_.divide(HalfCycles(10)));
+			via_.run_for(via_clock_.divide(10));
 		}
 
 		// The keyboard also has a clock, albeit a very slow one — 100,000 cycles/second.
@@ -601,7 +621,7 @@ private:
 		// Feed mouse inputs within at most 1250 cycles of each other.
 		if(mouse_.has_steps()) {
 			time_since_mouse_update_ += duration;
-			const auto mouse_ticks = time_since_mouse_update_.divide(HalfCycles(2500));
+			const auto mouse_ticks = time_since_mouse_update_.divide(2500);
 			if(mouse_ticks > HalfCycles(0)) {
 				mouse_.prepare_step();
 				scc_.set_dcd(0, mouse_.get_channel(1) & 1);
@@ -614,7 +634,7 @@ private:
 
 		// Consider updating the real-time clock.
 		real_time_clock_ += duration;
-		auto ticks = real_time_clock_.divide_cycles(Cycles(CLOCK_RATE)).as_integral();
+		auto ticks = real_time_clock_.divide<Cycles>(CLOCK_RATE).get();
 		while(ticks--) {
 			clock_.update();
 			// TODO: leave a delay between toggling the input rather than using this coupled hack.
@@ -663,10 +683,10 @@ private:
 							b3:	0 = use alternate sound buffer, 1 = use ordinary sound buffer
 							b2–b0:	audio output volume
 					*/
-					iwm_->set_select(!!(value & 0x20));
+					iwm_->set_select(value & 0x20);
 
 					machine_.set_use_alternate_buffers(!(value & 0x40), !(value&0x08));
-					machine_.set_rom_is_overlay(!!(value & 0x10));
+					machine_.set_rom_is_overlay(value & 0x10);
 
 					audio_.flush();
 					audio_.audio.set_volume(value & 7);
@@ -685,7 +705,7 @@ private:
 							b0:	clock's serial data line
 					*/
 					if(value & 0x4) clock_.abort();
-					else clock_.set_input(!!(value & 0x2), !!(value & 0x1));
+					else clock_.set_input(value & 0x2, value & 0x1);
 
 					audio_.flush();
 					audio_.audio.set_enabled(!(value & 0x80));
@@ -731,7 +751,7 @@ private:
 		void run_for(HalfCycles duration) {
 			// The 6522 enjoys a divide-by-ten, so multiply back up here to make the
 			// divided-by-two clock the audio works on.
-			audio_.time_since_update += HalfCycles(duration.as_integral() * 5);
+			audio_.time_since_update += HalfCycles(duration.get() * 5);
 		}
 
 		void flush() {
@@ -770,6 +790,7 @@ private:
 	NCR::NCR5380::NCR5380 scsi_;
 	SCSI::Target::Target<SCSI::DirectAccessDevice> hard_drive_;
 	bool scsi_bus_is_clocked_ = false;
+	bool soft_reset_ = false;
 
 	HalfCycles via_clock_;
 	HalfCycles real_time_clock_;
@@ -842,15 +863,19 @@ private:
 
 using namespace Apple::Macintosh;
 
-std::unique_ptr<Machine> Machine::Macintosh(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	auto *const mac_target = dynamic_cast<const Analyser::Static::Macintosh::Target *>(target);
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	const auto &mac_target = static_cast<const Analyser::Static::Macintosh::Target &>(target);
 
-	using Model = Analyser::Static::Macintosh::Target::Model;
-	switch(mac_target->model) {
+	switch(mac_target.model) {
+		using enum Analyser::Static::Macintosh::Target::Model;
+
 		default:
-		case Model::Mac128k:	return std::make_unique<ConcreteMachine<Model::Mac128k>>(*mac_target, rom_fetcher);
-		case Model::Mac512k:	return std::make_unique<ConcreteMachine<Model::Mac512k>>(*mac_target, rom_fetcher);
-		case Model::Mac512ke:	return std::make_unique<ConcreteMachine<Model::Mac512ke>>(*mac_target, rom_fetcher);
-		case Model::MacPlus:	return std::make_unique<ConcreteMachine<Model::MacPlus>>(*mac_target, rom_fetcher);
+		case Mac128k:	return std::make_unique<ConcreteMachine<Mac128k>>(mac_target, rom_fetcher);
+		case Mac512k:	return std::make_unique<ConcreteMachine<Mac512k>>(mac_target, rom_fetcher);
+		case Mac512ke:	return std::make_unique<ConcreteMachine<Mac512ke>>(mac_target, rom_fetcher);
+		case MacPlus:	return std::make_unique<ConcreteMachine<MacPlus>>(mac_target, rom_fetcher);
 	}
 }

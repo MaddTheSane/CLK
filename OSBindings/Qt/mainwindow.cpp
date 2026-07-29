@@ -14,8 +14,9 @@
 #include <cstdio>
 #include <memory>
 
-#include "../../Numeric/CRC.hpp"
 #include "../../Configurable/StandardOptions.hpp"
+#include "../../Machines/Utility/ROMLibrary.hpp"
+#include "../../Numeric/CRC.hpp"
 
 namespace {
 
@@ -280,6 +281,14 @@ void MainWindow::launchMachine() {
 					}
 				}
 			}
+
+			// Fallback: check the ROM library.
+			if(results.find(description.name) == results.end()) {
+				auto data = ROM::included_rom_image(description.name);
+				if(data.has_value()) {
+					results[description.name] = std::move(*data);
+				}
+			}
 		}
 
 		missingRoms = roms.subtract(results);
@@ -315,7 +324,7 @@ void MainWindow::launchMachine() {
 	// Install audio output if required.
 	const auto audio_producer = machine->audio_producer();
 	if(audio_producer) {
-		static constexpr size_t samplesPerBuffer = 256;	// TODO: select this dynamically.
+		static constexpr size_t samplesPerBuffer = 1024;	// TODO: select this dynamically.
 		const auto speaker = audio_producer->get_speaker();
 		if(speaker) {
 			QAudioDevice device(QMediaDevices::defaultAudioOutput());
@@ -325,11 +334,10 @@ void MainWindow::launchMachine() {
 				// Use the ideal format's sample rate, provide stereo as long as at least two channels
 				// are available, and — at least for now — assume a good buffer size.
 				audioIsStereo = (idealFormat.channelCount() > 1) && speaker->get_is_stereo();
+				const auto channelCount = 1 + int(audioIsStereo);
 
-				audioIs8bit = idealFormat.sampleFormat() == QAudioFormat::UInt8;
-
-				idealFormat.setChannelCount(1 + int(audioIsStereo));
-				idealFormat.setSampleFormat(audioIs8bit ? QAudioFormat::UInt8 : QAudioFormat::Int16);
+				idealFormat.setChannelCount(channelCount);
+				idealFormat.setSampleFormat(QAudioFormat::Int16);
 
 				speaker->set_output_rate(idealFormat.sampleRate(), samplesPerBuffer, audioIsStereo);
 				speaker->set_delegate(this);
@@ -341,7 +349,7 @@ void MainWindow::launchMachine() {
 
 					// Start the output. The additional `audioBuffer` is meant to minimise latency,
 					// believe it or not, given Qt's semantics.
-					audioOutput->setBufferSize(samplesPerBuffer * sizeof(int16_t));
+					audioOutput->setBufferSize(samplesPerBuffer * sizeof(int16_t) * channelCount);
 					audioOutput->start(&audioBuffer);
 					audioBuffer.setDepth(audioOutput->bufferSize());
 				});
@@ -373,7 +381,7 @@ void MainWindow::launchMachine() {
 	// Add an 'input' menu if justified (i.e. machine has both a keyboard and joystick input, and the keyboard is exclusive).
 	auto keyboardMachine = machine->keyboard_machine();
 	auto joystickMachine = machine->joystick_machine();
-	if(keyboardMachine && joystickMachine && keyboardMachine->get_keyboard().is_exclusive()) {
+	if(keyboardMachine && joystickMachine && keyboardMachine->keyboard().is_exclusive()) {
 		inputMenu = menuBar()->addMenu(tr("&Input"));
 
 		QAction *const asKeyboardAction = new QAction(tr("Use Keyboard as Keyboard"), this);
@@ -400,6 +408,32 @@ void MainWindow::launchMachine() {
 	}
 	keyboardInputMode = keyboardMachine ? KeyboardInputMode::Keyboard : KeyboardInputMode::Joystick;
 
+	// Add a 'reset' menu, possibly.
+	auto softResettable = machine->soft_resettable();
+	auto hardResettable = machine->hard_resettable();
+	if(softResettable || hardResettable) {
+		resetMenu = menuBar()->addMenu(tr("&Reset"));
+
+		if(softResettable) {
+			QAction *const softResetAction = new QAction(tr("Soft"), this);
+			softResetAction->setShortcuts(QKeySequence::Refresh);
+			resetMenu->addAction(softResetAction);
+			connect(softResetAction, &QAction::triggered, this, [=, this] {
+				auto softResettable = machine->soft_resettable();
+				if(softResettable) softResettable->soft_reset();
+			});
+		}
+
+		if(hardResettable) {
+			QAction *const hardResetAction = new QAction(tr("Hard"), this);
+			resetMenu->addAction(hardResetAction);
+			connect(hardResetAction, &QAction::triggered, this, [=, this] {
+				auto hardResettable = machine->hard_resettable();
+				if(hardResettable) hardResettable->hard_reset();
+			});
+		}
+	}
+
 	// Add machine-specific UI.
 	const std::string settingsPrefix = Machine::ShortNameForTargetMachine(machineType);
 	auto configurableMachine = machine->configurable_device();
@@ -413,7 +447,6 @@ void MainWindow::launchMachine() {
 				const auto name = Reflection::Enum::to_string<Configurable::Display>(option);
 				return std::find(allDisplayValues.begin(), allDisplayValues.end(), name) != allDisplayValues.end();
 			};
-
 
 			const bool hasCompositeColour = contains(Configurable::Display::CompositeColour);
 			const bool hasCompositeMonochrome = contains(Configurable::Display::CompositeMonochrome);
@@ -554,7 +587,7 @@ void MainWindow::addDisplayMenu(
 		action->setChecked(displaySelection == defaultDisplay);
 		connect(action, &QAction::triggered, this, [=, this] {
 			for(auto otherAction: {compositeColourAction, compositeMonochromeAction, sVideoAction, rgbAction}) {
-				if(otherAction && otherAction != action) otherAction->setChecked(false);
+				if(otherAction) otherAction->setChecked(otherAction == action);
 			}
 
 			Settings settings;
@@ -939,7 +972,7 @@ bool MainWindow::processEvent(QKeyEvent *const event) {
 			const auto keyboardMachine = machine->keyboard_machine();
 			if(!keyboardMachine) return true;
 
-			auto &keyboard = keyboardMachine->get_keyboard();
+			auto &keyboard = keyboardMachine->keyboard();
 			const auto text = event->text();
 			keyboard.set_key_pressed(*key, event->text().size() ? text[0].toLatin1() : '\0', isPressed, event->isAutoRepeat());
 			if(keyboard.is_exclusive() || keyboard.observed_keys().find(*key) != keyboard.observed_keys().end()) {
@@ -1016,6 +1049,8 @@ void MainWindow::setButtonPressed(const int index, const bool isPressed) {
 #include "../../Analyser/Static/MSX/Target.hpp"
 #include "../../Analyser/Static/Oric/Target.hpp"
 #include "../../Analyser/Static/PCCompatible/Target.hpp"
+#include "../../Analyser/Static/TandyCoCo/Target.hpp"
+#include "../../Analyser/Static/Thomson/Target.hpp"
 #include "../../Analyser/Static/ZX8081/Target.hpp"
 #include "../../Analyser/Static/ZXSpectrum/Target.hpp"
 
@@ -1274,6 +1309,29 @@ void MainWindow::start_spectrum() {
 	launchTarget(std::move(target));
 }
 
+void MainWindow::start_tandyCoCo() {
+	using Target = Analyser::Static::TandyCoCo::Target;
+	auto target = std::make_unique<Target>();
+	switch(ui->tandyCoCoMemorySizeComboBox->currentIndex()) {
+		default:	target->memory_size = Target::MemorySize::ThirtyTwoKB;		break;
+		case 1:		target->memory_size = Target::MemorySize::SixtyFourKB;		break;
+	}
+	target->has_disk_drive = ui->tandyCoCoDiskDriveCheckBox->isChecked();
+	launchTarget(std::move(target));
+}
+
+void MainWindow::start_thomson() {
+	using Target = Analyser::Static::Thomson::MOTarget;
+	auto target = std::make_unique<Target>();
+	switch(ui->thomsonModelComboBox->currentIndex()) {
+		default:	target->model = Target::Model::MO5v11;		break;
+		case 1:		target->model = Target::Model::MO6v3;		break;
+		case 2:		target->model = Target::Model::Prodest128;	break;
+	}
+	target->floppy = ui->thomsonDiskDriveCheckBox->isChecked() ? Target::Floppy::CD90_640 : Target::Floppy::None;
+	launchTarget(std::move(target));
+}
+
 void MainWindow::start_plus4() {
 	using Target = Analyser::Static::Commodore::Plus4Target;
 	auto target = std::make_unique<Target>();
@@ -1411,6 +1469,14 @@ void MainWindow::processAllSettings() {
 	/* PC Compatible. */
 	applier(ui->pcSpeedComboBox, "pc.speed");
 	applier(ui->pcVideoAdaptorComboBox, "pc.videoAdaptor");
+
+	/* Tandy CoCo. */
+	applier(ui->tandyCoCoMemorySizeComboBox, "tandy.memorySize");
+	applier(ui->tandyCoCoDiskDriveCheckBox, "tandy.hasDiskDrive");
+
+	/* Thomson. */
+	applier(ui->thomsonModelComboBox, "thomson.model");
+	applier(ui->thomsonDiskDriveCheckBox, "thomson.hasDiskDrive");
 
 	/* Vic-20 */
 	applier(ui->vic20RegionComboBox, "vic20.region");

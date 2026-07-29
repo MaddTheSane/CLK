@@ -32,10 +32,10 @@ FileHolder::FileHolder(const std::string &file_name, const FileMode ideal_mode)
 		case FileMode::ReadWrite:
 			file_ = std::fopen(file_name.c_str(), "rb+");
 			if(file_) break;
-			is_read_only_ = true;
 			[[fallthrough]];
 
 		case FileMode::Read:
+			is_read_only_ = true;
 			file_ = std::fopen(file_name.c_str(), "rb");
 		break;
 
@@ -73,7 +73,7 @@ std::size_t FileHolder::write(const std::vector<uint8_t> &buffer) {
 	return std::fwrite(buffer.data(), 1, buffer.size(), file_);
 }
 
-std::size_t FileHolder::write(const uint8_t *buffer, const std::size_t size) {
+std::size_t FileHolder::write(const void *buffer, const std::size_t size) {
 	return std::fwrite(buffer, 1, size, file_);
 }
 

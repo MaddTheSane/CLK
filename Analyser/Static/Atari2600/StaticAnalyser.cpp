@@ -23,7 +23,7 @@ static void DeterminePagingFor2kCartridge(Target &target, const Storage::Cartrid
 	// A CommaVid start address needs to be outside of its RAM.
 	if(entry_address < 0x1800 || break_address < 0x1800) return;
 
-	std::function<std::size_t(uint16_t address)> high_location_mapper = [](uint16_t address) {
+	auto high_location_mapper = [](uint16_t address) {
 		address &= 0x1fff;
 		return size_t(address - 0x1800);
 	};
@@ -203,7 +203,7 @@ Analyser::Static::TargetList Analyser::Static::Atari2600::GetTargets(
 
 	// try to figure out the paging scheme
 	if(!media.cartridges.empty()) {
-		const auto &segments = media.cartridges.front()->get_segments();
+		const auto &segments = media.cartridges.front()->segments();
 
 		if(segments.size() == 1) {
 			const Storage::Cartridge::Cartridge::Segment &segment = segments.front();

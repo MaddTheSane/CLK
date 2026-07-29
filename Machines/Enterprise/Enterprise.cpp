@@ -95,6 +95,7 @@ template <
 	public MachineTypes::MappedKeyboardMachine,
 	public MachineTypes::MediaTarget,
 	public MachineTypes::ScanProducer,
+	public MachineTypes::SoftResettable,
 	public MachineTypes::TimedMachine,
 	public Utility::TypeRecipient<CharacterMapper> {
 private:
@@ -273,9 +274,7 @@ public:
 
 		// Pass on any media.
 		insert_media(target.media);
-		if(!target.loading_command.empty()) {
-			type_string(target.loading_command);
-		}
+		type_string(target.loading_command);
 
 		// Ensure the splash screen is automatically skipped if any media has been provided.
 		if(!target.media.empty()) {
@@ -291,7 +290,7 @@ public:
 	// MARK: - Z80::BusHandler.
 	forceinline void advance_nick(const HalfCycles duration) {
 		if(nick_ += duration) {
-			const auto nick = nick_.last_valid();
+			const auto nick = nick_.get();
 			const bool nick_interrupt_line = nick->get_interrupt_line();
 			if(nick_interrupt_line && !previous_nick_interrupt_line_) {
 				set_interrupts(uint8_t(Dave::Interrupt::Nick), nick_.last_sequence_point_overrun());
@@ -333,7 +332,7 @@ public:
 					// Query Nick for the amount of delay that would occur with one cycle left
 					// in this read opcode.
 					const auto delay_time = nick_.time_since_flush(HalfCycles(2));
-					const auto delay = nick_.last_valid()->get_time_until_z80_slot(delay_time);
+					const auto delay = nick_.get()->get_time_until_z80_slot(delay_time);
 					penalty = nick_.back_map(delay, delay_time);
 				} else if(wait_mode_ != WaitMode::None) {
 					penalty = dave_delay_;
@@ -354,7 +353,7 @@ public:
 					// Get delay, in Nick cycles, for a Z80 access that occurs in 0.5
 					// cycles from now (i.e. with one cycle left to run).
 					const auto delay_time = nick_.time_since_flush(HalfCycles(1));
-					const auto delay = nick_.last_valid()->get_time_until_z80_slot(delay_time);
+					const auto delay = nick_.get()->get_time_until_z80_slot(delay_time);
 					penalty = nick_.back_map(delay, delay_time);
 				}
 			break;
@@ -365,7 +364,7 @@ public:
 					// Get delay, in Nick cycles, for a Z80 access that occurs in 0.5
 					// cycles from now (i.e. with one cycle left to run).
 					const auto delay_time = nick_.time_since_flush(HalfCycles(1));
-					const auto delay = nick_.last_valid()->get_time_until_z80_slot(delay_time);
+					const auto delay = nick_.get()->get_time_until_z80_slot(delay_time);
 					penalty = nick_.back_map(delay, delay_time);
 				}
 			}
@@ -375,12 +374,12 @@ public:
 		time_since_audio_update_ += full_length;
 		advance_nick(full_length);
 		if(dave_timer_ += full_length) {
-			set_interrupts(dave_timer_.last_valid()->get_new_interrupts(), dave_timer_.last_sequence_point_overrun());
+			set_interrupts(dave_timer_.get()->get_new_interrupts(), dave_timer_.last_sequence_point_overrun());
 		}
 
 		// The WD/etc runs at a nominal 8Mhz.
 		if constexpr (has_disk_controller) {
-			exdos_.run_for(Cycles(full_length.as_integral()));
+			exdos_.run_for(Cycles(full_length.get()));
 		}
 
 		switch(cycle.operation) {
@@ -568,13 +567,6 @@ public:
 			break;
 
 			case PartialMachineCycle::ReadOpcode:
-				{
-					static bool print_opcode = false;
-					if(print_opcode) {
-						printf("%04x: %02x\n", address, read_pointers_[address >> 14][address]);
-					}
-				}
-
 				// Potential segue for the host FS. I'm relying on branch prediction to
 				// avoid this cost almost always.
 				if(test_host_fs_traps_ && (address >> 14) == 3) [[unlikely]] {
@@ -732,19 +724,19 @@ private:
 	// MARK: - ScanProducer
 
 	void set_scan_target(Outputs::Display::ScanTarget *const scan_target) override {
-		nick_.last_valid()->set_scan_target(scan_target);
+		nick_.get()->set_scan_target(scan_target);
 	}
 
 	Outputs::Display::ScanStatus get_scaled_scan_status() const override {
-		return nick_.last_valid()->get_scaled_scan_status();
+		return nick_.get()->get_scaled_scan_status();
 	}
 
 	void set_display_type(const Outputs::Display::DisplayType display_type) final {
-		nick_.last_valid()->set_display_type(display_type);
+		nick_.get()->set_display_type(display_type);
 	}
 
 	Outputs::Display::DisplayType get_display_type() const final {
-		return nick_.last_valid()->get_display_type();
+		return nick_.get()->get_display_type();
 	}
 
 	// MARK: - AudioProducer
@@ -758,9 +750,19 @@ private:
 		z80_.run_for(cycles);
 	}
 
+	// MARK: - Resettable.
+
+	void soft_reset() override {
+		page<0>(0x00);
+		page<1>(0x00);
+		page<2>(0x00);
+		page<3>(0x00);
+		z80_.set_power_on_reset();
+	}
+
 	// MARK: - KeyboardMachine
 	Enterprise::KeyboardMapper keyboard_mapper_;
-	KeyboardMapper *get_keyboard_mapper() final {
+	KeyboardMapper *keyboard_mapper() final {
 		return &keyboard_mapper_;
 	}
 
@@ -779,7 +781,7 @@ private:
 	}
 
 	// MARK: - Utility::TypeRecipient
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		Utility::TypeRecipient<CharacterMapper>::add_typer(string);
 
 		if(z80_.get_is_resetting()) {
@@ -791,7 +793,7 @@ private:
 		}
 	}
 
-	bool can_type(const char c) const final {
+	bool can_type(const wchar_t c) const final {
 		return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 	}
 
@@ -841,7 +843,10 @@ private:
 	static constexpr int dave_divider = 8;
 	JustInTimeActor<Dave::TimedInterruptSource, HalfCycles, 1, dave_divider> dave_timer_;
 	inline void update_audio() {
-		speaker_.run_for(audio_queue_, time_since_audio_update_.divide_cycles(Cycles(dave_divider)));
+		speaker_.run_for(
+			audio_queue_,
+			time_since_audio_update_.divide<Cycles>(dave_divider)
+		);
 	}
 
 	// MARK: - EXDos card.
@@ -994,12 +999,12 @@ std::unique_ptr<Machine> machine(
 
 }
 
-std::unique_ptr<Machine> Machine::Enterprise(
-	const Analyser::Static::Target *const target,
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
 	const ROMMachine::ROMFetcher &rom_fetcher
 ) {
 	using Target = Analyser::Static::Enterprise::Target;
-	const Target &enterprise_target = *dynamic_cast<const Target *>(target);
+	const auto &enterprise_target = static_cast<const Target &>(target);
 
 	if(enterprise_target.dos != Target::DOS::None) {
 		return machine<true>(enterprise_target, rom_fetcher);

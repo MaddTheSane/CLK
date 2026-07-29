@@ -28,6 +28,8 @@ enum class Machine {
 	Oric,
 	Plus4,
 	PCCompatible,
+	TandyCoCo,
+	ThomsonMO,
 	Vic20,
 	ZX8081,
 	ZXSpectrum,

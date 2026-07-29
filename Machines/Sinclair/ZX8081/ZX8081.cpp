@@ -251,7 +251,9 @@ public:
 				}
 
 				if(should_autorun_ && address == finished_load_address_) {
-					type_string(is_zx81 ? "r \n" : "r\n ");	// Spaces here are not especially scientific; they merely ensure sufficient pauses for both the ZX80 and 81, empirically.
+					// Spaces here are not especially scientific; they merely ensure
+					// sufficient pauses for both the ZX80 and 81, empirically.
+					type_string(is_zx81 ? L"r \n" : L"r\n ");
 					should_autorun_ = false;
 				}
 
@@ -330,11 +332,11 @@ public:
 		return !media.tapes.empty();
 	}
 
-	void type_string(const std::string &string) final {
+	void type_string(const std::wstring &string) final {
 		Utility::TypeRecipient<CharacterMapper>::add_typer(string);
 	}
 
-	bool can_type(char c) const final {
+	bool can_type(const wchar_t c) const final {
 		return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 	}
 
@@ -369,15 +371,15 @@ public:
 	}
 
 	// MARK: - Typer timing
-	HalfCycles get_typer_delay(const std::string &) const final {
+	HalfCycles typer_delay(const std::wstring &) const final {
 		return z80_.get_is_resetting() ? Cycles(7'000'000) : Cycles(0);
 	}
 
-	HalfCycles get_typer_frequency() const final {
+	HalfCycles typer_frequency() const final {
 		return Cycles(159'961);
 	}
 
-	KeyboardMapper *get_keyboard_mapper() final {
+	KeyboardMapper *keyboard_mapper() final {
 		return &keyboard_mapper_;
 	}
 
@@ -432,7 +434,7 @@ private:
 	Sinclair::ZX::Keyboard::Keyboard keyboard_;
 	Sinclair::ZX::Keyboard::KeyboardMapper keyboard_mapper_;
 
-	HalfClockReceiver<Storage::Tape::BinaryTapePlayer> tape_player_;
+	ConvertedClockReceiver<Storage::Tape::BinaryTapePlayer, HalfCycles, Cycles> tape_player_;
 	Storage::Tape::ZX8081::Parser parser_;
 
 	bool nmi_is_enabled_ = false;
@@ -486,7 +488,7 @@ private:
 		return GI::AY38910::Utility::read(ay_);
 	}
 	inline void update_audio() {
-		speaker_.run_for(audio_queue_, time_since_ay_update_.divide_cycles(Cycles(2)));
+		speaker_.run_for(audio_queue_, time_since_ay_update_.divide<Cycles>(2));
 	}
 };
 
@@ -496,10 +498,13 @@ private:
 using namespace Sinclair::ZX8081;
 
 // See header; constructs and returns an instance of the ZX80 or 81.
-std::unique_ptr<Machine> Machine::ZX8081(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	const auto zx_target = dynamic_cast<const Analyser::Static::ZX8081::Target *>(target);
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	const auto &zx_target = static_cast<const Analyser::Static::ZX8081::Target &>(target);
 
 	// Instantiate the correct type of machine.
-	if(zx_target->is_ZX81)	return std::make_unique<ConcreteMachine<true>>(*zx_target, rom_fetcher);
-	else					return std::make_unique<ConcreteMachine<false>>(*zx_target, rom_fetcher);
+	if(zx_target.is_ZX81)	return std::make_unique<ConcreteMachine<true>>(zx_target, rom_fetcher);
+	else					return std::make_unique<ConcreteMachine<false>>(zx_target, rom_fetcher);
 }

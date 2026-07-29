@@ -148,7 +148,7 @@ Outputs::Display::ScanStatus TIA::get_scaled_scan_status() const {
 }
 
 void TIA::run_for(const Cycles cycles) {
-	int number_of_cycles = int(cycles.as_integral());
+	auto number_of_cycles = cycles.as<int>();
 
 	// if part way through a line, definitely perform a partial, at most up to the end of the line
 	if(horizontal_counter_) {
@@ -181,7 +181,7 @@ void TIA::reset_horizontal_counter() {
 }
 
 int TIA::get_cycles_until_horizontal_blank(const Cycles from_offset) {
-	return (cycles_per_line - (horizontal_counter_ + from_offset.as_integral()) % cycles_per_line) % cycles_per_line;
+	return (cycles_per_line - (horizontal_counter_ + from_offset.get()) % cycles_per_line) % cycles_per_line;
 }
 
 void TIA::set_background_colour(uint8_t colour) {
@@ -196,7 +196,7 @@ void TIA::set_colour_palette_entry(size_t index, uint8_t colour) {
 	if(tv_standard_ == OutputMode::NTSC) {
 		if(!phase) phase = 255;
 		else {
-			phase = -(phase * 127) / 13;
+			phase = uint8_t(-(phase * 127) / 13);
 			phase -= 102;
 			phase &= 127;
 		}
@@ -563,8 +563,8 @@ void TIA::draw_playfield(int start, int end) {
 	// proceed along four-pixel boundaries, plotting four pixels at a time
 	int aligned_position = (start + 3)&~3;
 	while(aligned_position < end) {
-		int offset = (aligned_position - first_pixel_cycle) >> 2;
-		uint32_t value = ((background_[(offset/20)&background_half_mask_] >> (offset%20))&1) * 0x01010101;
+		const int offset = (aligned_position - first_pixel_cycle) >> 2;
+		const uint32_t value = ((background_[(offset/20)&background_half_mask_] >> (offset%20))&1) * 0x01010101;
 		*reinterpret_cast<uint32_t *>(&collision_buffer_[aligned_position - first_pixel_cycle]) |= value;
 		aligned_position += 4;
 	}

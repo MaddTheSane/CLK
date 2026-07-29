@@ -33,7 +33,7 @@ Vic20CartridgesFrom(const std::vector<std::shared_ptr<Storage::Cartridge::Cartri
 	std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>> vic20_cartridges;
 
 	for(const auto &cartridge : cartridges) {
-		const auto &segments = cartridge->get_segments();
+		const auto &segments = cartridge->segments();
 
 		// Only one mapped item is allowed ...
 		if(segments.size() != 1) continue;
@@ -163,9 +163,9 @@ std::optional<BASICAnalysis> analyse(const File &file) {
 template <typename TargetT>
 void set_loading_command(TargetT &target) {
 	if(target.media.disks.empty()) {
-		target.loading_command = "LOAD\"\",1,1\nRUN\n";
+		target.loading_command = L"LOAD\"\",1,1\nRUN\n";
 	} else {
-		target.loading_command = "LOAD\"*\",8,1\nRUN\n";
+		target.loading_command = L"LOAD\"*\",8,1\nRUN\n";
 	}
 }
 
@@ -240,8 +240,8 @@ FileAnalysis analyse_files(const Analyser::Static::Media &media) {
 	return analysis;
 }
 
-std::string loading_command(const FileAnalysis &file_analysis) {
-	std::ostringstream string_stream;
+std::wstring loading_command(const FileAnalysis &file_analysis) {
+	std::wostringstream string_stream;
 	string_stream << "LOAD\"" << (file_analysis.is_disk ? "*" : "") << "\"," << file_analysis.device;
 
 	const auto analysis = analyse(file_analysis.files[0]);

@@ -10,10 +10,11 @@
 
 #include "Outputs/ScanTarget.hpp"
 #include "Outputs/DisplayMetrics.hpp"
+#include "Concurrency/SpinLock.hpp"
+#include "Numeric/CircularCounter.hpp"
 
 #include <array>
 #include <atomic>
-#include <functional>
 #include <mutex>
 #include <vector>
 
@@ -52,12 +53,12 @@ public:
 		Outputs::Display::ScanTarget::Scan scan;
 
 		/// Stores the y coordinate for this scan's data within the write area texture.
-		/// Use this plus the scan's endpoints' data_offsets to locate this data in 2d.
-		/// Note that the data_offsets will have been adjusted to be relative to the line
+		/// Use this plus the scan's endpoints' `data_offsets` to locate this data in 2d.
+		/// Note that the `data_offsets` will have been adjusted to be relative to the line
 		/// they fall within, not the data allocation.
 		uint16_t data_y;
 		/// Stores the y coordinate assigned to this scan within the intermediate buffers.
-		/// Use this plus this scan's endpoints' x locations to determine where to composite
+		/// Use this plus this scan's endpoint x locations to determine where to compose
 		/// this data for intermediate processing.
 		uint16_t line;
 	};
@@ -68,13 +69,12 @@ public:
 	struct Line {
 		struct EndPoint {
 			uint16_t x, y;
-			int16_t composite_angle;
 			uint16_t cycles_since_end_of_horizontal_retrace;
 		} end_points[2];
 
-		uint8_t composite_amplitude;
 		uint16_t line;
 	};
+	static_assert(sizeof(Line) == 14);
 
 	/// Provides additional metadata about lines; this is separate because it's unlikely to be of
 	/// interest to the GPU, unlike the fields in Line.
@@ -94,7 +94,7 @@ public:
 	void set_scan_buffer(Scan *buffer, size_t size);
 
 	/// Sets the area of memory to use as line and line metadata buffers.
-	void set_line_buffer(Line *line_buffer, LineMetadata *metadata_buffer, size_t size);
+	void set_line_buffer(Line *line_buffer, size_t size);
 
 	/// Sets a new base address for the texture.
 	/// When called this will flush all existing data and load up the
@@ -104,7 +104,7 @@ public:
 	/// @returns The number of bytes per input sample, as per the latest modals.
 	size_t write_area_data_size() const;
 
-	/// Defines a segment of data now ready for output, consisting of start and endpoints for:
+	/// Defines a segment of data now ready for output, consisting of begin and end endpoints for:
 	///
 	///	(i) the region of the write area that has been modified; if the caller is using shared memory
 	/// for the write area then it can ignore this information;
@@ -114,18 +114,19 @@ public:
 	/// (iii) the number of lines that have been completed.
 	///
 	/// New write areas and scans are exposed only upon completion of the corresponding lines.
-	/// The values indicated by the start point are the first that should be drawn. Those indicated
+	/// The values indicated by the begin point are the first that should be drawn. Those indicated
 	/// by the end point are one after the final that should be drawn.
 	///
-	/// So e.g. start.scan = 23, end.scan = 24 means draw a single scan, index 23.
+	/// So e.g. begin.scan = 23, end.scan = 24 means draw a single scan, index 23.
 	struct OutputArea {
 		struct Endpoint {
 			int write_area_x, write_area_y;
 			size_t scan;
 			size_t line;
+			size_t frame;
 		};
 
-		Endpoint start, end;
+		Endpoint begin, end;
 
 #ifndef NDEBUG
 		size_t counter;
@@ -150,7 +151,11 @@ public:
 
 	/// Performs @c action ensuring that no other @c perform actions, or any
 	/// change to modals, occurs simultaneously.
-	void perform(const std::function<void(void)> &action);
+	template <typename FuncT>
+	void perform(FuncT &&function) {
+		std::lock_guard guard(is_updating_);
+		function();
+	}
 
 	/// @returns new Modals if any have been set since the last call to get_new_modals().
 	///		The caller must be within a @c perform block.
@@ -164,6 +169,77 @@ public:
 	/// Safe to call from any thread.
 	bool has_new_modals() const;
 
+	template <typename OutputFuncT, typename FrameFuncT, typename CountGetT, typename FrameLimitGetT>
+	void output(
+		const OutputArea &area,
+		OutputFuncT &&output,
+		FrameFuncT &&end_frame,
+		CountGetT &&count,
+		FrameLimitGetT &&limit
+	) const {
+		if(count(area.end) == count(area.begin) && area.end.frame == area.begin.frame) {
+			return;
+		}
+
+		if(area.end.frame == area.begin.frame) {
+			output(count(area.begin), count(area.end));
+			return;
+		}
+
+		size_t output_begin = count(area.begin);
+		size_t frame_begin = area.begin.frame;
+		do {
+			if(output_begin != limit(frames_[frame_begin])) {
+				output(output_begin, limit(frames_[frame_begin]));
+				output_begin = limit(frames_[frame_begin]);
+			}
+			end_frame(
+				frames_[frame_begin].previous_was_complete,
+				frames_[frame_begin].field_index,
+				frames_[frame_begin].is_interlaced
+			);
+			++frame_begin;
+			if(frame_begin == frames_.size()) frame_begin = 0;
+		} while(frame_begin != area.end.frame);
+
+		if(output_begin != count(area.end)) {
+			output(output_begin, count(area.end));
+		}
+	}
+
+	template <typename ScanFuncT, typename FrameFuncT>
+	void output_scans(
+		const OutputArea &area,
+		ScanFuncT &&output_scans,
+		FrameFuncT &&end_frame
+	) const {
+		output(
+			area,
+			output_scans,
+			end_frame,
+			[](const auto &endpoint) { return endpoint.scan; },
+			[](const auto &frame) { return frame.first_scan; }
+		);
+	}
+
+	template <typename LineFuncT, typename FrameFuncT>
+	void output_lines(
+		const OutputArea &area,
+		LineFuncT &&output_lines,
+		FrameFuncT &&end_frame
+	) const {
+		output(
+			area,
+			output_lines,
+			end_frame,
+			[](const auto &endpoint) { return endpoint.line; },
+			[](const auto &frame) { return frame.first_line; }
+		);
+	}
+
+	static constexpr float InterframeAlpha = 0.64f;
+	static constexpr float TwoFrameAlpha = 1.0f - (1.0f - InterframeAlpha) * (1.0f - InterframeAlpha);
+
 private:
 	// ScanTarget overrides.
 	void set_modals(Modals) final;
@@ -173,6 +249,7 @@ private:
 	void end_data(size_t actual_length) final;
 	void announce(Event event, bool is_visible, const Outputs::Display::ScanTarget::Scan::EndPoint &location, uint8_t colour_burst_amplitude) final;
 	void will_change_owner() final;
+	void set_delegate(Delegate &) final;
 
 	// Uses a texture to vend write areas.
 	uint8_t *write_area_ = nullptr;
@@ -196,53 +273,15 @@ private:
 	bool frame_is_complete_ = true;
 	bool previous_frame_was_complete_ = true;
 
-	// By convention everything in the PointerSet points to the next instance
-	// of whatever it is that will be used. So a client should start with whatever
-	// is pointed to by the read pointers and carry until it gets to a value that
-	// is equal to whatever is in the submit pointers.
-	struct PointerSet {
-		// This constructor is here to appease GCC's interpretation of
-		// an ambiguity in the C++ standard; cf. https://stackoverflow.com/questions/17430377
-		PointerSet() noexcept = default;
+	Concurrency::SpinLock<Concurrency::Barrier::AcquireRelease> is_updating_;
 
-		// Squeezing this struct into 64 bits makes the std::atomics more likely
-		// to be lock free; they are under LLVM x86-64.
-
-		// Points to the vended area in the write area texture.
-		// The vended area is always preceded by a guard pixel, so a
-		// sensible default construction is write_area = 1.
-		int32_t write_area = 1;
-
-		// Points into the scan buffer.
-		uint16_t scan = 0;
-
-		// Points into the line buffer.
-		uint16_t line = 0;
-	};
-
-	/// A pointer to the final thing currently cleared for submission.
-	std::atomic<PointerSet> submit_pointers_;
-
-	/// A pointer to the first thing not yet submitted for display; this is
-	/// atomic since it also acts as the buffer into which the write_pointers_
-	/// may run and is therefore used by both producer and consumer.
-	std::atomic<PointerSet> read_pointers_;
-
-	std::atomic<PointerSet> read_ahead_pointers_;
-
-	/// This is used as a spinlock to guard `perform` calls.
-	std::atomic_flag is_updating_;
-
-	/// A mutex for gettng access to anything the producer modifies — i.e. the write_pointers_,
+	/// A lock for gettng access to anything the producer modifies — i.e. the write_pointers_,
 	/// data_type_size_ and write_area_texture_, and all other state to do with capturing
 	/// data, scans and lines.
 	///
 	/// This is almost never contended. The main collision is a user-prompted change of modals while the
 	/// emulation thread is running.
-	std::mutex producer_mutex_;
-
-	/// A pointer to the next thing that should be provided to the caller for data.
-	PointerSet write_pointers_;
+	Concurrency::SpinLock<Concurrency::Barrier::Relaxed> producer_lock_;
 
 	// The owner-supplied scan buffer and size.
 	Scan *scan_buffer_ = nullptr;
@@ -250,7 +289,6 @@ private:
 
 	// The owner-supplied line buffer and size.
 	Line *line_buffer_ = nullptr;
-	LineMetadata *line_metadata_buffer_ = nullptr;
 	size_t line_buffer_size_ = 0;
 
 	// Current modals and whether they've yet been returned
@@ -269,6 +307,74 @@ private:
 	size_t output_area_counter_ = 0;
 	size_t output_area_next_returned_ = 0;
 #endif
+
+	// Frames parts kept separately from the PointerSet as that is subject
+	// to back pressure, meaning that data may be dropped.
+	//
+	// Frames always advance as a simple function of time and have a very
+	// large buffer in terms of clock time.
+	struct Frame {
+		size_t first_scan;			// Index into the scans of the first one in this frame.
+		size_t first_line;			// Index into the lines of the first one in this frame.
+		bool previous_was_complete;	// Indicates whether the frame before this one was 'complete', i.e. there was no
+									// back pressure, all data the emulated machine wanted to publish was published.
+
+		bool is_interlaced;		// Indicates whether the pattern of scans makes it look like the emulated machine is
+								// generating interlaced video. This is detected based on the recent pattern of frames,
+								// so might lag slightly and won't necessarily be known immediately at machine start.
+
+		int field_index;		// Alternates between 0 and 1.
+	};
+	static constexpr uint16_t NumFrames = 60;
+	std::array<Frame, NumFrames> frames_;
+	std::atomic<Numeric::CircularCounter<uint16_t, NumFrames>> frame_read_;
+	std::atomic<Numeric::CircularCounter<uint16_t, NumFrames>> frame_write_;
+
+	// A recent history of field start positions, to allow detection of interlaced video.
+	// That can be used as a hint for display purposes.
+	static constexpr size_t StartHistoryLength = 16;
+	std::array<Outputs::Display::ScanTarget::Scan::EndPoint, StartHistoryLength> start_history_;
+	Numeric::CircularCounter<size_t, StartHistoryLength> start_history_pointer_;
+	bool is_interlaced_ = false;
+	int field_index_ = 0;
+
+	// By convention everything in the PointerSet points to the next instance
+	// of whatever it is that will be used. So a client should start with whatever
+	// is pointed to by the read pointers and carry until it gets to a value that
+	// is equal to whatever is in the submit pointers.
+	struct PointerSet {
+		// This constructor is here to appease GCC's interpretation of
+		// an ambiguity in the C++ standard; cf. https://stackoverflow.com/questions/17430377
+		PointerSet() noexcept = default;
+
+		// Squeezing this struct into 64 bits ensures the std::atomics are lock free
+		// on the platforms and compilers I target.
+
+		// Points to the vended area in the write area texture.
+		// The vended area is always preceded by a guard pixel, so a
+		// sensible default construction is write_area = 1.
+		int32_t write_area = 1;
+
+		// Points into the scan buffer.
+		uint16_t scan = 0;
+
+		// Points into the line buffer.
+		uint16_t line = 0;
+	};
+	static_assert(std::atomic<PointerSet>::is_always_lock_free);
+
+	/// A pointer to the next thing that should be provided to the caller for data.
+	PointerSet write_pointers_;
+
+	/// A pointer to the final thing currently cleared for submission.
+	alignas(64) std::atomic<PointerSet> submit_pointers_;
+
+	/// A pointer to the first thing not yet submitted for display; this is
+	/// atomic since it also acts as the buffer into which the write_pointers_
+	/// may run and is therefore used by both producer and consumer.
+	alignas(64) std::atomic<PointerSet> read_pointers_;
+
+	alignas(64) std::atomic<PointerSet> read_ahead_pointers_;
 };
 
 }

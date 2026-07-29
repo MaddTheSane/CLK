@@ -84,7 +84,7 @@ class ConcreteMachine:
 	public MachineTypes::TimedMachine {
 public:
 	ConcreteMachine(const Target &target) : frequency_mismatch_warner_(*this) {
-		const std::vector<uint8_t> &rom = target.media.cartridges.front()->get_segments().front().data;
+		const std::vector<uint8_t> &rom = target.media.cartridges.front()->segments().front().data;
 
 		using PagingModel = Target::PagingModel;
 		switch(target.paging_model) {
@@ -219,7 +219,7 @@ private:
 
 using namespace Atari2600;
 
-std::unique_ptr<Machine> Machine::Atari2600(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &) {
-	const Target *const atari_target = dynamic_cast<const Target *>(target);
-	return std::make_unique<Atari2600::ConcreteMachine>(*atari_target);
+std::unique_ptr<Machine> Machine::create(const Analyser::Static::Target &target, const ROMMachine::ROMFetcher &) {
+	const auto &atari_target = static_cast<const Target &>(target);
+	return std::make_unique<Atari2600::ConcreteMachine>(atari_target);
 }

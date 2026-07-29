@@ -136,7 +136,7 @@ public:
 		bios_ = roms.find(rom_name)->second;
 
 		if(!target.media.cartridges.empty()) {
-			const auto &segment = target.media.cartridges.front()->get_segments().front();
+			const auto &segment = target.media.cartridges.front()->segments().front();
 			cartridge_ = segment.data;
 			if(cartridge_.size() >= 32768)
 				cartridge_address_limit_ = 0xffff;
@@ -176,19 +176,19 @@ public:
 	}
 
 	void set_scan_target(Outputs::Display::ScanTarget *scan_target) final {
-		vdp_.last_valid()->set_scan_target(scan_target);
+		vdp_.get()->set_scan_target(scan_target);
 	}
 
 	Outputs::Display::ScanStatus get_scaled_scan_status() const final {
-		return vdp_.last_valid()->get_scaled_scan_status();
+		return vdp_.get()->get_scaled_scan_status();
 	}
 
 	void set_display_type(Outputs::Display::DisplayType display_type) final {
-		vdp_.last_valid()->set_display_type(display_type);
+		vdp_.get()->set_display_type(display_type);
 	}
 
 	Outputs::Display::DisplayType get_display_type() const final {
-		return vdp_.last_valid()->get_display_type();
+		return vdp_.get()->get_display_type();
 	}
 
 	Outputs::Speaker::Speaker *get_speaker() final {
@@ -379,7 +379,10 @@ private:
 		cartridge_pages_[1] = &cartridge_[selected_start];
 	}
 	inline void update_audio() {
-		speaker_.run_for(audio_queue_, time_since_sn76489_update_.divide_cycles(Cycles(sn76489_divider)));
+		speaker_.run_for(
+			audio_queue_,
+			time_since_sn76489_update_.divide<Cycles>(sn76489_divider)
+		);
 	}
 
 	CPU::Z80::Processor<ConcreteMachine, false, false> z80_;
@@ -417,6 +420,9 @@ private:
 
 using namespace Coleco::Vision;
 
-std::unique_ptr<Machine> Machine::ColecoVision(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	return std::make_unique<ConcreteMachine>(*target, rom_fetcher);
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	return std::make_unique<ConcreteMachine>(target, rom_fetcher);
 }

@@ -25,7 +25,7 @@ Drive::Drive(
 	Storage::TimedEventLoop(input_clock_rate),
 	available_heads_(number_of_heads),
 	ready_type_(rdy_type) {
-	set_rotation_speed(revolutions_per_minute);
+	set_rotation_speed(float(revolutions_per_minute));
 
 	const auto seed =
 		std::default_random_engine::result_type(std::chrono::system_clock::now().time_since_epoch().count());
@@ -33,11 +33,13 @@ Drive::Drive(
 
 	// Get at least 64 bits of random information; rounding is likey to give this a slight bias.
 	random_source_ = 0;
-	auto half_range = (randomiser.max() - randomiser.min()) / 2;
+	const auto half_range = (randomiser.max() - randomiser.min()) / 2;
 	for(int bit = 0; bit < 64; ++bit) {
 		random_source_ <<= 1;
 		random_source_ |= ((randomiser() - randomiser.min()) >= half_range) ? 1 : 0;
 	}
+
+	unformatted_track_ = std::make_unique<UnformattedTrack>();
 }
 
 Drive::Drive(
@@ -122,7 +124,7 @@ void Drive::step(const HeadPosition offset) {
 	did_step(head_position_);
 }
 
-Track *Drive::step_to(const HeadPosition offset) {
+std::shared_ptr<Track> Drive::step_to(const HeadPosition offset) {
 	HeadPosition old_head_position = head_position_;
 	head_position_ = std::max(offset, HeadPosition(0));
 
@@ -213,7 +215,7 @@ void Drive::set_event_delegate(Storage::Disk::Drive::EventDelegate *const delega
 }
 
 void Drive::advance(const Cycles cycles) {
-	cycles_since_index_hole_ += cycles.as_integral();
+	cycles_since_index_hole_ += cycles.get();
 	if(event_delegate_) event_delegate_->advance(cycles);
 }
 
@@ -233,14 +235,14 @@ void Drive::run_for(const Cycles cycles) {
 
 	if(disk_is_rotating_) {
 		if(has_disk_) {
-			Time zero(0);
+			static constexpr Time zero(0);
 
-			auto number_of_cycles = cycles.as_integral();
+			auto number_of_cycles = cycles.get();
 			while(number_of_cycles) {
-				auto cycles_until_next_event = get_cycles_until_next_event();
+				const auto cycles_until_next_event = get_cycles_until_next_event();
 				auto cycles_to_run_for = std::min(cycles_until_next_event, number_of_cycles);
 				if(!is_reading_ && cycles_until_bits_written_ > zero) {
-					auto write_cycles_target = cycles_until_bits_written_.get<Cycles::IntType>();
+					auto write_cycles_target = cycles_until_bits_written_.as<Cycles::IntType>();
 					if(cycles_until_bits_written_.length % cycles_until_bits_written_.clock_rate) ++write_cycles_target;
 					cycles_to_run_for = std::min(cycles_to_run_for, write_cycles_target);
 				}
@@ -248,7 +250,7 @@ void Drive::run_for(const Cycles cycles) {
 				number_of_cycles -= cycles_to_run_for;
 				if(!is_reading_) {
 					if(cycles_until_bits_written_ > zero) {
-						Storage::Time cycles_to_run_for_time(static_cast<int>(cycles_to_run_for));
+						const Storage::Time cycles_to_run_for_time(static_cast<int>(cycles_to_run_for));
 						if(cycles_until_bits_written_ <= cycles_to_run_for_time) {
 							cycles_until_bits_written_.set_zero();
 							if(event_delegate_) {
@@ -323,7 +325,7 @@ void Drive::get_next_event(const float duration_already_passed) {
 	if(track_) {
 		const auto track_event = track_->get_next_event();
 		current_event_.type = track_event.type;
-		current_event_.length = track_event.length.get<float>();
+		current_event_.length = track_event.length.as<float>();
 	} else {
 		current_event_.length = 1.0f;
 		current_event_.type = Track::Event::IndexHole;
@@ -347,13 +349,16 @@ void Drive::get_next_event(const float duration_already_passed) {
 void Drive::process_next_event() {
 	if(current_event_.type == Track::Event::IndexHole) {
 		++ready_index_count_;
-		if(ready_index_count_ == 2 && (ready_type_ == ReadyType::ShugartRDY || ready_type_ == ReadyType::ShugartModifiedRDY)) {
+		if(
+			ready_index_count_ == 2 &&
+			(ready_type_ == ReadyType::ShugartRDY || ready_type_ == ReadyType::ShugartModifiedRDY)
+		) {
 			is_ready_ = true;
 		}
 		cycles_since_index_hole_ = 0;
 
-		// Begin a 2ms period of holding the index line pulse active.
-		index_pulse_remaining_ = Cycles((get_input_clock_rate() * 2) / 1000);
+		// Begin a 1ms period of holding the index line pulse active.
+		index_pulse_remaining_ = Cycles((get_input_clock_rate() * 1) / 1000);
 	}
 	if(
 		event_delegate_ &&
@@ -366,7 +371,7 @@ void Drive::process_next_event() {
 
 // MARK: - Track management
 
-Track *Drive::get_track() {
+std::shared_ptr<Track> Drive::get_track() {
 	if(disk_) return disk_->track_at_position(Track::Address(head_, head_position_));
 	return nullptr;
 }
@@ -378,7 +383,7 @@ void Drive::set_track(const std::shared_ptr<Track> &track) {
 void Drive::setup_track() {
 	track_ = get_track();
 	if(!track_) {
-		track_ = &unformatted_track_;
+		track_ = unformatted_track_;
 	}
 
 	float offset = 0.0f;
@@ -392,7 +397,7 @@ void Drive::setup_track() {
 
 	// Reseed cycles_since_index_hole_; 99.99% of the time it'll still be correct as is,
 	// but if the track has rounded one way or the other it may now be very slightly adrift.
-	cycles_since_index_hole_ = (int((time_found + offset) * cycles_per_revolution_)) % cycles_per_revolution_;
+	cycles_since_index_hole_ = int((time_found + offset) * float(cycles_per_revolution_)) % cycles_per_revolution_;
 
 	get_next_event(offset);
 }
@@ -451,18 +456,17 @@ void Drive::end_writing() {
 	//
 	// "High" is defined as: two samples per clock relative to an idiomatic
 	// 8Mhz disk controller and 300RPM disk speed.
-	const size_t high_resolution_track_rate = 3200000;
+	const size_t high_resolution_track_rate = 3'200'000;
 
 	if(!is_reading_) {
 		is_reading_ = true;
 
 		if(!patched_track_) {
-			// Avoid creating a new patched track if this one is already patched
-//			patched_track_ = dynamic_cast<PCMTrack *>(track_);
-//			if(!patched_track_ || !patched_track_->is_resampled_clone()) {
-				Track *const tr = track_;
-				patched_track_.reset(PCMTrack::resampled_clone(tr, high_resolution_track_rate));
-//			}
+			// Avoid creating a new patched track if this one is already patched.
+			patched_track_ = std::dynamic_pointer_cast<PCMTrack>(track_);
+			if(!patched_track_ || !patched_track_->is_resampled_clone()) {
+				patched_track_.reset(PCMTrack::resampled_clone(track_.get(), high_resolution_track_rate));
+			}
 		}
 		patched_track_->add_segment(write_start_time_, write_segment_, clamp_writing_to_index_hole_);
 		cycles_since_index_hole_ %= cycles_per_revolution_;

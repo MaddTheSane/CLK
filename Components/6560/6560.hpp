@@ -169,9 +169,11 @@ public:
 		}
 
 		for(int c = 0; c < 16; c++) {
-			uint8_t *colour = reinterpret_cast<uint8_t *>(&colours_[c]);
-			colour[0] = luminances[c];
-			colour[1] = chrominances[c];
+			const uint8_t colour[2] = {
+				luminances[c],
+				chrominances[c]
+			};
+			colours_[c] = std::bit_cast<uint16_t>(colour);
 		}
 	}
 
@@ -182,7 +184,7 @@ public:
 		// keep track of the amount of time since the speaker was updated; lazy updates are applied
 		cycles_since_speaker_update_ += cycles;
 
-		auto number_of_cycles = cycles.as_integral();
+		auto number_of_cycles = cycles.get();
 		while(number_of_cycles--) {
 			// keep an old copy of the vertical count because that test is a cycle later than the actual changes
 			int previous_vertical_counter = vertical_counter_;
@@ -473,7 +475,7 @@ private:
 
 	Cycles cycles_since_speaker_update_;
 	void update_audio() {
-		speaker_.run_for(audio_queue_, Cycles(cycles_since_speaker_update_.divide(Cycles(4))));
+		speaker_.run_for(audio_queue_, cycles_since_speaker_update_.divide<Cycles>(4));
 	}
 
 	// register state

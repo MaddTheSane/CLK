@@ -21,7 +21,7 @@ struct Machine {
 	virtual ~Machine() = default;
 
 	/// Creates and returns an AppleII.
-	static std::unique_ptr<Machine> AppleII(const Analyser::Static::Target *, const ROMMachine::ROMFetcher &);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	/// Defines the runtime options available for an Apple II.
 	class Options: public Reflection::StructImpl<Options>, public Configurable::Options::Display<Options> {
@@ -32,7 +32,7 @@ struct Machine {
 		Options(const Configurable::OptionsType) :
 			Configurable::Options::Display<Options>(Configurable::Display::CompositeColour) {}
 	private:
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {

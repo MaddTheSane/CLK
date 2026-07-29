@@ -52,7 +52,7 @@ void right_trim(std::string &string) {
 	}).base(), string.end());
 }
 
-std::string RunCommandFor(const Storage::Disk::CPM::File &file) {
+std::wstring RunCommandFor(const Storage::Disk::CPM::File &file) {
 	// Trim spaces from the name.
 	std::string name = file.name;
 	right_trim(name);
@@ -68,7 +68,8 @@ std::string RunCommandFor(const Storage::Disk::CPM::File &file) {
 	}
 
 	// Add a newline and return.
-	return command + "\n";
+	command += "\n";
+	return std::wstring(command.begin(), command.end());
 }
 
 void InspectCatalogue(
@@ -189,14 +190,15 @@ void InspectCatalogue(
 	} ();
 
 	if(run_name.has_value()) {
-		target->loading_command = "run\"" + rtrimmed(*run_name) + "\n";
+		const std::string loading_command = "run\"" + rtrimmed(*run_name) + "\n";
+		target->loading_command = std::wstring(loading_command.begin(), loading_command.end());
 	} else {
-		target->loading_command = "cat\n";
+		target->loading_command = L"cat\n";
 	}
 }
 
 bool CheckBootSector(
-	const std::shared_ptr<Storage::Disk::Disk> &disk,
+	const Storage::Disk::Disk &disk,
 	const std::unique_ptr<Analyser::Static::AmstradCPC::Target> &target
 ) {
 	Storage::Encodings::MFM::Parser parser(Storage::Encodings::MFM::Density::Double, disk);
@@ -214,7 +216,7 @@ bool CheckBootSector(
 
 		// This is a system disk, then launch it as though it were CP/M.
 		if(!matched) {
-			target->loading_command = "|cpm\n";
+			target->loading_command = L"|cpm\n";
 			return true;
 		}
 	}
@@ -269,7 +271,7 @@ Analyser::Static::TargetList Analyser::Static::AmstradCPC::GetTargets(
 			// Ugliness flows here: assume the CPC isn't smart enough to pause between pressing
 			// enter and responding to the follow-on prompt to press a key, so just type for
 			// a while. Yuck!
-			target->loading_command = "|tape\nrun\"\n123";
+			target->loading_command = L"|tape\nrun\"\n123";
 		}
 	}
 
@@ -280,7 +282,7 @@ Analyser::Static::TargetList Analyser::Static::AmstradCPC::GetTargets(
 		for(auto &disk: media.disks) {
 			// Check for an ordinary catalogue, making sure this isn't actually a ZX Spectrum disk.
 			std::unique_ptr<Storage::Disk::CPM::Catalogue> data_catalogue =
-				Storage::Disk::CPM::GetCatalogue(disk, data_format, false);
+				Storage::Disk::CPM::GetCatalogue(*disk, data_format, false);
 			if(data_catalogue && !data_catalogue->is_zx_spectrum_booter()) {
 				InspectCatalogue(*data_catalogue, target);
 				target->media.disks.push_back(disk);
@@ -288,14 +290,14 @@ Analyser::Static::TargetList Analyser::Static::AmstradCPC::GetTargets(
 			}
 
 			// Failing that check for a boot sector.
-			if(CheckBootSector(disk, target)) {
+			if(CheckBootSector(*disk, target)) {
 				target->media.disks.push_back(disk);
 				continue;
 			}
 
 			// Failing that check for a system catalogue.
 			std::unique_ptr<Storage::Disk::CPM::Catalogue> system_catalogue =
-				Storage::Disk::CPM::GetCatalogue(disk, system_format, false);
+				Storage::Disk::CPM::GetCatalogue(*disk, system_format, false);
 			if(system_catalogue && !system_catalogue->is_zx_spectrum_booter()) {
 				InspectCatalogue(*system_catalogue, target);
 				target->media.disks.push_back(disk);

@@ -22,7 +22,7 @@ namespace Oric {
 */
 struct Machine {
 	virtual ~Machine() = default;
-	static std::unique_ptr<Machine> Oric(const Analyser::Static::Target *, const ROMMachine::ROMFetcher &);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	class Options:
 		public Reflection::StructImpl<Options>,
@@ -38,7 +38,7 @@ struct Machine {
 			Configurable::Options::QuickLoad<Options>(type == Configurable::OptionsType::UserFriendly) {}
 
 	private:
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {

@@ -85,7 +85,7 @@ public:
 	/// Adds time to the actor.
 	///
 	/// @returns @c true if adding time caused a flush; @c false otherwise.
-	forceinline bool operator += (LocalTimeScale rhs) {
+	forceinline bool operator += (const LocalTimeScale rhs) {
 		if constexpr (std::is_base_of<ClockingHint::Source, T>::value) {
 			if(clocking_preference_ == ClockingHint::Preference::None) {
 				return false;
@@ -150,12 +150,12 @@ public:
 	}
 
 	/// @returns a pointer to the included object, without flushing time.
-	[[nodiscard]] forceinline T *last_valid() {
+	[[nodiscard]] forceinline T *get() {
 		return &object_;
 	}
 
 	/// @returns a const pointer to the included object, without flushing time.
-	[[nodiscard]] forceinline const T *last_valid() const {
+	[[nodiscard]] forceinline const T *get() const {
 		return &object_;
 	}
 
@@ -164,7 +164,7 @@ public:
 		if constexpr (divider == 1) {
 			return time_since_update_;
 		}
-		return TargetTimeScale(time_since_update_.as_integral() / divider);
+		return TargetTimeScale(time_since_update_.get() / divider);
 	}
 
 	/// @returns the amount of time since the object was last flushed, plus the local time scale @c offset,
@@ -173,7 +173,7 @@ public:
 		if constexpr (divider == 1) {
 			return time_since_update_ + offset;
 		}
-		return TargetTimeScale((time_since_update_ + offset).as_integral() / divider);
+		return TargetTimeScale((time_since_update_ + offset).get() / divider);
 	}
 
 	/// Flushes all accumulated time.
@@ -186,9 +186,10 @@ public:
 				const auto duration = time_since_update_.template flush<TargetTimeScale>();
 				object_.run_for(duration);
 			} else {
-				const auto duration = time_since_update_.template divide<TargetTimeScale>(LocalTimeScale(divider));
-				if(duration > TargetTimeScale(0))
-					object_.run_for(duration);
+				const auto target_duration = time_since_update_.template divide<TargetTimeScale>(divider);
+				if(target_duration > TargetTimeScale(0)) {
+					object_.run_for(target_duration);
+				}
 			}
 		}
 	}
@@ -222,7 +223,10 @@ public:
 
 	/// Indicates the amount of time, in the local time scale, until the first local slot that falls wholly
 	/// after @c duration, if that delay were to occur in @c offset units of time from now.
-	[[nodiscard]] forceinline LocalTimeScale back_map(TargetTimeScale duration, TargetTimeScale offset) const {
+	[[nodiscard]] forceinline LocalTimeScale back_map(
+		const TargetTimeScale duration,
+		const TargetTimeScale offset
+	) const {
 		// A 1:1 mapping is easy.
 		if constexpr (multiplier == 1 && divider == 1) {
 			return duration;
@@ -235,8 +239,8 @@ public:
 		// Figure out the number of whole input steps that is required to get
 		// past target, and subtract the number of whole input steps necessary
 		// to get to base.
-		const auto steps_to_base = base.as_integral() / multiplier;
-		const auto steps_to_target = (target.as_integral() + divider - 1) / multiplier;
+		const auto steps_to_base = base.get() / multiplier;
+		const auto steps_to_target = (target.get() + divider - 1) / multiplier;
 
 		return LocalTimeScale(steps_to_target - steps_to_base);
 	}
@@ -282,7 +286,7 @@ private:
 	}
 
 #ifndef NDEBUG
-	std::atomic_flag flush_concurrency_check_{};
+	std::atomic_flag flush_concurrency_check_;
 #endif
 };
 
@@ -295,7 +299,7 @@ template <class T, class LocalTimeScale = HalfCycles, class TargetTimeScale = Lo
 class AsyncJustInTimeActor {
 public:
 	/// Constructs a new AsyncJustInTimeActor using the same construction arguments as the included object.
-	template<typename... Args> AsyncJustInTimeActor(TargetTimeScale threshold, Args&&... args) :
+	template<typename... Args> AsyncJustInTimeActor(const TargetTimeScale threshold, Args&&... args) :
 		object_(std::forward<Args>(args)...),
 		threshold_(threshold) {}
 
@@ -318,7 +322,7 @@ public:
 	}
 
 	/// Returns a pointer to the included object without flushing time.
-	inline T *last_valid() {
+	inline T *get() {
 		return &object_;
 	}
 

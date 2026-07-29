@@ -9,6 +9,8 @@
 #include "PCMTrack.hpp"
 #include "Outputs/Log.hpp"
 
+#include <cassert>
+
 namespace {
 using Logger = Log::Logger<Log::Source::PCMTrack>;
 }
@@ -135,7 +137,7 @@ float PCMTrack::seek_to(const float time_since_index_hole) {
 	do {
 		// if this segment extends beyond the amount of time left to seek, trust it to complete
 		// the seek
-		const float segment_time = segment_event_sources_[segment_pointer_].get_length().get<float>();
+		const float segment_time = segment_event_sources_[segment_pointer_].get_length().as<float>();
 		if(segment_time > time_left_to_seek) {
 			return accumulated_time + segment_event_sources_[segment_pointer_].seek_to(time_left_to_seek);
 		}
@@ -178,6 +180,7 @@ void PCMTrack::add_segment(const Time &start_time, const PCMSegment &segment, co
 		for(size_t bit = 0; bit < segment.data.size(); ++bit) {
 			if(segment.data[bit]) {
 				const size_t output_bit = start_bit + half_offset + (bit * target_width) / segment.data.size();
+				assert(output_bit >= start_bit && output_bit < selected_end_bit);
 				if(output_bit >= destination.data.size()) return;
 				destination.data[output_bit] = true;
 			}

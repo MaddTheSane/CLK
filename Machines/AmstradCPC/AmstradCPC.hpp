@@ -24,10 +24,7 @@ struct Machine {
 	virtual ~Machine() = default;
 
 	/// Creates and returns an Amstrad CPC.
-	static std::unique_ptr<Machine> AmstradCPC(
-		const Analyser::Static::Target *const target,
-		const ROMMachine::ROMFetcher &rom_fetcher
-	);
+	static std::unique_ptr<Machine> create(const Analyser::Static::Target &, const ROMMachine::ROMFetcher &);
 
 	/// Defines the runtime options available for an Amstrad CPC.
 	class Options:
@@ -47,7 +44,7 @@ struct Machine {
 		friend Configurable::Options::QuickLoad<Options>;
 		friend Configurable::Options::DynamicCrop<Options>;
 
-		Options() : Options( Configurable::OptionsType::UserFriendly) {}
+		Options() : Options(Configurable::OptionsType::UserFriendly) {}
 
 		friend Reflection::StructImpl<Options>;
 		void declare_fields() {

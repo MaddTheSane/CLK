@@ -41,7 +41,7 @@ AcornCartridgesFrom(const std::vector<std::shared_ptr<Storage::Cartridge::Cartri
 	std::vector<std::shared_ptr<Storage::Cartridge::Cartridge>> acorn_cartridges;
 
 	for(const auto &cartridge : cartridges) {
-		const auto &segments = cartridge->get_segments();
+		const auto &segments = cartridge->segments();
 
 		// Only one mapped item is allowed.
 		if(segments.size() != 1) continue;
@@ -113,8 +113,9 @@ Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(
 		if(!files.empty()) {
 			// Inspect first file. If it's protected or doesn't look like BASIC
 			// then the loading command is *RUN. Otherwise it's CHAIN"".
-			targetElectron->loading_command =
+			const std::string loading_command =
 				(files.front().flags & File::Flags::ExecuteOnly) || !is_basic(files.front()) ? "*RUN\n" : "CHAIN\"\"\n";
+			targetElectron->loading_command = std::wstring(loading_command.begin(), loading_command.end());
 			targetElectron->media.tapes = media.tapes;
 
 			// TODO: my BBC Micro doesn't yet support tapes; evaluate here in the future.
@@ -126,8 +127,8 @@ Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(
 		std::unique_ptr<Catalogue> dfs_catalogue, adfs_catalogue;
 
 		// Get any sort of catalogue that can be found.
-		dfs_catalogue = GetDFSCatalogue(disk);
-		if(dfs_catalogue == nullptr) adfs_catalogue = GetADFSCatalogue(disk);
+		dfs_catalogue = GetDFSCatalogue(*disk);
+		if(dfs_catalogue == nullptr) adfs_catalogue = GetADFSCatalogue(*disk);
 
 		// 8-bit options: DFS and Hugo-style ADFS.
 		if(dfs_catalogue || (adfs_catalogue && !adfs_catalogue->has_large_sectors && adfs_catalogue->is_hugo)) {
@@ -171,8 +172,10 @@ Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(
 					}
 				}
 
-				targetBBC->loading_command = targetElectron->loading_command =
+				const std::string loading_command =
 					sole_basic_file ? "CHAIN \"" + sole_basic_file->name + "\"\n" : "*CAT\n";
+				targetBBC->loading_command = targetElectron->loading_command =
+					std::wstring(loading_command.begin(), loading_command.end());
 			}
 
 			// Further special case: if any of the files have a top word of 0x0003 then
@@ -329,7 +332,7 @@ Analyser::Static::TargetList Analyser::Static::Acorn::GetTargets(
 		if(sector[0xfd]) {
 			targetElectron->should_shift_restart = true;
 		} else {
-			targetElectron->loading_command = "*CAT\n";
+			targetElectron->loading_command = L"*CAT\n";
 		}
 	}
 

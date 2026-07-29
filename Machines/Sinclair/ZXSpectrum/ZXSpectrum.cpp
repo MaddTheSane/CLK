@@ -41,6 +41,7 @@
 #include "ClockReceiver/JustInTime.hpp"
 
 #include <array>
+#include <atomic>
 
 namespace {
 
@@ -60,10 +61,12 @@ public:
 
 	void did_set_input(const Input &digital_input, bool is_active) final {
 		const auto apply_kempston = [&](uint8_t mask) {
-			if(is_active) kempston_ |= mask; else kempston_ &= ~mask;
+			if(is_active) write_kempston_ |= mask; else write_kempston_ &= ~mask;
+			kempston_.store(write_kempston_, std::memory_order_relaxed);
 		};
 		const auto apply_sinclair = [&](uint16_t mask) {
-			if(is_active) sinclair_ &= ~mask; else sinclair_ |= mask;
+			if(is_active) write_sinclair_ &= ~mask; else write_sinclair_ |= mask;
+			sinclair_.store(write_sinclair_, std::memory_order_relaxed);
 		};
 
 		switch(digital_input.type) {
@@ -95,18 +98,23 @@ public:
 	/// @returns The value that a Kempston joystick interface would report if this joystick
 	/// were plugged into it.
 	uint8_t get_kempston() {
-		return kempston_;
+		return kempston_.load(std::memory_order_relaxed);
 	}
 
 	/// @returns The value that a Sinclair interface would report if this joystick
 	/// were plugged into it via @c port (which should be either 0 or 1, for ports 1 or 2).
-	uint8_t get_sinclair(int port) {
-		return uint8_t(sinclair_ >> (port * 8));
+	uint8_t get_sinclair(const int port) {
+		return uint8_t(sinclair_.load(std::memory_order_relaxed) >> (port * 8));
 	}
 
 private:
-	uint8_t kempston_ = 0x00;
-	uint16_t sinclair_ = 0xffff;
+	static constexpr uint8_t DefaultKempston = 0x00;
+	static constexpr uint16_t DefaultSinclair = 0xffff;
+	uint8_t write_kempston_ = DefaultKempston;
+	uint16_t write_sinclair_ = DefaultSinclair;
+
+	std::atomic<uint8_t> kempston_ = DefaultKempston;
+	std::atomic<uint16_t> sinclair_ = DefaultSinclair;
 };
 
 }
@@ -129,6 +137,7 @@ template<Model model> class ConcreteMachine:
 	public MachineTypes::MediaChangeObserver,
 	public MachineTypes::MediaTarget,
 	public MachineTypes::ScanProducer,
+	public MachineTypes::SoftResettable,
 	public MachineTypes::TimedMachine,
 	public Utility::TypeRecipient<CharacterMapper> {
 public:
@@ -152,7 +161,7 @@ public:
 			case Model::SixteenK:
 			case Model::FortyEightK:	rom_name = ROM::Name::Spectrum48k;		break;
 			case Model::OneTwoEightK:	rom_name = ROM::Name::Spectrum128k;		break;
-			case Model::Plus2:			rom_name = ROM::Name::SpecrumPlus2;		break;
+			case Model::Plus2:			rom_name = ROM::Name::SpectrumPlus2;	break;
 			case Model::Plus2a:
 			case Model::Plus3:			rom_name = ROM::Name::SpectrumPlus3;	break;
 			// TODO: possibly accept the +3 ROM in multiple parts?
@@ -192,7 +201,7 @@ public:
 		if(target.state) {
 			const auto state = static_cast<State *>(target.state.get());
 			state->z80.apply(z80_);
-			state->video.apply(*video_.last_valid());
+			state->video.apply(*video_.get());
 			state->ay.apply(ay_);
 
 			// If this is a 48k or 16k machine, remap source data from its original
@@ -279,10 +288,21 @@ public:
 		}
 	}
 
+	// MARK: - Resettable.
+
+	void soft_reset() override {
+		disable_paging_ = false;
+		port1ffd_ = 0;
+		port7ffd_ = 0;
+		update_memory_map();
+		update_video_base();
+		z80_.set_power_on_reset();
+	}
+
 	// MARK: - ScanProducer.
 
 	void set_scan_target(Outputs::Display::ScanTarget *scan_target) override {
-		video_->set_scan_target(scan_target);
+		video_.get()->set_scan_target(scan_target);
 	}
 
 	Outputs::Display::ScanStatus get_scaled_scan_status() const override {
@@ -313,7 +333,7 @@ public:
 				cycle.operation >= PartialMachineCycle::ReadOpcodeStart &&
 				cycle.operation <= PartialMachineCycle::WriteStart) {
 
-				const auto delay = video_.last_valid()->access_delay(video_.time_since_flush());
+				const auto delay = video_.get()->access_delay(video_.time_since_flush());
 				advance(cycle.length + delay);
 				return delay;
 			}
@@ -344,13 +364,13 @@ public:
 
 					if((address & 0xc000) == 0x4000) {
 						for(int c = 0; c < ((address & 1) ? 4 : 2); c++) {
-							const auto next_delay = video_.last_valid()->access_delay(time);
+							const auto next_delay = video_.get()->access_delay(time);
 							delay += next_delay;
 							time += next_delay + 2;
 						}
 					} else {
 						if(!(address & 1)) {
-							delay = video_.last_valid()->access_delay(time + HalfCycles(2));
+							delay = video_.get()->access_delay(time + HalfCycles(2));
 						}
 					}
 
@@ -364,7 +384,7 @@ public:
 					// These all start by loading the address bus, then set MREQ
 					// half a cycle later.
 					if(banks_[address >> 14].is_contended) {
-						const auto delay = video_.last_valid()->access_delay(video_.time_since_flush());
+						const auto delay = video_.get()->access_delay(video_.time_since_flush());
 
 						advance(cycle.length + delay);
 						return delay;
@@ -382,7 +402,7 @@ public:
 						HalfCycles time = video_.time_since_flush();
 						HalfCycles delay;
 						for(int c = 0; c < half_cycles; c += 2) {
-							const auto next_delay = video_.last_valid()->access_delay(time);
+							const auto next_delay = video_.get()->access_delay(time);
 							delay += next_delay;
 							time += next_delay + 2;
 						}
@@ -613,15 +633,15 @@ public:
 	}
 
 private:
-	void advance(HalfCycles duration) {
+	void advance(const HalfCycles duration) {
 		time_since_audio_update_ += duration;
 
 		video_ += duration;
 		if(video_.did_flush()) {
-			z80_.set_interrupt_line(video_.last_valid()->get_interrupt_line(), video_.last_sequence_point_overrun());
+			z80_.set_interrupt_line(video_.get()->get_interrupt_line(), video_.last_sequence_point_overrun());
 		}
 
-		if(!tape_player_is_sleeping_) tape_player_.run_for(duration.as_integral());
+		if(!tape_player_is_sleeping_) tape_player_.run_for(Cycles(duration.get()));
 
 		// Update automatic tape motor control, if enabled; if it's been
 		// 0.5 seconds since software last possibly polled the tape, stop it.
@@ -635,37 +655,38 @@ private:
 		}
 
 		if constexpr (model == Model::Plus3) {
-			fdc_ += Cycles(duration.as_integral());
+			fdc_ += Cycles(duration.get());
 		}
 
 		if(typer_) typer_->run_for(duration);
 	}
 
-	void type_string(const std::string &string) override {
+	void type_string(const std::wstring &string) override {
 		Utility::TypeRecipient<CharacterMapper>::add_typer(string);
 	}
 
-	bool can_type(char c) const override {
+	bool can_type(const wchar_t c) const override {
 		return Utility::TypeRecipient<CharacterMapper>::can_type(c);
 	}
 
 public:
 
 	// MARK: - Typer.
-	HalfCycles get_typer_delay(const std::string &) const override {
+	HalfCycles typer_delay(const std::wstring &) const override {
 		return z80_.get_is_resetting() ? Cycles(7'000'000) : Cycles(0);
 	}
 
-	HalfCycles get_typer_frequency() const override{
+	HalfCycles typer_frequency() const override{
 		return Cycles(70'908);
 	}
 
-	KeyboardMapper *get_keyboard_mapper() override {
+	KeyboardMapper *keyboard_mapper() override {
 		return &keyboard_mapper_;
 	}
 
 	// MARK: - Keyboard.
 	void set_key_state(uint16_t key, bool is_pressed) override {
+		// TODO: Handle KeyExtendedMode.
 		keyboard_.set_key_state(key, is_pressed);
 	}
 
@@ -867,7 +888,11 @@ private:
 
 	HalfCycles time_since_audio_update_;
 	void update_audio() {
-		speaker_.run_for(audio_queue_, time_since_audio_update_.divide_cycles(Cycles(2)));
+		const auto cycles = time_since_audio_update_.divide<Cycles>(2);
+		speaker_.run_for(
+			audio_queue_,
+			cycles
+		);
 	}
 
 	// MARK: - Video.
@@ -1000,16 +1025,21 @@ private:
 
 using namespace Sinclair::ZXSpectrum;
 
-std::unique_ptr<Machine> Machine::ZXSpectrum(const Analyser::Static::Target *target, const ROMMachine::ROMFetcher &rom_fetcher) {
-	const auto zx_target = dynamic_cast<const Analyser::Static::ZXSpectrum::Target *>(target);
+std::unique_ptr<Machine> Machine::create(
+	const Analyser::Static::Target &target,
+	const ROMMachine::ROMFetcher &rom_fetcher
+) {
+	const auto &zx_target = static_cast<const Analyser::Static::ZXSpectrum::Target &>(target);
 
-	switch(zx_target->model) {
-		case Model::SixteenK:		return std::make_unique<ConcreteMachine<Model::SixteenK>>(*zx_target, rom_fetcher);
-		case Model::FortyEightK:	return std::make_unique<ConcreteMachine<Model::FortyEightK>>(*zx_target, rom_fetcher);
-		case Model::OneTwoEightK:	return std::make_unique<ConcreteMachine<Model::OneTwoEightK>>(*zx_target, rom_fetcher);
-		case Model::Plus2:			return std::make_unique<ConcreteMachine<Model::Plus2>>(*zx_target, rom_fetcher);
-		case Model::Plus2a:			return std::make_unique<ConcreteMachine<Model::Plus2a>>(*zx_target, rom_fetcher);
-		case Model::Plus3:			return std::make_unique<ConcreteMachine<Model::Plus3>>(*zx_target, rom_fetcher);
+	switch(zx_target.model) {
+		using enum Model;
+
+		case SixteenK:		return std::make_unique<ConcreteMachine<SixteenK>>(zx_target, rom_fetcher);
+		case FortyEightK:	return std::make_unique<ConcreteMachine<FortyEightK>>(zx_target, rom_fetcher);
+		case OneTwoEightK:	return std::make_unique<ConcreteMachine<OneTwoEightK>>(zx_target, rom_fetcher);
+		case Plus2:			return std::make_unique<ConcreteMachine<Plus2>>(zx_target, rom_fetcher);
+		case Plus2a:		return std::make_unique<ConcreteMachine<Plus2a>>(zx_target, rom_fetcher);
+		case Plus3:			return std::make_unique<ConcreteMachine<Plus3>>(zx_target, rom_fetcher);
 	}
 
 	return nullptr;

@@ -52,7 +52,7 @@ void Executor::run_for(const Cycles cycles) {
 	// The incoming clock is divided by four; the local cycles_ count
 	// ensures that fractional parts are kept track of.
 	cycles_ += cycles;
-	CachingExecutor::run_for(cycles_.divide(Cycles(4)).as<int>());
+	CachingExecutor::run_for(cycles_.divide(4).as<int>());
 }
 
 void Executor::reset() {
@@ -118,7 +118,7 @@ uint8_t Executor::read(uint16_t address) {
 
 void Executor::set_port_output(const int port) {
 	// Force 'output' to a 1 anywhere that a bit is set as input.
-	port_handler_.set_port_output(port, port_outputs_[port] | ~port_directions_[port]);
+	port_handler_.set_port_output(port, uint8_t(port_outputs_[port] | ~port_directions_[port]));
 }
 
 void Executor::write(uint16_t address, const uint8_t value) {

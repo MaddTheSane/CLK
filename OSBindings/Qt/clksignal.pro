@@ -61,6 +61,8 @@ SOURCES += \
 	$$SRC/Analyser/Static/Oric/*.cpp \
 	$$SRC/Analyser/Static/PCCompatible/*.cpp \
 	$$SRC/Analyser/Static/Sega/*.cpp \
+	$$SRC/Analyser/Static/TandyCoCo/*.cpp \
+	$$SRC/Analyser/Static/Thomson/*.cpp \
 	$$SRC/Analyser/Static/ZX8081/*.cpp \
 	$$SRC/Analyser/Static/ZXSpectrum/*.cpp \
 \
@@ -68,6 +70,7 @@ SOURCES += \
 	$$SRC/Components/5380/*.cpp \
 	$$SRC/Components/6522/Implementation/*.cpp \
 	$$SRC/Components/6560/*.cpp \
+	$$SRC/Components/6847/*.cpp \
 	$$SRC/Components/6850/*.cpp \
 	$$SRC/Components/68901/*.cpp \
 	$$SRC/Components/8272/*.cpp \
@@ -97,6 +100,7 @@ SOURCES += \
 	$$SRC/Machines/Acorn/Archimedes/*.cpp \
 	$$SRC/Machines/Acorn/BBCMicro/*.cpp \
 	$$SRC/Machines/Acorn/Electron/*.cpp \
+	$$SRC/Machines/Acorn/Floppy/*.cpp \
 	$$SRC/Machines/Amiga/*.cpp \
 	$$SRC/Machines/AmstradCPC/*.cpp \
 	$$SRC/Machines/Apple/ADB/*.cpp \
@@ -119,12 +123,15 @@ SOURCES += \
 	$$SRC/Machines/Sinclair/Keyboard/*.cpp \
 	$$SRC/Machines/Sinclair/ZX8081/*.cpp \
 	$$SRC/Machines/Sinclair/ZXSpectrum/*.cpp \
+	$$SRC/Machines/Tandy/CoCo/*.cpp \
+	$$SRC/Machines/Thomson/MO/*.cpp \
 \
 	$$SRC/Outputs/*.cpp \
 	$$SRC/Outputs/CRT/*.cpp \
 	$$SRC/Outputs/ScanTargets/*.cpp \
 	$$SRC/Outputs/OpenGL/*.cpp \
 	$$SRC/Outputs/OpenGL/Primitives/*.cpp \
+	$$SRC/Outputs/OpenGL/Shaders/*.cpp \
 \
 	$$SRC/Processors/6502/Implementation/*.cpp \
 	$$SRC/Processors/6502/State/*.cpp \
@@ -193,6 +200,8 @@ HEADERS += \
 	$$SRC/Analyser/Static/Oric/*.hpp \
 	$$SRC/Analyser/Static/PCCompatible/*.hpp \
 	$$SRC/Analyser/Static/Sega/*.hpp \
+	$$SRC/Analyser/Static/TandyCoCo/*.hpp \
+	$$SRC/Analyser/Static/Thomson/*.hpp \
 	$$SRC/Analyser/Static/ZX8081/*.hpp \
 \
 	$$SRC/ClockReceiver/*.hpp \
@@ -204,6 +213,7 @@ HEADERS += \
 	$$SRC/Components/6532/*.hpp \
 	$$SRC/Components/6560/*.hpp \
 	$$SRC/Components/6845/*.hpp \
+	$$SRC/Components/6847/*.hpp \
 	$$SRC/Components/6850/*.hpp \
 	$$SRC/Components/8255/*.hpp \
 	$$SRC/Components/8272/*.hpp \
@@ -263,6 +273,9 @@ HEADERS += \
 	$$SRC/Machines/Sinclair/Keyboard/*.hpp \
 	$$SRC/Machines/Sinclair/ZX8081/*.hpp \
 	$$SRC/Machines/Sinclair/ZXSpectrum/*.hpp \
+	$$SRC/Machines/Tandy/CoCo/*.hpp \
+	$$SRC/Machines/Thomson/MO/*.hpp \
+	$$SRC/Machines/Thomson/MO/FastTapeSchemes/*.hpp \
 \
 	$$SRC/Numeric/*.hpp \
 \
@@ -272,6 +285,7 @@ HEADERS += \
 	$$SRC/Outputs/ScanTargets/*.hpp \
 	$$SRC/Outputs/OpenGL/*.hpp \
 	$$SRC/Outputs/OpenGL/Primitives/*.hpp \
+	$$SRC/Outputs/OpenGL/Shaders/*.hpp \
 	$$SRC/Outputs/Speaker/*.hpp \
 	$$SRC/Outputs/Speaker/Implementation/*.hpp \
 \
